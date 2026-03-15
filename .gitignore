@@ -1,0 +1,33 @@
+# Gradle / Android build outputs
+.gradle/
+build/
+**/build/
+
+# Local machine / IDE
+local.properties
+.idea/
+*.iml
+
+# Kotlin / Java / logs
+.kotlin/
+*.log
+hs_err_pid*
+replay_pid*
+java_pid*.hprof
+
+# Test / lint artifacts
+**/test-results/
+**/reports/
+
+# APK / AAB outputs
+*.apk
+*.aab
+
+# OS noise
+.DS_Store
+
+# BMAD / OpenCode process artifacts
+_bmad/
+_bmad-output/
+.opencode/
+AGENTS.md
