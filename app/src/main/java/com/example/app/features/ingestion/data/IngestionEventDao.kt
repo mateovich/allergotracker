@@ -21,6 +21,9 @@ interface IngestionEventDao {
     @Update
     suspend fun update(entity: IngestionEventEntity): Int
 
+    @Query("DELETE FROM ingestion_events WHERE id = :id")
+    suspend fun deleteById(id: Long): Int
+
     @Query("SELECT * FROM ingestion_events ORDER BY occurred_at_epoch_ms DESC, id DESC")
     fun observeIngestionEvents(): Flow<List<IngestionEventEntity>>
 }

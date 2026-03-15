@@ -6,10 +6,13 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -73,6 +76,37 @@ fun EditOutbreakScreen(
             modifier = contentModifier.fillMaxSize().padding(16.dp).testTag("edit-outbreak-form-screen"),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (state.isDeleteConfirmationVisible) {
+                AlertDialog(
+                    onDismissRequest = { viewModel.onIntent(EditOutbreakUiIntent.DismissDeleteConfirmation) },
+                    title = { Text("Delete record?") },
+                    text = {
+                        Text(
+                            "Delete outbreak record \"${state.outbreakDescriptor}\" at \"${state.bodyLocation}\"? This cannot be undone."
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = { viewModel.onIntent(EditOutbreakUiIntent.ConfirmDelete) },
+                            modifier = Modifier.testTag("edit-outbreak-delete-confirm"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError
+                            )
+                        ) {
+                            Text("Delete")
+                        }
+                    },
+                    dismissButton = {
+                        OutlinedButton(
+                            onClick = { viewModel.onIntent(EditOutbreakUiIntent.DismissDeleteConfirmation) },
+                            modifier = Modifier.testTag("edit-outbreak-delete-cancel")
+                        ) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
             OutlinedTextField(
                 value = state.outbreakDescriptor,
                 onValueChange = { viewModel.onIntent(EditOutbreakUiIntent.UpdateOutbreakDescriptor(it)) },
@@ -128,10 +162,17 @@ fun EditOutbreakScreen(
             }
             Button(
                 onClick = { viewModel.onIntent(EditOutbreakUiIntent.Save) },
-                enabled = !state.isSaving,
+                enabled = state.canSave && !state.isSaving && !state.isDeleting,
                 modifier = Modifier.fillMaxWidth().testTag("edit-outbreak-save")
             ) {
                 Text(if (state.isSaving) "Saving..." else "Save changes")
+            }
+            OutlinedButton(
+                onClick = { viewModel.onIntent(EditOutbreakUiIntent.ShowDeleteConfirmation) },
+                enabled = !state.isSaving && !state.isDeleting,
+                modifier = Modifier.fillMaxWidth().testTag("edit-outbreak-delete")
+            ) {
+                Text(if (state.isDeleting) "Deleting..." else "Delete record", color = MaterialTheme.colorScheme.error)
             }
         }
     }

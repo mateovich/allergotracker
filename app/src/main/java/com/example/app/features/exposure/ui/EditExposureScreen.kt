@@ -6,10 +6,13 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -73,6 +76,33 @@ fun EditExposureScreen(
             modifier = contentModifier.fillMaxSize().padding(16.dp).testTag("edit-exposure-form-screen"),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (state.isDeleteConfirmationVisible) {
+                AlertDialog(
+                    onDismissRequest = { viewModel.onIntent(EditExposureUiIntent.DismissDeleteConfirmation) },
+                    title = { Text("Delete record?") },
+                    text = { Text("Delete exposure record \"${state.exposureType}\"? This cannot be undone.") },
+                    confirmButton = {
+                        Button(
+                            onClick = { viewModel.onIntent(EditExposureUiIntent.ConfirmDelete) },
+                            modifier = Modifier.testTag("edit-exposure-delete-confirm"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError
+                            )
+                        ) {
+                            Text("Delete")
+                        }
+                    },
+                    dismissButton = {
+                        OutlinedButton(
+                            onClick = { viewModel.onIntent(EditExposureUiIntent.DismissDeleteConfirmation) },
+                            modifier = Modifier.testTag("edit-exposure-delete-cancel")
+                        ) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
             OutlinedTextField(
                 value = state.exposureType,
                 onValueChange = { viewModel.onIntent(EditExposureUiIntent.UpdateExposureType(it)) },
@@ -116,10 +146,17 @@ fun EditExposureScreen(
             }
             Button(
                 onClick = { viewModel.onIntent(EditExposureUiIntent.Save) },
-                enabled = !state.isSaving,
+                enabled = state.canSave && !state.isSaving && !state.isDeleting,
                 modifier = Modifier.fillMaxWidth().testTag("edit-exposure-save")
             ) {
                 Text(if (state.isSaving) "Saving..." else "Save changes")
+            }
+            OutlinedButton(
+                onClick = { viewModel.onIntent(EditExposureUiIntent.ShowDeleteConfirmation) },
+                enabled = !state.isSaving && !state.isDeleting,
+                modifier = Modifier.fillMaxWidth().testTag("edit-exposure-delete")
+            ) {
+                Text(if (state.isDeleting) "Deleting..." else "Delete record", color = MaterialTheme.colorScheme.error)
             }
         }
     }

@@ -6,11 +6,14 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -80,6 +83,33 @@ fun EditIngestionScreen(
                 .testTag("edit-ingestion-form-screen"),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (state.isDeleteConfirmationVisible) {
+                AlertDialog(
+                    onDismissRequest = { viewModel.onIntent(EditIngestionUiIntent.DismissDeleteConfirmation) },
+                    title = { Text("Delete record?") },
+                    text = { Text("Delete ingestion record \"${state.itemName}\"? This cannot be undone.") },
+                    confirmButton = {
+                        Button(
+                            onClick = { viewModel.onIntent(EditIngestionUiIntent.ConfirmDelete) },
+                            modifier = Modifier.testTag("edit-ingestion-delete-confirm"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError
+                            )
+                        ) {
+                            Text("Delete")
+                        }
+                    },
+                    dismissButton = {
+                        OutlinedButton(
+                            onClick = { viewModel.onIntent(EditIngestionUiIntent.DismissDeleteConfirmation) },
+                            modifier = Modifier.testTag("edit-ingestion-delete-cancel")
+                        ) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
             OutlinedTextField(
                 value = state.itemName,
                 onValueChange = { viewModel.onIntent(EditIngestionUiIntent.UpdateItemName(it)) },
@@ -133,10 +163,17 @@ fun EditIngestionScreen(
             }
             Button(
                 onClick = { viewModel.onIntent(EditIngestionUiIntent.Save) },
-                enabled = !state.isSaving,
+                enabled = state.canSave && !state.isSaving && !state.isDeleting,
                 modifier = Modifier.fillMaxWidth().testTag("edit-ingestion-save")
             ) {
                 Text(if (state.isSaving) "Saving..." else "Save changes")
+            }
+            OutlinedButton(
+                onClick = { viewModel.onIntent(EditIngestionUiIntent.ShowDeleteConfirmation) },
+                enabled = !state.isSaving && !state.isDeleting,
+                modifier = Modifier.fillMaxWidth().testTag("edit-ingestion-delete")
+            ) {
+                Text(if (state.isDeleting) "Deleting..." else "Delete record", color = MaterialTheme.colorScheme.error)
             }
         }
     }

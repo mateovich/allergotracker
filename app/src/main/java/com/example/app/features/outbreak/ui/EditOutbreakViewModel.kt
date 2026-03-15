@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
+import com.example.app.features.outbreak.domain.DeleteOutbreakEventUseCase
 import com.example.app.features.outbreak.domain.GetOutbreakEventUseCase
 import com.example.app.features.outbreak.domain.UpdateOutbreakEventCommand
 import com.example.app.features.outbreak.domain.UpdateOutbreakEventUseCase
@@ -23,6 +24,7 @@ import kotlinx.coroutines.launch
 class EditOutbreakViewModel(
     private val recordId: Long,
     private val getOutbreakEventUseCase: GetOutbreakEventUseCase,
+    private val deleteOutbreakEventUseCase: DeleteOutbreakEventUseCase,
     private val updateOutbreakEventUseCase: UpdateOutbreakEventUseCase,
     private val currentTimeProvider: CurrentTimeProvider
 ) : ViewModel() {
@@ -83,6 +85,9 @@ class EditOutbreakViewModel(
                     )
                 }
             }
+            EditOutbreakUiIntent.ShowDeleteConfirmation -> showDeleteConfirmation()
+            EditOutbreakUiIntent.DismissDeleteConfirmation -> updateState { it.copy(isDeleteConfirmationVisible = false) }
+            EditOutbreakUiIntent.ConfirmDelete -> delete()
             EditOutbreakUiIntent.Save -> save()
         }
     }
@@ -115,6 +120,7 @@ class EditOutbreakViewModel(
 
     private fun save() {
         val currentState = mutableState.value
+        if (!currentState.canSave || currentState.isSaving || currentState.isDeleting || currentState.isLoading) return
         val parsedOccurredAt = parseOccurredAtInput(currentState.occurredAtInput)
         if (parsedOccurredAt == null) {
             updateState {
@@ -158,6 +164,46 @@ class EditOutbreakViewModel(
                 }
             }
         }
+    }
+
+    private fun delete() {
+        val currentState = mutableState.value
+        if (
+            !currentState.isDeleteConfirmationVisible ||
+            currentState.isDeleting ||
+            currentState.isSaving ||
+            currentState.isLoading
+        ) return
+        updateState {
+            it.copy(
+                isDeleting = true,
+                isDeleteConfirmationVisible = false,
+                formMessage = ""
+            )
+        }
+        viewModelScope.launch {
+            when (val result = deleteOutbreakEventUseCase(recordId)) {
+                is AppResult.Success -> {
+                    updateState { it.copy(isDeleting = false) }
+                    effectChannel.trySend(EditOutbreakUiEffect.NavigateToRecords)
+                }
+                is AppResult.Error -> {
+                    updateState {
+                        it.copy(
+                            isDeleting = false,
+                            formMessage = result.error.message,
+                            canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun showDeleteConfirmation() {
+        val currentState = mutableState.value
+        if (currentState.isLoading || currentState.isSaving || currentState.isDeleting || currentState.outbreakDescriptor.isBlank()) return
+        updateState { it.copy(isDeleteConfirmationVisible = true, formMessage = "") }
     }
 
     private fun canSave(outbreakDescriptor: String, bodyLocation: String): Boolean {

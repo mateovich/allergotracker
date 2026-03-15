@@ -53,6 +53,8 @@ private class FakeEditableOutbreakRepository : OutbreakRepository {
             OutbreakEvent(command.id, command.outbreakDescriptor, command.bodyLocation, command.occurredAtEpochMs, command.notes)
         )
     }
+
+    override suspend fun deleteOutbreak(id: Long): AppResult<Unit> = error("unused")
 }
 
 private class FakeOutbreakCurrentTimeProvider(private val now: Long) : CurrentTimeProvider {

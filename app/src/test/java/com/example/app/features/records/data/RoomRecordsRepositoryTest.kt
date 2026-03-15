@@ -119,6 +119,54 @@ class RoomRecordsRepositoryTest {
     }
 
     @Test
+    fun deleting_records_updates_timeline_and_count_without_stale_rows() = runBlocking {
+        val ingestionEventDao = FakeIngestionEventDao(
+            events = listOf(
+                IngestionEventEntity(
+                    id = 7L,
+                    itemName = "Tea",
+                    quantityLevel = 2,
+                    occurredAtEpochMs = 1_700_000_200_000L,
+                    notes = null,
+                    createdAtEpochMs = 1_700_000_200_000L
+                )
+            )
+        )
+        val exposureEventDao = FakeExposureEventDao(
+            events = listOf(
+                ExposureEventEntity(
+                    id = 5L,
+                    exposureType = "Pollen",
+                    occurredAtEpochMs = 1_700_000_100_000L,
+                    notes = null,
+                    createdAtEpochMs = 1_700_000_100_000L
+                )
+            )
+        )
+        val outbreakEventDao = FakeOutbreakEventDao(
+            events = listOf(
+                OutbreakEventEntity(
+                    id = 3L,
+                    outbreakDescriptor = "Skin flare",
+                    bodyLocation = "Arm",
+                    occurredAtEpochMs = 1_700_000_000_000L,
+                    notes = null,
+                    createdAtEpochMs = 1_700_000_000_000L
+                )
+            )
+        )
+        val repository = RoomRecordsRepository(ingestionEventDao, exposureEventDao, outbreakEventDao)
+
+        ingestionEventDao.deleteById(7L)
+
+        val records = repository.observeRecords().first()
+        val count = repository.observeRecordCount().first()
+
+        assertEquals(2, count)
+        assertEquals(listOf("exposure-5", "outbreak-3"), records.map { it.id })
+    }
+
+    @Test
     fun equal_timestamps_with_equal_ids_use_explicit_event_type_tie_break() = runBlocking {
         val sharedTimestamp = 1_700_000_000_000L
         val repository = RoomRecordsRepository(
@@ -185,6 +233,13 @@ private class FakeIngestionEventDao(
         return 1
     }
 
+    override suspend fun deleteById(id: Long): Int {
+        val updated = state.value.filterNot { it.id == id }
+        if (updated.size == state.value.size) return 0
+        state.value = updated
+        return 1
+    }
+
     override fun observeRecordCount(): Flow<Int> = state.map { it.size }
 
     override fun observeIngestionEvents(): Flow<List<IngestionEventEntity>> = state
@@ -210,6 +265,13 @@ private class FakeExposureEventDao(
         return 1
     }
 
+    override suspend fun deleteById(id: Long): Int {
+        val updated = state.value.filterNot { it.id == id }
+        if (updated.size == state.value.size) return 0
+        state.value = updated
+        return 1
+    }
+
     override fun observeRecordCount(): Flow<Int> = state.map { it.size }
 
     override fun observeExposureEvents(): Flow<List<ExposureEventEntity>> = state
@@ -232,6 +294,13 @@ private class FakeOutbreakEventDao(
         val index = state.value.indexOfFirst { it.id == entity.id }
         if (index == -1) return 0
         state.value = state.value.toMutableList().also { it[index] = entity }
+        return 1
+    }
+
+    override suspend fun deleteById(id: Long): Int {
+        val updated = state.value.filterNot { it.id == id }
+        if (updated.size == state.value.size) return 0
+        state.value = updated
         return 1
     }
 

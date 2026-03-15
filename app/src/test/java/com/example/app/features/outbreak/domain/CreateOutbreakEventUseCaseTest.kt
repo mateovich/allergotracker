@@ -124,6 +124,10 @@ private class FakeOutbreakRepository : OutbreakRepository {
     override suspend fun updateOutbreak(command: UpdateOutbreakEventCommand): AppResult<OutbreakEvent> {
         return AppResult.Error(DomainError.IntegrityError("unused"))
     }
+
+    override suspend fun deleteOutbreak(id: Long): AppResult<Unit> {
+        return AppResult.Error(DomainError.IntegrityError("unused"))
+    }
 }
 
 private class FakeCurrentTimeProvider(

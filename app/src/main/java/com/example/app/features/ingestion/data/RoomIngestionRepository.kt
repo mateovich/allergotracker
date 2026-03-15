@@ -1,5 +1,6 @@
 package com.example.app.features.ingestion.data
 
+import android.database.sqlite.SQLiteConstraintException
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.ingestion.domain.CreateIngestionEventCommand
@@ -65,6 +66,22 @@ class RoomIngestionRepository(
             AppResult.Success(updatedEntity.toDomain())
         } catch (_: Exception) {
             AppResult.Error(DomainError.PersistenceError("Couldn't update ingestion locally. Try again."))
+        }
+    }
+
+    override suspend fun deleteIngestion(id: Long): AppResult<Unit> {
+        return try {
+            ingestionEventDao.getById(id)
+                ?: return AppResult.Error(DomainError.IntegrityError("Ingestion record no longer exists."))
+            val deletedCount = ingestionEventDao.deleteById(id)
+            if (deletedCount == 0) {
+                return AppResult.Error(DomainError.IntegrityError("Ingestion record no longer exists."))
+            }
+            AppResult.Success(Unit)
+        } catch (_: SQLiteConstraintException) {
+            AppResult.Error(DomainError.IntegrityError("Ingestion record could not be deleted safely."))
+        } catch (_: Exception) {
+            AppResult.Error(DomainError.PersistenceError("Couldn't delete ingestion locally. Try again."))
         }
     }
 

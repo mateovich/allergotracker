@@ -21,6 +21,9 @@ interface ExposureEventDao {
     @Update
     suspend fun update(entity: ExposureEventEntity): Int
 
+    @Query("DELETE FROM exposure_events WHERE id = :id")
+    suspend fun deleteById(id: Long): Int
+
     @Query("SELECT * FROM exposure_events ORDER BY occurred_at_epoch_ms DESC, id DESC")
     fun observeExposureEvents(): Flow<List<ExposureEventEntity>>
 }

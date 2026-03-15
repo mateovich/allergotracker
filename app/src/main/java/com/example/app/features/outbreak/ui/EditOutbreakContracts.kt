@@ -16,6 +16,8 @@ data class EditOutbreakUiState(
     val formMessage: String = "",
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
+    val isDeleting: Boolean = false,
+    val isDeleteConfirmationVisible: Boolean = false,
     val canSave: Boolean = false
 )
 
@@ -26,6 +28,9 @@ sealed interface EditOutbreakUiIntent {
     data class UpdateNotes(val value: String) : EditOutbreakUiIntent
     data class UpdateOccurredAtInput(val value: String) : EditOutbreakUiIntent
     data class SelectTimePreset(val preset: OutbreakTimePreset) : EditOutbreakUiIntent
+    data object ShowDeleteConfirmation : EditOutbreakUiIntent
+    data object DismissDeleteConfirmation : EditOutbreakUiIntent
+    data object ConfirmDelete : EditOutbreakUiIntent
     data object Save : EditOutbreakUiIntent
 }
 

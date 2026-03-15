@@ -1,13 +1,16 @@
 package com.example.app.features.exposure.ui
 
 import com.example.app.MainDispatcherRule
+import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.exposure.domain.DeleteExposureEventUseCase
 import com.example.app.features.exposure.domain.ExposureEvent
 import com.example.app.features.exposure.domain.ExposureRepository
 import com.example.app.features.exposure.domain.GetExposureEventUseCase
 import com.example.app.features.exposure.domain.UpdateExposureEventCommand
 import com.example.app.features.exposure.domain.UpdateExposureEventUseCase
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -36,14 +39,15 @@ class EditExposureViewModelTest {
     }
 
     @Test
-    fun invalid_save_keeps_user_input_and_shows_inline_errors() = runBlocking {
+    fun invalid_input_disables_save() = runBlocking {
         val viewModel = buildViewModel()
         viewModel.onIntent(EditExposureUiIntent.Load)
         viewModel.onIntent(EditExposureUiIntent.UpdateExposureType("   "))
         viewModel.onIntent(EditExposureUiIntent.Save)
 
         assertEquals("   ", viewModel.state.value.exposureType)
-        assertEquals("Enter what you were exposed to.", viewModel.state.value.exposureTypeError)
+        assertTrue(!viewModel.state.value.canSave)
+        assertTrue(!viewModel.state.value.isSaving)
     }
 
     @Test
@@ -56,6 +60,103 @@ class EditExposureViewModelTest {
         viewModel.onIntent(EditExposureUiIntent.Save)
 
         assertEquals(EditExposureUiEffect.NavigateToRecords, effect.await())
+    }
+
+    @Test
+    fun delete_confirmation_can_open_and_close_without_losing_form_state() = runBlocking {
+        val viewModel = buildViewModel()
+        viewModel.onIntent(EditExposureUiIntent.Load)
+
+        viewModel.onIntent(EditExposureUiIntent.ShowDeleteConfirmation)
+        assertTrue(viewModel.state.value.isDeleteConfirmationVisible)
+
+        viewModel.onIntent(EditExposureUiIntent.DismissDeleteConfirmation)
+
+        assertTrue(!viewModel.state.value.isDeleteConfirmationVisible)
+        assertEquals("Pollen", viewModel.state.value.exposureType)
+    }
+
+    @Test
+    fun successful_delete_navigates_back_to_records() = runBlocking {
+        val viewModel = buildViewModel()
+        viewModel.onIntent(EditExposureUiIntent.Load)
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.onIntent(EditExposureUiIntent.ShowDeleteConfirmation)
+        viewModel.onIntent(EditExposureUiIntent.ConfirmDelete)
+
+        assertEquals(EditExposureUiEffect.NavigateToRecords, effect.await())
+    }
+
+    @Test
+    fun confirm_delete_without_visible_confirmation_does_not_delete() = runBlocking {
+        var deleteCalls = 0
+        val repository = object : ExposureRepository {
+            override suspend fun createExposure(command: com.example.app.features.exposure.domain.CreateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
+            override suspend fun getExposure(id: Long): AppResult<ExposureEvent> = AppResult.Success(ExposureEvent(id, "Pollen", existingOccurredAt, "outside"))
+            override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> = AppResult.Success(ExposureEvent(command.id, command.exposureType, command.occurredAtEpochMs, command.notes))
+            override suspend fun deleteExposure(id: Long): AppResult<Unit> {
+                deleteCalls += 1
+                return AppResult.Success(Unit)
+            }
+        }
+        val viewModel = EditExposureViewModel(
+            recordId = 5L,
+            getExposureEventUseCase = GetExposureEventUseCase(repository),
+            deleteExposureEventUseCase = DeleteExposureEventUseCase(repository),
+            updateExposureEventUseCase = UpdateExposureEventUseCase(repository, CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = CurrentTimeProvider { fixedNow }
+        )
+
+        viewModel.onIntent(EditExposureUiIntent.Load)
+        viewModel.onIntent(EditExposureUiIntent.ConfirmDelete)
+
+        assertEquals(0, deleteCalls)
+        assertTrue(!viewModel.state.value.isDeleting)
+    }
+
+    @Test
+    fun failed_delete_keeps_screen_recoverable_for_retry() = runBlocking {
+        var deleteAttempts = 0
+        val repository = object : ExposureRepository {
+            override suspend fun createExposure(command: com.example.app.features.exposure.domain.CreateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
+
+            override suspend fun getExposure(id: Long): AppResult<ExposureEvent> {
+                return AppResult.Success(ExposureEvent(id, "Pollen", existingOccurredAt, "outside"))
+            }
+
+            override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> {
+                return AppResult.Success(ExposureEvent(command.id, command.exposureType, command.occurredAtEpochMs, command.notes))
+            }
+
+            override suspend fun deleteExposure(id: Long): AppResult<Unit> {
+                deleteAttempts += 1
+                return if (deleteAttempts == 1) {
+                    AppResult.Error(DomainError.PersistenceError("Couldn't delete exposure locally. Try again."))
+                } else {
+                    AppResult.Success(Unit)
+                }
+            }
+        }
+        val viewModel = EditExposureViewModel(
+            recordId = 5L,
+            getExposureEventUseCase = GetExposureEventUseCase(repository),
+            deleteExposureEventUseCase = DeleteExposureEventUseCase(repository),
+            updateExposureEventUseCase = UpdateExposureEventUseCase(repository, CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = CurrentTimeProvider { fixedNow }
+        )
+
+        viewModel.onIntent(EditExposureUiIntent.Load)
+        viewModel.onIntent(EditExposureUiIntent.ShowDeleteConfirmation)
+        viewModel.onIntent(EditExposureUiIntent.ConfirmDelete)
+
+        assertEquals("Couldn't delete exposure locally. Try again.", viewModel.state.value.formMessage)
+        assertTrue(!viewModel.state.value.isDeleting)
+        assertTrue(!viewModel.state.value.isDeleteConfirmationVisible)
+
+        viewModel.onIntent(EditExposureUiIntent.ShowDeleteConfirmation)
+
+        assertTrue(viewModel.state.value.isDeleteConfirmationVisible)
     }
 
     @Test
@@ -79,6 +180,66 @@ class EditExposureViewModelTest {
     }
 
     @Test
+    fun invalid_save_does_not_call_update() = runBlocking {
+        var updateCalls = 0
+        val repository = object : ExposureRepository {
+            override suspend fun createExposure(command: com.example.app.features.exposure.domain.CreateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
+            override suspend fun getExposure(id: Long): AppResult<ExposureEvent> = AppResult.Success(ExposureEvent(id, "Pollen", existingOccurredAt, "outside"))
+            override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> {
+                updateCalls += 1
+                return AppResult.Success(ExposureEvent(command.id, command.exposureType, command.occurredAtEpochMs, command.notes))
+            }
+            override suspend fun deleteExposure(id: Long): AppResult<Unit> = AppResult.Success(Unit)
+        }
+        val viewModel = EditExposureViewModel(
+            recordId = 5L,
+            getExposureEventUseCase = GetExposureEventUseCase(repository),
+            deleteExposureEventUseCase = DeleteExposureEventUseCase(repository),
+            updateExposureEventUseCase = UpdateExposureEventUseCase(repository, CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = CurrentTimeProvider { fixedNow }
+        )
+
+        viewModel.onIntent(EditExposureUiIntent.Load)
+        viewModel.onIntent(EditExposureUiIntent.UpdateExposureType("   "))
+        viewModel.onIntent(EditExposureUiIntent.Save)
+
+        assertEquals(0, updateCalls)
+    }
+
+    @Test
+    fun second_save_while_first_is_in_flight_is_ignored() = runBlocking {
+        var updateCalls = 0
+        val updateGate = CompletableDeferred<Unit>()
+        val repository = object : ExposureRepository {
+            override suspend fun createExposure(command: com.example.app.features.exposure.domain.CreateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
+            override suspend fun getExposure(id: Long): AppResult<ExposureEvent> = AppResult.Success(ExposureEvent(id, "Pollen", existingOccurredAt, "outside"))
+            override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> {
+                updateCalls += 1
+                updateGate.await()
+                return AppResult.Success(ExposureEvent(command.id, command.exposureType, command.occurredAtEpochMs, command.notes))
+            }
+            override suspend fun deleteExposure(id: Long): AppResult<Unit> = AppResult.Success(Unit)
+        }
+        val viewModel = EditExposureViewModel(
+            recordId = 5L,
+            getExposureEventUseCase = GetExposureEventUseCase(repository),
+            deleteExposureEventUseCase = DeleteExposureEventUseCase(repository),
+            updateExposureEventUseCase = UpdateExposureEventUseCase(repository, CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = CurrentTimeProvider { fixedNow }
+        )
+
+        viewModel.onIntent(EditExposureUiIntent.Load)
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.onIntent(EditExposureUiIntent.Save)
+        viewModel.onIntent(EditExposureUiIntent.Save)
+        updateGate.complete(Unit)
+
+        assertEquals(EditExposureUiEffect.NavigateToRecords, effect.await())
+        assertEquals(1, updateCalls)
+    }
+
+    @Test
     fun failed_load_can_retry_and_recover() = runBlocking {
         var loadAttempts = 0
         val repository = object : ExposureRepository {
@@ -96,10 +257,13 @@ class EditExposureViewModelTest {
             override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> {
                 return AppResult.Success(ExposureEvent(command.id, command.exposureType, command.occurredAtEpochMs, command.notes))
             }
+
+            override suspend fun deleteExposure(id: Long): AppResult<Unit> = AppResult.Success(Unit)
         }
         val viewModel = EditExposureViewModel(
             recordId = 5L,
             getExposureEventUseCase = GetExposureEventUseCase(repository),
+            deleteExposureEventUseCase = DeleteExposureEventUseCase(repository),
             updateExposureEventUseCase = UpdateExposureEventUseCase(repository, CurrentTimeProvider { fixedNow }),
             currentTimeProvider = CurrentTimeProvider { fixedNow }
         )
@@ -124,10 +288,13 @@ class EditExposureViewModelTest {
             override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> {
                 return AppResult.Success(ExposureEvent(command.id, command.exposureType, command.occurredAtEpochMs, command.notes))
             }
+
+            override suspend fun deleteExposure(id: Long): AppResult<Unit> = AppResult.Success(Unit)
         }
         return EditExposureViewModel(
             recordId = 5L,
             getExposureEventUseCase = GetExposureEventUseCase(repository),
+            deleteExposureEventUseCase = DeleteExposureEventUseCase(repository),
             updateExposureEventUseCase = UpdateExposureEventUseCase(repository, CurrentTimeProvider { fixedNow }),
             currentTimeProvider = CurrentTimeProvider { fixedNow }
         )

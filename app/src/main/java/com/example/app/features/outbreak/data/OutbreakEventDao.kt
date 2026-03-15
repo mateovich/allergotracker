@@ -21,6 +21,9 @@ interface OutbreakEventDao {
     @Update
     suspend fun update(entity: OutbreakEventEntity): Int
 
+    @Query("DELETE FROM outbreak_events WHERE id = :id")
+    suspend fun deleteById(id: Long): Int
+
     @Query("SELECT * FROM outbreak_events ORDER BY occurred_at_epoch_ms DESC, id DESC")
     fun observeOutbreakEvents(): Flow<List<OutbreakEventEntity>>
 }

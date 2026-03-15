@@ -123,6 +123,10 @@ private class FakeIngestionRepository : IngestionRepository {
     override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> {
         return AppResult.Error(DomainError.IntegrityError("unused"))
     }
+
+    override suspend fun deleteIngestion(id: Long): AppResult<Unit> {
+        return AppResult.Error(DomainError.IntegrityError("unused"))
+    }
 }
 
 private class FakeCurrentTimeProvider(

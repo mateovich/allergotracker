@@ -1,5 +1,6 @@
 package com.example.app.features.outbreak.data
 
+import android.database.sqlite.SQLiteConstraintException
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
@@ -65,6 +66,22 @@ class RoomOutbreakRepository(
             AppResult.Success(updatedEntity.toDomain())
         } catch (_: Exception) {
             AppResult.Error(DomainError.PersistenceError("Couldn't update outbreak locally. Try again."))
+        }
+    }
+
+    override suspend fun deleteOutbreak(id: Long): AppResult<Unit> {
+        return try {
+            outbreakEventDao.getById(id)
+                ?: return AppResult.Error(DomainError.IntegrityError("Outbreak record no longer exists."))
+            val deletedCount = outbreakEventDao.deleteById(id)
+            if (deletedCount == 0) {
+                return AppResult.Error(DomainError.IntegrityError("Outbreak record no longer exists."))
+            }
+            AppResult.Success(Unit)
+        } catch (_: SQLiteConstraintException) {
+            AppResult.Error(DomainError.IntegrityError("Outbreak record could not be deleted safely."))
+        } catch (_: Exception) {
+            AppResult.Error(DomainError.PersistenceError("Couldn't delete outbreak locally. Try again."))
         }
     }
 

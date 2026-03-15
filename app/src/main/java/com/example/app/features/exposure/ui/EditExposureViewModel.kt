@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.exposure.domain.DeleteExposureEventUseCase
 import com.example.app.features.exposure.domain.GetExposureEventUseCase
 import com.example.app.features.exposure.domain.UpdateExposureEventCommand
 import com.example.app.features.exposure.domain.UpdateExposureEventUseCase
@@ -23,6 +24,7 @@ import kotlinx.coroutines.launch
 class EditExposureViewModel(
     private val recordId: Long,
     private val getExposureEventUseCase: GetExposureEventUseCase,
+    private val deleteExposureEventUseCase: DeleteExposureEventUseCase,
     private val updateExposureEventUseCase: UpdateExposureEventUseCase,
     private val currentTimeProvider: CurrentTimeProvider
 ) : ViewModel() {
@@ -75,6 +77,9 @@ class EditExposureViewModel(
                     )
                 }
             }
+            EditExposureUiIntent.ShowDeleteConfirmation -> showDeleteConfirmation()
+            EditExposureUiIntent.DismissDeleteConfirmation -> updateState { it.copy(isDeleteConfirmationVisible = false) }
+            EditExposureUiIntent.ConfirmDelete -> delete()
             EditExposureUiIntent.Save -> save()
         }
     }
@@ -106,6 +111,7 @@ class EditExposureViewModel(
 
     private fun save() {
         val currentState = mutableState.value
+        if (!currentState.canSave || currentState.isSaving || currentState.isDeleting || currentState.isLoading) return
         val parsedOccurredAt = parseOccurredAtInput(currentState.occurredAtInput)
         if (parsedOccurredAt == null) {
             updateState {
@@ -147,6 +153,46 @@ class EditExposureViewModel(
                 }
             }
         }
+    }
+
+    private fun delete() {
+        val currentState = mutableState.value
+        if (
+            !currentState.isDeleteConfirmationVisible ||
+            currentState.isDeleting ||
+            currentState.isSaving ||
+            currentState.isLoading
+        ) return
+        updateState {
+            it.copy(
+                isDeleting = true,
+                isDeleteConfirmationVisible = false,
+                formMessage = ""
+            )
+        }
+        viewModelScope.launch {
+            when (val result = deleteExposureEventUseCase(recordId)) {
+                is AppResult.Success -> {
+                    updateState { it.copy(isDeleting = false) }
+                    effectChannel.trySend(EditExposureUiEffect.NavigateToRecords)
+                }
+                is AppResult.Error -> {
+                    updateState {
+                        it.copy(
+                            isDeleting = false,
+                            formMessage = result.error.message,
+                            canSave = it.exposureType.isNotBlank()
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun showDeleteConfirmation() {
+        val currentState = mutableState.value
+        if (currentState.isLoading || currentState.isSaving || currentState.isDeleting || currentState.exposureType.isBlank()) return
+        updateState { it.copy(isDeleteConfirmationVisible = true, formMessage = "") }
     }
 
     private fun formatTime(epochMillis: Long): String = timeFormatter.format(Instant.ofEpochMilli(epochMillis))

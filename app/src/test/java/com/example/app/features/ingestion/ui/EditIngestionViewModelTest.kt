@@ -1,12 +1,15 @@
 package com.example.app.features.ingestion.ui
 
 import com.example.app.MainDispatcherRule
+import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.ingestion.domain.DeleteIngestionEventUseCase
 import com.example.app.features.ingestion.domain.GetIngestionEventUseCase
 import com.example.app.features.ingestion.domain.IngestionEvent
 import com.example.app.features.ingestion.domain.IngestionRepository
 import com.example.app.features.ingestion.domain.UpdateIngestionEventCommand
 import com.example.app.features.ingestion.domain.UpdateIngestionEventUseCase
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -35,15 +38,15 @@ class EditIngestionViewModelTest {
     }
 
     @Test
-    fun invalid_save_keeps_user_input_and_shows_inline_errors() = runBlocking {
+    fun invalid_input_disables_save() = runBlocking {
         val viewModel = buildViewModel()
         viewModel.onIntent(EditIngestionUiIntent.Load)
         viewModel.onIntent(EditIngestionUiIntent.UpdateItemName("   "))
         viewModel.onIntent(EditIngestionUiIntent.Save)
 
         assertEquals("   ", viewModel.state.value.itemName)
-        assertEquals("Enter what you ingested.", viewModel.state.value.itemNameError)
-        assertTrue(viewModel.state.value.formMessage.isNotBlank())
+        assertTrue(!viewModel.state.value.canSave)
+        assertTrue(!viewModel.state.value.isSaving)
     }
 
     @Test
@@ -59,6 +62,103 @@ class EditIngestionViewModelTest {
     }
 
     @Test
+    fun delete_confirmation_can_open_and_close_without_losing_form_state() = runBlocking {
+        val viewModel = buildViewModel()
+        viewModel.onIntent(EditIngestionUiIntent.Load)
+
+        viewModel.onIntent(EditIngestionUiIntent.ShowDeleteConfirmation)
+        assertTrue(viewModel.state.value.isDeleteConfirmationVisible)
+
+        viewModel.onIntent(EditIngestionUiIntent.DismissDeleteConfirmation)
+
+        assertTrue(!viewModel.state.value.isDeleteConfirmationVisible)
+        assertEquals("Tea", viewModel.state.value.itemName)
+    }
+
+    @Test
+    fun successful_delete_navigates_back_to_records() = runBlocking {
+        val viewModel = buildViewModel()
+        viewModel.onIntent(EditIngestionUiIntent.Load)
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.onIntent(EditIngestionUiIntent.ShowDeleteConfirmation)
+        viewModel.onIntent(EditIngestionUiIntent.ConfirmDelete)
+
+        assertEquals(EditIngestionUiEffect.NavigateToRecords, effect.await())
+    }
+
+    @Test
+    fun confirm_delete_without_visible_confirmation_does_not_delete() = runBlocking {
+        var deleteCalls = 0
+        val repository = object : IngestionRepository {
+            override suspend fun createIngestion(command: com.example.app.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
+            override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> = AppResult.Success(IngestionEvent(id, "Tea", 2, existingOccurredAt, "with honey"))
+            override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> = AppResult.Success(IngestionEvent(command.id, command.itemName, command.quantityLevel ?: 0, command.occurredAtEpochMs, command.notes))
+            override suspend fun deleteIngestion(id: Long): AppResult<Unit> {
+                deleteCalls += 1
+                return AppResult.Success(Unit)
+            }
+        }
+        val viewModel = EditIngestionViewModel(
+            recordId = 7L,
+            getIngestionEventUseCase = GetIngestionEventUseCase(repository),
+            deleteIngestionEventUseCase = DeleteIngestionEventUseCase(repository),
+            updateIngestionEventUseCase = UpdateIngestionEventUseCase(repository, com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }
+        )
+
+        viewModel.onIntent(EditIngestionUiIntent.Load)
+        viewModel.onIntent(EditIngestionUiIntent.ConfirmDelete)
+
+        assertEquals(0, deleteCalls)
+        assertTrue(!viewModel.state.value.isDeleting)
+    }
+
+    @Test
+    fun failed_delete_keeps_screen_recoverable_for_retry() = runBlocking {
+        var deleteAttempts = 0
+        val repository = object : IngestionRepository {
+            override suspend fun createIngestion(command: com.example.app.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
+
+            override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> {
+                return AppResult.Success(IngestionEvent(id, "Tea", 2, existingOccurredAt, "with honey"))
+            }
+
+            override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> {
+                return AppResult.Success(IngestionEvent(command.id, command.itemName, command.quantityLevel ?: 0, command.occurredAtEpochMs, command.notes))
+            }
+
+            override suspend fun deleteIngestion(id: Long): AppResult<Unit> {
+                deleteAttempts += 1
+                return if (deleteAttempts == 1) {
+                    AppResult.Error(DomainError.PersistenceError("Couldn't delete ingestion locally. Try again."))
+                } else {
+                    AppResult.Success(Unit)
+                }
+            }
+        }
+        val viewModel = EditIngestionViewModel(
+            recordId = 7L,
+            getIngestionEventUseCase = GetIngestionEventUseCase(repository),
+            deleteIngestionEventUseCase = DeleteIngestionEventUseCase(repository),
+            updateIngestionEventUseCase = UpdateIngestionEventUseCase(repository, com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }
+        )
+
+        viewModel.onIntent(EditIngestionUiIntent.Load)
+        viewModel.onIntent(EditIngestionUiIntent.ShowDeleteConfirmation)
+        viewModel.onIntent(EditIngestionUiIntent.ConfirmDelete)
+
+        assertEquals("Couldn't delete ingestion locally. Try again.", viewModel.state.value.formMessage)
+        assertTrue(!viewModel.state.value.isDeleting)
+        assertTrue(!viewModel.state.value.isDeleteConfirmationVisible)
+
+        viewModel.onIntent(EditIngestionUiIntent.ShowDeleteConfirmation)
+
+        assertTrue(viewModel.state.value.isDeleteConfirmationVisible)
+    }
+
+    @Test
     fun time_preset_reanchors_edit_time_from_current_time() = runBlocking {
         val viewModel = buildViewModel()
         viewModel.onIntent(EditIngestionUiIntent.Load)
@@ -66,6 +166,66 @@ class EditIngestionViewModelTest {
         viewModel.onIntent(EditIngestionUiIntent.SelectTimePreset(IngestionTimePreset.ONE_HOUR_AGO))
 
         assertEquals(fixedNow - (60L * 60L * 1000L), viewModel.state.value.occurredAtEpochMs)
+    }
+
+    @Test
+    fun invalid_save_does_not_call_update() = runBlocking {
+        var updateCalls = 0
+        val repository = object : IngestionRepository {
+            override suspend fun createIngestion(command: com.example.app.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
+            override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> = AppResult.Success(IngestionEvent(id, "Tea", 2, existingOccurredAt, "with honey"))
+            override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> {
+                updateCalls += 1
+                return AppResult.Success(IngestionEvent(command.id, command.itemName, command.quantityLevel ?: 0, command.occurredAtEpochMs, command.notes))
+            }
+            override suspend fun deleteIngestion(id: Long): AppResult<Unit> = AppResult.Success(Unit)
+        }
+        val viewModel = EditIngestionViewModel(
+            recordId = 7L,
+            getIngestionEventUseCase = GetIngestionEventUseCase(repository),
+            deleteIngestionEventUseCase = DeleteIngestionEventUseCase(repository),
+            updateIngestionEventUseCase = UpdateIngestionEventUseCase(repository, com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }
+        )
+
+        viewModel.onIntent(EditIngestionUiIntent.Load)
+        viewModel.onIntent(EditIngestionUiIntent.UpdateItemName("   "))
+        viewModel.onIntent(EditIngestionUiIntent.Save)
+
+        assertEquals(0, updateCalls)
+    }
+
+    @Test
+    fun second_save_while_first_is_in_flight_is_ignored() = runBlocking {
+        var updateCalls = 0
+        val updateGate = CompletableDeferred<Unit>()
+        val repository = object : IngestionRepository {
+            override suspend fun createIngestion(command: com.example.app.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
+            override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> = AppResult.Success(IngestionEvent(id, "Tea", 2, existingOccurredAt, "with honey"))
+            override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> {
+                updateCalls += 1
+                updateGate.await()
+                return AppResult.Success(IngestionEvent(command.id, command.itemName, command.quantityLevel ?: 0, command.occurredAtEpochMs, command.notes))
+            }
+            override suspend fun deleteIngestion(id: Long): AppResult<Unit> = AppResult.Success(Unit)
+        }
+        val viewModel = EditIngestionViewModel(
+            recordId = 7L,
+            getIngestionEventUseCase = GetIngestionEventUseCase(repository),
+            deleteIngestionEventUseCase = DeleteIngestionEventUseCase(repository),
+            updateIngestionEventUseCase = UpdateIngestionEventUseCase(repository, com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }
+        )
+
+        viewModel.onIntent(EditIngestionUiIntent.Load)
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.onIntent(EditIngestionUiIntent.Save)
+        viewModel.onIntent(EditIngestionUiIntent.Save)
+        updateGate.complete(Unit)
+
+        assertEquals(EditIngestionUiEffect.NavigateToRecords, effect.await())
+        assertEquals(1, updateCalls)
     }
 
     @Test
@@ -86,10 +246,13 @@ class EditIngestionViewModelTest {
             override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> {
                 return AppResult.Success(IngestionEvent(command.id, command.itemName, command.quantityLevel ?: 0, command.occurredAtEpochMs, command.notes))
             }
+
+            override suspend fun deleteIngestion(id: Long): AppResult<Unit> = AppResult.Success(Unit)
         }
         val viewModel = EditIngestionViewModel(
             recordId = 7L,
             getIngestionEventUseCase = GetIngestionEventUseCase(repository),
+            deleteIngestionEventUseCase = DeleteIngestionEventUseCase(repository),
             updateIngestionEventUseCase = UpdateIngestionEventUseCase(repository, com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }),
             currentTimeProvider = com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }
         )
@@ -114,10 +277,13 @@ class EditIngestionViewModelTest {
             override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> {
                 return AppResult.Success(IngestionEvent(command.id, command.itemName, command.quantityLevel ?: 0, command.occurredAtEpochMs, command.notes))
             }
+
+            override suspend fun deleteIngestion(id: Long): AppResult<Unit> = AppResult.Success(Unit)
         }
         return EditIngestionViewModel(
             recordId = 7L,
             getIngestionEventUseCase = GetIngestionEventUseCase(repository),
+            deleteIngestionEventUseCase = DeleteIngestionEventUseCase(repository),
             updateIngestionEventUseCase = UpdateIngestionEventUseCase(repository, com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }),
             currentTimeProvider = com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }
         )

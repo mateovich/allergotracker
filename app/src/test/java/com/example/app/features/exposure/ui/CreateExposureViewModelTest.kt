@@ -103,6 +103,10 @@ class CreateExposureViewModelTest {
                     override suspend fun updateExposure(command: com.example.app.features.exposure.domain.UpdateExposureEventCommand): AppResult<ExposureEvent> {
                         error("Not used in create tests")
                     }
+
+                    override suspend fun deleteExposure(id: Long): AppResult<Unit> {
+                        error("Not used in create tests")
+                    }
                 },
                 currentTimeProvider = timeProvider
             )

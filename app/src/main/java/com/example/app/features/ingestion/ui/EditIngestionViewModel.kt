@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.ingestion.domain.DeleteIngestionEventUseCase
 import com.example.app.features.ingestion.domain.GetIngestionEventUseCase
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
 import com.example.app.features.ingestion.domain.IngestionQuantityOption
@@ -22,6 +23,7 @@ import kotlinx.coroutines.launch
 class EditIngestionViewModel(
     private val recordId: Long,
     private val getIngestionEventUseCase: GetIngestionEventUseCase,
+    private val deleteIngestionEventUseCase: DeleteIngestionEventUseCase,
     private val updateIngestionEventUseCase: UpdateIngestionEventUseCase,
     private val currentTimeProvider: CurrentTimeProvider
 ) : ViewModel() {
@@ -68,6 +70,9 @@ class EditIngestionViewModel(
                     )
                 }
             }
+            EditIngestionUiIntent.ShowDeleteConfirmation -> showDeleteConfirmation()
+            EditIngestionUiIntent.DismissDeleteConfirmation -> updateState { it.copy(isDeleteConfirmationVisible = false) }
+            EditIngestionUiIntent.ConfirmDelete -> delete()
             EditIngestionUiIntent.Save -> save()
         }
     }
@@ -106,6 +111,7 @@ class EditIngestionViewModel(
 
     private fun save() {
         val currentState = mutableState.value
+        if (!currentState.canSave || currentState.isSaving || currentState.isDeleting || currentState.isLoading) return
         updateState { it.copy(isSaving = true, formMessage = "") }
         viewModelScope.launch {
             when (
@@ -138,6 +144,46 @@ class EditIngestionViewModel(
                 }
             }
         }
+    }
+
+    private fun delete() {
+        val currentState = mutableState.value
+        if (
+            !currentState.isDeleteConfirmationVisible ||
+            currentState.isDeleting ||
+            currentState.isSaving ||
+            currentState.isLoading
+        ) return
+        updateState {
+            it.copy(
+                isDeleting = true,
+                isDeleteConfirmationVisible = false,
+                formMessage = ""
+            )
+        }
+        viewModelScope.launch {
+            when (val result = deleteIngestionEventUseCase(recordId)) {
+                is AppResult.Success -> {
+                    updateState { it.copy(isDeleting = false) }
+                    effectChannel.trySend(EditIngestionUiEffect.NavigateToRecords)
+                }
+                is AppResult.Error -> {
+                    updateState {
+                        it.copy(
+                            isDeleting = false,
+                            formMessage = result.error.message,
+                            canSave = canSave(it.itemName, it.selectedQuantityLevel)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun showDeleteConfirmation() {
+        val currentState = mutableState.value
+        if (currentState.isLoading || currentState.isSaving || currentState.isDeleting || currentState.itemName.isBlank()) return
+        updateState { it.copy(isDeleteConfirmationVisible = true, formMessage = "") }
     }
 
     private fun formatTime(epochMillis: Long): String = timeFormatter.format(Instant.ofEpochMilli(epochMillis))

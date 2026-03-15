@@ -6,4 +6,5 @@ interface ExposureRepository {
     suspend fun createExposure(command: CreateExposureEventCommand): AppResult<ExposureEvent>
     suspend fun getExposure(id: Long): AppResult<ExposureEvent>
     suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent>
+    suspend fun deleteExposure(id: Long): AppResult<Unit>
 }

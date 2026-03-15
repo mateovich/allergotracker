@@ -15,6 +15,8 @@ data class EditIngestionUiState(
     val formMessage: String = "",
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
+    val isDeleting: Boolean = false,
+    val isDeleteConfirmationVisible: Boolean = false,
     val canSave: Boolean = false
 )
 
@@ -24,6 +26,9 @@ sealed interface EditIngestionUiIntent {
     data class UpdateNotes(val value: String) : EditIngestionUiIntent
     data class SelectQuantityLevel(val level: Int) : EditIngestionUiIntent
     data class SelectTimePreset(val preset: IngestionTimePreset) : EditIngestionUiIntent
+    data object ShowDeleteConfirmation : EditIngestionUiIntent
+    data object DismissDeleteConfirmation : EditIngestionUiIntent
+    data object ConfirmDelete : EditIngestionUiIntent
     data object Save : EditIngestionUiIntent
 }
 

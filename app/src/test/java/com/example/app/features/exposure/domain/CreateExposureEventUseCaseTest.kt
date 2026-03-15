@@ -116,6 +116,10 @@ private class FakeExposureRepository : ExposureRepository {
     override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> {
         return AppResult.Error(DomainError.IntegrityError("unused"))
     }
+
+    override suspend fun deleteExposure(id: Long): AppResult<Unit> {
+        return AppResult.Error(DomainError.IntegrityError("unused"))
+    }
 }
 
 private class FakeCurrentTimeProvider(

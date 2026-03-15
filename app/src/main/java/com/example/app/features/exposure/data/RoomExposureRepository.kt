@@ -1,5 +1,6 @@
 package com.example.app.features.exposure.data
 
+import android.database.sqlite.SQLiteConstraintException
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.exposure.domain.CreateExposureEventCommand
@@ -62,6 +63,22 @@ class RoomExposureRepository(
             AppResult.Success(updatedEntity.toDomain())
         } catch (_: Exception) {
             AppResult.Error(DomainError.PersistenceError("Couldn't update exposure locally. Try again."))
+        }
+    }
+
+    override suspend fun deleteExposure(id: Long): AppResult<Unit> {
+        return try {
+            exposureEventDao.getById(id)
+                ?: return AppResult.Error(DomainError.IntegrityError("Exposure record no longer exists."))
+            val deletedCount = exposureEventDao.deleteById(id)
+            if (deletedCount == 0) {
+                return AppResult.Error(DomainError.IntegrityError("Exposure record no longer exists."))
+            }
+            AppResult.Success(Unit)
+        } catch (_: SQLiteConstraintException) {
+            AppResult.Error(DomainError.IntegrityError("Exposure record could not be deleted safely."))
+        } catch (_: Exception) {
+            AppResult.Error(DomainError.PersistenceError("Couldn't delete exposure locally. Try again."))
         }
     }
 

@@ -131,6 +131,10 @@ class CreateOutbreakViewModelTest {
                     override suspend fun updateOutbreak(command: com.example.app.features.outbreak.domain.UpdateOutbreakEventCommand): AppResult<OutbreakEvent> {
                         error("Not used in create tests")
                     }
+
+                    override suspend fun deleteOutbreak(id: Long): AppResult<Unit> {
+                        error("Not used in create tests")
+                    }
                 },
                 currentTimeProvider = timeProvider
             )

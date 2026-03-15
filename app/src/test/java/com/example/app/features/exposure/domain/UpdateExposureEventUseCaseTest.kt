@@ -51,6 +51,8 @@ private class FakeEditableExposureRepository : ExposureRepository {
         updatedCommands += command
         return AppResult.Success(ExposureEvent(command.id, command.exposureType, command.occurredAtEpochMs, command.notes))
     }
+
+    override suspend fun deleteExposure(id: Long): AppResult<Unit> = error("unused")
 }
 
 private class FakeExposureCurrentTimeProvider(private val now: Long) : CurrentTimeProvider {

@@ -14,6 +14,8 @@ data class EditExposureUiState(
     val formMessage: String = "",
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
+    val isDeleting: Boolean = false,
+    val isDeleteConfirmationVisible: Boolean = false,
     val canSave: Boolean = false
 )
 
@@ -23,6 +25,9 @@ sealed interface EditExposureUiIntent {
     data class UpdateNotes(val value: String) : EditExposureUiIntent
     data class UpdateOccurredAtInput(val value: String) : EditExposureUiIntent
     data class SelectTimePreset(val preset: ExposureTimePreset) : EditExposureUiIntent
+    data object ShowDeleteConfirmation : EditExposureUiIntent
+    data object DismissDeleteConfirmation : EditExposureUiIntent
+    data object ConfirmDelete : EditExposureUiIntent
     data object Save : EditExposureUiIntent
 }
 

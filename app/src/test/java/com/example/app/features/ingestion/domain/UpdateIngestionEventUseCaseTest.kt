@@ -55,6 +55,8 @@ private class FakeEditableIngestionRepository : IngestionRepository {
             IngestionEvent(command.id, command.itemName, command.quantityLevel ?: 0, command.occurredAtEpochMs, command.notes)
         )
     }
+
+    override suspend fun deleteIngestion(id: Long): AppResult<Unit> = error("unused")
 }
 
 private class FakeEditableCurrentTimeProvider(private val now: Long) : CurrentTimeProvider {

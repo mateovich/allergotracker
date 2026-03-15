@@ -90,6 +90,10 @@ class CreateIngestionViewModelTest {
                     override suspend fun updateIngestion(command: com.example.app.features.ingestion.domain.UpdateIngestionEventCommand): AppResult<IngestionEvent> {
                         error("Not used in create tests")
                     }
+
+                    override suspend fun deleteIngestion(id: Long): AppResult<Unit> {
+                        error("Not used in create tests")
+                    }
                 },
                 currentTimeProvider = timeProvider
             )
