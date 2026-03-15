@@ -1,0 +1,47 @@
+package com.example.app.features.outbreak.ui
+
+data class OutbreakTimeOptionUiModel(
+    val key: String,
+    val label: String,
+    val offsetMillis: Long
+)
+
+enum class OutbreakTimePreset(
+    val label: String,
+    val offsetMillis: Long
+) {
+    NOW(label = "Now", offsetMillis = 0L),
+    THIRTY_MINUTES_AGO(label = "30m ago", offsetMillis = 30L * 60L * 1000L),
+    ONE_HOUR_AGO(label = "1h ago", offsetMillis = 60L * 60L * 1000L)
+}
+
+data class CreateOutbreakUiState(
+    val title: String = "Create Outbreak",
+    val outbreakDescriptor: String = "",
+    val bodyLocation: String = "",
+    val notes: String = "",
+    val occurredAtEpochMs: Long = 0L,
+    val occurredAtInput: String = "",
+    val occurredAtLabel: String = "",
+    val selectedTimePreset: OutbreakTimePreset = OutbreakTimePreset.NOW,
+    val timeOptions: List<OutbreakTimeOptionUiModel> = emptyList(),
+    val outbreakDescriptorError: String? = null,
+    val bodyLocationError: String? = null,
+    val occurredAtError: String? = null,
+    val formMessage: String = "",
+    val isSaving: Boolean = false,
+    val canSave: Boolean = false
+)
+
+sealed interface CreateOutbreakUiIntent {
+    data class UpdateOutbreakDescriptor(val value: String) : CreateOutbreakUiIntent
+    data class UpdateBodyLocation(val value: String) : CreateOutbreakUiIntent
+    data class UpdateNotes(val value: String) : CreateOutbreakUiIntent
+    data class UpdateOccurredAtInput(val value: String) : CreateOutbreakUiIntent
+    data class SelectTimePreset(val preset: OutbreakTimePreset) : CreateOutbreakUiIntent
+    data object Save : CreateOutbreakUiIntent
+}
+
+sealed interface CreateOutbreakUiEffect {
+    data object NavigateToRecords : CreateOutbreakUiEffect
+}

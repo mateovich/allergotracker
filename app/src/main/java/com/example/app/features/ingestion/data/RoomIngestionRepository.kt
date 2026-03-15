@@ -1,0 +1,80 @@
+package com.example.app.features.ingestion.data
+
+import com.example.app.core.common.error.DomainError
+import com.example.app.core.common.result.AppResult
+import com.example.app.features.ingestion.domain.CreateIngestionEventCommand
+import com.example.app.features.ingestion.domain.CurrentTimeProvider
+import com.example.app.features.ingestion.domain.IngestionEvent
+import com.example.app.features.ingestion.domain.IngestionRepository
+import com.example.app.features.ingestion.domain.UpdateIngestionEventCommand
+
+class RoomIngestionRepository(
+    private val ingestionEventDao: IngestionEventDao,
+    private val currentTimeProvider: CurrentTimeProvider
+) : IngestionRepository {
+    override suspend fun createIngestion(command: CreateIngestionEventCommand): AppResult<IngestionEvent> {
+        return try {
+            val entity = IngestionEventEntity(
+                itemName = command.itemName,
+                quantityLevel = command.quantityLevel ?: 0,
+                occurredAtEpochMs = command.occurredAtEpochMs,
+                notes = command.notes,
+                createdAtEpochMs = currentTimeProvider.nowEpochMillis()
+            )
+            val id = ingestionEventDao.insert(entity)
+            AppResult.Success(
+                IngestionEvent(
+                    id = id,
+                    itemName = entity.itemName,
+                    quantityLevel = entity.quantityLevel,
+                    occurredAtEpochMs = entity.occurredAtEpochMs,
+                    notes = entity.notes
+                )
+            )
+        } catch (_: Exception) {
+            AppResult.Error(
+                DomainError.PersistenceError("Couldn't save ingestion locally. Try again.")
+            )
+        }
+    }
+
+    override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> {
+        return try {
+            val entity = ingestionEventDao.getById(id)
+                ?: return AppResult.Error(DomainError.IntegrityError("Ingestion record no longer exists."))
+            AppResult.Success(entity.toDomain())
+        } catch (_: Exception) {
+            AppResult.Error(DomainError.PersistenceError("Couldn't load ingestion locally. Try again."))
+        }
+    }
+
+    override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> {
+        return try {
+            val currentEntity = ingestionEventDao.getById(command.id)
+                ?: return AppResult.Error(DomainError.IntegrityError("Ingestion record no longer exists."))
+            val updatedEntity = currentEntity.copy(
+                itemName = command.itemName,
+                quantityLevel = command.quantityLevel ?: 0,
+                occurredAtEpochMs = command.occurredAtEpochMs,
+                notes = command.notes
+            )
+            val updatedCount = ingestionEventDao.update(updatedEntity)
+            if (updatedCount == 0) {
+                return AppResult.Error(DomainError.IntegrityError("Ingestion record no longer exists."))
+            }
+            AppResult.Success(updatedEntity.toDomain())
+        } catch (_: Exception) {
+            AppResult.Error(DomainError.PersistenceError("Couldn't update ingestion locally. Try again."))
+        }
+    }
+
+    private fun IngestionEventEntity.toDomain(): IngestionEvent {
+        return IngestionEvent(
+            id = id,
+            itemName = itemName,
+            quantityLevel = quantityLevel,
+            occurredAtEpochMs = occurredAtEpochMs,
+            notes = notes
+        )
+    }
+}

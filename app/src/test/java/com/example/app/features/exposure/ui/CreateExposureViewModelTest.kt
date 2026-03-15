@@ -1,0 +1,111 @@
+package com.example.app.features.exposure.ui
+
+import com.example.app.MainDispatcherRule
+import com.example.app.core.common.result.AppResult
+import com.example.app.features.exposure.domain.CreateExposureDefaultsUseCase
+import com.example.app.features.exposure.domain.CreateExposureEventCommand
+import com.example.app.features.exposure.domain.CreateExposureEventUseCase
+import com.example.app.features.exposure.domain.ExposureEvent
+import com.example.app.features.exposure.domain.ExposureRepository
+import com.example.app.features.ingestion.domain.CurrentTimeProvider
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+
+class CreateExposureViewModelTest {
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
+
+    private val fixedNow = 1_700_000_000_000L
+
+    @Test
+    fun initializes_with_contextual_defaults_when_form_opens() {
+        val viewModel = buildViewModel()
+        val expectedTimeLabel = DateTimeFormatter.ofPattern("HH:mm")
+            .withZone(ZoneId.systemDefault())
+            .format(Instant.ofEpochMilli(fixedNow))
+
+        assertEquals(expectedTimeLabel, viewModel.state.value.occurredAtLabel)
+        assertEquals(ExposureTimePreset.NOW, viewModel.state.value.selectedTimePreset)
+        assertTrue(viewModel.state.value.occurredAtInput.isNotBlank())
+        assertFalse(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun invalid_save_keeps_user_input_and_shows_inline_errors() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType("Pollen"))
+        viewModel.onIntent(CreateExposureUiIntent.SelectTimePreset(ExposureTimePreset.ONE_HOUR_AGO))
+        viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType("   "))
+        viewModel.onIntent(CreateExposureUiIntent.Save)
+
+        assertEquals("   ", viewModel.state.value.exposureType)
+        assertEquals("Enter what you were exposed to.", viewModel.state.value.exposureTypeError)
+        assertTrue(viewModel.state.value.formMessage.isNotBlank())
+    }
+
+    @Test
+    fun successful_save_emits_navigation_back_to_records() = runBlocking {
+        val viewModel = buildViewModel()
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType("Pollen"))
+        viewModel.onIntent(CreateExposureUiIntent.Save)
+
+        assertEquals(CreateExposureUiEffect.NavigateToRecords, effect.await())
+    }
+
+    @Test
+    fun invalid_datetime_input_shows_actionable_inline_error() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType("Pollen"))
+        viewModel.onIntent(CreateExposureUiIntent.UpdateOccurredAtInput("bad-input"))
+        viewModel.onIntent(CreateExposureUiIntent.Save)
+
+        assertEquals("Enter date and time as yyyy-MM-dd HH:mm.", viewModel.state.value.occurredAtError)
+        assertEquals("Please fix the highlighted fields.", viewModel.state.value.formMessage)
+    }
+
+    private fun buildViewModel(): CreateExposureViewModel {
+        val timeProvider = object : CurrentTimeProvider {
+            override fun nowEpochMillis(): Long = fixedNow
+        }
+        return CreateExposureViewModel(
+            createExposureDefaultsUseCase = CreateExposureDefaultsUseCase(timeProvider),
+            createExposureEventUseCase = CreateExposureEventUseCase(
+                repository = object : ExposureRepository {
+                    override suspend fun createExposure(command: CreateExposureEventCommand): AppResult<ExposureEvent> {
+                        return AppResult.Success(
+                            ExposureEvent(
+                                id = 11L,
+                                exposureType = command.exposureType,
+                                occurredAtEpochMs = command.occurredAtEpochMs,
+                                notes = command.notes
+                            )
+                        )
+                    }
+
+                    override suspend fun getExposure(id: Long): AppResult<ExposureEvent> {
+                        error("Not used in create tests")
+                    }
+
+                    override suspend fun updateExposure(command: com.example.app.features.exposure.domain.UpdateExposureEventCommand): AppResult<ExposureEvent> {
+                        error("Not used in create tests")
+                    }
+                },
+                currentTimeProvider = timeProvider
+            )
+        )
+    }
+}
