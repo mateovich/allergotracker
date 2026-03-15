@@ -80,7 +80,7 @@ fun EditExposureScreen(
                 AlertDialog(
                     onDismissRequest = { viewModel.onIntent(EditExposureUiIntent.DismissDeleteConfirmation) },
                     title = { Text("Delete record?") },
-                    text = { Text("Delete exposure record \"${state.exposureType}\"? This cannot be undone.") },
+                    text = { Text("Delete exposure record \"${state.deleteRecordLabel}\"? This cannot be undone.") },
                     confirmButton = {
                         Button(
                             onClick = { viewModel.onIntent(EditExposureUiIntent.ConfirmDelete) },
@@ -153,7 +153,7 @@ fun EditExposureScreen(
             }
             OutlinedButton(
                 onClick = { viewModel.onIntent(EditExposureUiIntent.ShowDeleteConfirmation) },
-                enabled = !state.isSaving && !state.isDeleting,
+                enabled = state.canDelete && !state.isSaving && !state.isDeleting,
                 modifier = Modifier.fillMaxWidth().testTag("edit-exposure-delete")
             ) {
                 Text(if (state.isDeleting) "Deleting..." else "Delete record", color = MaterialTheme.colorScheme.error)

@@ -88,12 +88,14 @@ class EditIngestionViewModel(
                     updateState {
                         it.copy(
                             itemName = event.itemName,
+                            deleteRecordLabel = event.itemName,
                             notes = event.notes.orEmpty(),
                             occurredAtEpochMs = event.occurredAtEpochMs,
                             occurredAtLabel = formatTime(event.occurredAtEpochMs),
                             selectedQuantityLevel = event.quantityLevel,
                             isLoading = false,
-                            canSave = canSave(event.itemName, event.quantityLevel)
+                            canSave = canSave(event.itemName, event.quantityLevel),
+                            canDelete = event.itemName.isNotBlank()
                         )
                     }
                 }
@@ -182,7 +184,7 @@ class EditIngestionViewModel(
 
     private fun showDeleteConfirmation() {
         val currentState = mutableState.value
-        if (currentState.isLoading || currentState.isSaving || currentState.isDeleting || currentState.itemName.isBlank()) return
+        if (currentState.isLoading || currentState.isSaving || currentState.isDeleting || !currentState.canDelete) return
         updateState { it.copy(isDeleteConfirmationVisible = true, formMessage = "") }
     }
 

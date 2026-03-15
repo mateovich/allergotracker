@@ -87,7 +87,7 @@ fun EditIngestionScreen(
                 AlertDialog(
                     onDismissRequest = { viewModel.onIntent(EditIngestionUiIntent.DismissDeleteConfirmation) },
                     title = { Text("Delete record?") },
-                    text = { Text("Delete ingestion record \"${state.itemName}\"? This cannot be undone.") },
+                    text = { Text("Delete ingestion record \"${state.deleteRecordLabel}\"? This cannot be undone.") },
                     confirmButton = {
                         Button(
                             onClick = { viewModel.onIntent(EditIngestionUiIntent.ConfirmDelete) },
@@ -170,7 +170,7 @@ fun EditIngestionScreen(
             }
             OutlinedButton(
                 onClick = { viewModel.onIntent(EditIngestionUiIntent.ShowDeleteConfirmation) },
-                enabled = !state.isSaving && !state.isDeleting,
+                enabled = state.canDelete && !state.isSaving && !state.isDeleting,
                 modifier = Modifier.fillMaxWidth().testTag("edit-ingestion-delete")
             ) {
                 Text(if (state.isDeleting) "Deleting..." else "Delete record", color = MaterialTheme.colorScheme.error)

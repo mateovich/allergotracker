@@ -104,12 +104,14 @@ class EditOutbreakViewModel(
                         it.copy(
                             outbreakDescriptor = event.outbreakDescriptor,
                             bodyLocation = event.bodyLocation,
+                            deleteRecordLabel = deleteRecordLabel(event.outbreakDescriptor, event.bodyLocation),
                             notes = event.notes.orEmpty(),
                             occurredAtEpochMs = event.occurredAtEpochMs,
                             occurredAtInput = formatDateTimeInput(event.occurredAtEpochMs),
                             occurredAtLabel = formatTime(event.occurredAtEpochMs),
                             isLoading = false,
-                            canSave = canSave(event.outbreakDescriptor, event.bodyLocation)
+                            canSave = canSave(event.outbreakDescriptor, event.bodyLocation),
+                            canDelete = canDelete(event.outbreakDescriptor, event.bodyLocation)
                         )
                     }
                 }
@@ -202,8 +204,17 @@ class EditOutbreakViewModel(
 
     private fun showDeleteConfirmation() {
         val currentState = mutableState.value
-        if (currentState.isLoading || currentState.isSaving || currentState.isDeleting || currentState.outbreakDescriptor.isBlank()) return
+        if (currentState.isLoading || currentState.isSaving || currentState.isDeleting || !currentState.canDelete) return
         updateState { it.copy(isDeleteConfirmationVisible = true, formMessage = "") }
+    }
+
+    private fun canDelete(outbreakDescriptor: String, bodyLocation: String): Boolean {
+        return outbreakDescriptor.isNotBlank() && bodyLocation.isNotBlank()
+    }
+
+    private fun deleteRecordLabel(outbreakDescriptor: String, bodyLocation: String): String {
+        if (!canDelete(outbreakDescriptor, bodyLocation)) return ""
+        return "$outbreakDescriptor at $bodyLocation"
     }
 
     private fun canSave(outbreakDescriptor: String, bodyLocation: String): Boolean {

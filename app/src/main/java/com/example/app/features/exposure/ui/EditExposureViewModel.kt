@@ -95,12 +95,14 @@ class EditExposureViewModel(
                     updateState {
                         it.copy(
                             exposureType = event.exposureType,
+                            deleteRecordLabel = event.exposureType,
                             notes = event.notes.orEmpty(),
                             occurredAtEpochMs = event.occurredAtEpochMs,
                             occurredAtInput = formatDateTimeInput(event.occurredAtEpochMs),
                             occurredAtLabel = formatTime(event.occurredAtEpochMs),
                             isLoading = false,
-                            canSave = event.exposureType.isNotBlank()
+                            canSave = event.exposureType.isNotBlank(),
+                            canDelete = event.exposureType.isNotBlank()
                         )
                     }
                 }
@@ -191,7 +193,7 @@ class EditExposureViewModel(
 
     private fun showDeleteConfirmation() {
         val currentState = mutableState.value
-        if (currentState.isLoading || currentState.isSaving || currentState.isDeleting || currentState.exposureType.isBlank()) return
+        if (currentState.isLoading || currentState.isSaving || currentState.isDeleting || !currentState.canDelete) return
         updateState { it.copy(isDeleteConfirmationVisible = true, formMessage = "") }
     }
 

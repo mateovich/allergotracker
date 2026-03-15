@@ -50,6 +50,7 @@ import com.example.app.features.records.domain.RecordsRepository
 import com.example.app.navigation.AppRoutes
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import org.junit.Assert.assertEquals
@@ -213,40 +214,19 @@ class RecordsScreenTest {
     @Test
     fun ingestion_delete_flow_removes_row_and_returns_to_records() {
         val fixedNow = 1_700_000_000_000L
-        val timeline = MutableStateFlow(
-            listOf(
-                RecordSummary(
-                    id = "ingestion-7",
-                    sortKey = 7L,
-                    typeLabel = "Ingestion",
-                    title = "Tea",
-                    detailLabel = "2 Light snack",
-                    occurredAtEpochMs = fixedNow - 60_000L,
-                    sourceId = 7L,
-                    eventType = RecordEventType.INGESTION
-                )
-            )
+        val store = ReactiveRecordStore(
+            ingestion = IngestionEvent(7L, "Tea", 2, fixedNow - 60_000L, "with honey")
         )
-        var currentEvent = IngestionEvent(7L, "Tea", 2, fixedNow - 60_000L, "with honey")
 
-        val recordsFactory = recordsFactoryFor(timeline, fixedNow)
+        val recordsFactory = recordsFactoryFor(store.recordsRepository(), fixedNow)
         val editFactory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                val repository = object : IngestionRepository {
-                    override suspend fun createIngestion(command: com.example.app.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
-                    override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> = AppResult.Success(currentEvent)
-                    override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> = AppResult.Success(currentEvent)
-                    override suspend fun deleteIngestion(id: Long): AppResult<Unit> {
-                        timeline.value = emptyList()
-                        return AppResult.Success(Unit)
-                    }
-                }
                 return EditIngestionViewModel(
                     recordId = 7L,
-                    getIngestionEventUseCase = GetIngestionEventUseCase(repository),
-                    deleteIngestionEventUseCase = DeleteIngestionEventUseCase(repository),
-                    updateIngestionEventUseCase = UpdateIngestionEventUseCase(repository, CurrentTimeProvider { fixedNow }),
+                    getIngestionEventUseCase = GetIngestionEventUseCase(store.ingestionRepository()),
+                    deleteIngestionEventUseCase = DeleteIngestionEventUseCase(store.ingestionRepository()),
+                    updateIngestionEventUseCase = UpdateIngestionEventUseCase(store.ingestionRepository(), CurrentTimeProvider { fixedNow }),
                     currentTimeProvider = CurrentTimeProvider { fixedNow }
                 ) as T
             }
@@ -268,40 +248,19 @@ class RecordsScreenTest {
     @Test
     fun exposure_delete_flow_removes_row_and_returns_to_records() {
         val fixedNow = 1_700_000_000_000L
-        val timeline = MutableStateFlow(
-            listOf(
-                RecordSummary(
-                    id = "exposure-5",
-                    sortKey = 5L,
-                    typeLabel = "Exposure",
-                    title = "Pollen",
-                    detailLabel = "Exposure recorded",
-                    occurredAtEpochMs = fixedNow - 120_000L,
-                    sourceId = 5L,
-                    eventType = RecordEventType.EXPOSURE
-                )
-            )
+        val store = ReactiveRecordStore(
+            exposure = ExposureEvent(5L, "Pollen", fixedNow - 120_000L, "outside")
         )
-        var currentEvent = ExposureEvent(5L, "Pollen", fixedNow - 120_000L, "outside")
 
-        val recordsFactory = recordsFactoryFor(timeline, fixedNow)
+        val recordsFactory = recordsFactoryFor(store.recordsRepository(), fixedNow)
         val editFactory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                val repository = object : ExposureRepository {
-                    override suspend fun createExposure(command: com.example.app.features.exposure.domain.CreateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
-                    override suspend fun getExposure(id: Long): AppResult<ExposureEvent> = AppResult.Success(currentEvent)
-                    override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> = AppResult.Success(currentEvent)
-                    override suspend fun deleteExposure(id: Long): AppResult<Unit> {
-                        timeline.value = emptyList()
-                        return AppResult.Success(Unit)
-                    }
-                }
                 return EditExposureViewModel(
                     recordId = 5L,
-                    getExposureEventUseCase = GetExposureEventUseCase(repository),
-                    deleteExposureEventUseCase = DeleteExposureEventUseCase(repository),
-                    updateExposureEventUseCase = UpdateExposureEventUseCase(repository, CurrentTimeProvider { fixedNow }),
+                    getExposureEventUseCase = GetExposureEventUseCase(store.exposureRepository()),
+                    deleteExposureEventUseCase = DeleteExposureEventUseCase(store.exposureRepository()),
+                    updateExposureEventUseCase = UpdateExposureEventUseCase(store.exposureRepository(), CurrentTimeProvider { fixedNow }),
                     currentTimeProvider = CurrentTimeProvider { fixedNow }
                 ) as T
             }
@@ -323,40 +282,19 @@ class RecordsScreenTest {
     @Test
     fun outbreak_delete_flow_removes_row_and_returns_to_records() {
         val fixedNow = 1_700_000_000_000L
-        val timeline = MutableStateFlow(
-            listOf(
-                RecordSummary(
-                    id = "outbreak-9",
-                    sortKey = 9L,
-                    typeLabel = "Outbreak",
-                    title = "Skin flare",
-                    detailLabel = "Arm - after workout",
-                    occurredAtEpochMs = fixedNow - 180_000L,
-                    sourceId = 9L,
-                    eventType = RecordEventType.OUTBREAK
-                )
-            )
+        val store = ReactiveRecordStore(
+            outbreak = OutbreakEvent(9L, "Skin flare", "Arm", fixedNow - 180_000L, "after workout")
         )
-        var currentEvent = OutbreakEvent(9L, "Skin flare", "Arm", fixedNow - 180_000L, "after workout")
 
-        val recordsFactory = recordsFactoryFor(timeline, fixedNow)
+        val recordsFactory = recordsFactoryFor(store.recordsRepository(), fixedNow)
         val editFactory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                val repository = object : OutbreakRepository {
-                    override suspend fun createOutbreak(command: com.example.app.features.outbreak.domain.CreateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
-                    override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> = AppResult.Success(currentEvent)
-                    override suspend fun updateOutbreak(command: UpdateOutbreakEventCommand): AppResult<OutbreakEvent> = AppResult.Success(currentEvent)
-                    override suspend fun deleteOutbreak(id: Long): AppResult<Unit> {
-                        timeline.value = emptyList()
-                        return AppResult.Success(Unit)
-                    }
-                }
                 return EditOutbreakViewModel(
                     recordId = 9L,
-                    getOutbreakEventUseCase = GetOutbreakEventUseCase(repository),
-                    deleteOutbreakEventUseCase = DeleteOutbreakEventUseCase(repository),
-                    updateOutbreakEventUseCase = UpdateOutbreakEventUseCase(repository, CurrentTimeProvider { fixedNow }),
+                    getOutbreakEventUseCase = GetOutbreakEventUseCase(store.outbreakRepository()),
+                    deleteOutbreakEventUseCase = DeleteOutbreakEventUseCase(store.outbreakRepository()),
+                    updateOutbreakEventUseCase = UpdateOutbreakEventUseCase(store.outbreakRepository(), CurrentTimeProvider { fixedNow }),
                     currentTimeProvider = CurrentTimeProvider { fixedNow }
                 ) as T
             }
@@ -368,7 +306,7 @@ class RecordsScreenTest {
 
         composeRule.onNodeWithTag("record-item-outbreak-9").performClick()
         composeRule.onNodeWithTag("edit-outbreak-delete").performClick()
-        composeRule.onNodeWithText("Delete outbreak record \"Skin flare\" at \"Arm\"? This cannot be undone.").assertIsDisplayed()
+        composeRule.onNodeWithText("Delete outbreak record \"Skin flare at Arm\"? This cannot be undone.").assertIsDisplayed()
         composeRule.onNodeWithTag("edit-outbreak-delete-confirm").performClick()
 
         composeRule.onNodeWithTag("records-empty-state").assertIsDisplayed()
@@ -452,13 +390,9 @@ private fun OutbreakEditJourneyHost(
 }
 
 private fun recordsFactoryFor(
-    timeline: MutableStateFlow<List<RecordSummary>>,
+    recordsRepository: RecordsRepository,
     fixedNow: Long
 ): ViewModelProvider.Factory {
-    val recordsRepository = object : RecordsRepository {
-        override fun observeRecordCount(): Flow<Int> = timeline.map { it.size }
-        override fun observeRecords(): Flow<List<RecordSummary>> = timeline
-    }
     return object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -469,4 +403,144 @@ private fun recordsFactoryFor(
             ) as T
         }
     }
+}
+
+private class ReactiveRecordStore(
+    ingestion: IngestionEvent? = null,
+    exposure: ExposureEvent? = null,
+    outbreak: OutbreakEvent? = null
+) {
+    private val ingestionState = MutableStateFlow(ingestion)
+    private val exposureState = MutableStateFlow(exposure)
+    private val outbreakState = MutableStateFlow(outbreak)
+
+    fun recordsRepository(): RecordsRepository = object : RecordsRepository {
+        override fun observeRecordCount(): Flow<Int> = observeRecords().map { it.size }
+
+        override fun observeRecords(): Flow<List<RecordSummary>> {
+            return combine(ingestionState, exposureState, outbreakState) { ingestionEvent, exposureEvent, outbreakEvent ->
+                listOfNotNull(
+                    ingestionEvent?.toRecordSummary(),
+                    exposureEvent?.toRecordSummary(),
+                    outbreakEvent?.toRecordSummary()
+                ).sortedWith(compareByDescending<RecordSummary> { it.occurredAtEpochMs }.thenByDescending { it.sourceId })
+            }
+        }
+    }
+
+    fun ingestionRepository(): IngestionRepository = object : IngestionRepository {
+        override suspend fun createIngestion(command: com.example.app.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
+
+        override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> {
+            return ingestionState.value?.takeIf { it.id == id }?.let { AppResult.Success(it) }
+                ?: AppResult.Error(com.example.app.core.common.error.DomainError.PersistenceError("Missing ingestion"))
+        }
+
+        override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> {
+            val current = ingestionState.value ?: return AppResult.Error(com.example.app.core.common.error.DomainError.PersistenceError("Missing ingestion"))
+            val updated = current.copy(
+                itemName = command.itemName,
+                quantityLevel = command.quantityLevel ?: current.quantityLevel,
+                occurredAtEpochMs = command.occurredAtEpochMs,
+                notes = command.notes
+            )
+            ingestionState.value = updated
+            return AppResult.Success(updated)
+        }
+
+        override suspend fun deleteIngestion(id: Long): AppResult<Unit> {
+            ingestionState.value = null
+            return AppResult.Success(Unit)
+        }
+    }
+
+    fun exposureRepository(): ExposureRepository = object : ExposureRepository {
+        override suspend fun createExposure(command: com.example.app.features.exposure.domain.CreateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
+
+        override suspend fun getExposure(id: Long): AppResult<ExposureEvent> {
+            return exposureState.value?.takeIf { it.id == id }?.let { AppResult.Success(it) }
+                ?: AppResult.Error(com.example.app.core.common.error.DomainError.PersistenceError("Missing exposure"))
+        }
+
+        override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> {
+            val current = exposureState.value ?: return AppResult.Error(com.example.app.core.common.error.DomainError.PersistenceError("Missing exposure"))
+            val updated = current.copy(
+                exposureType = command.exposureType,
+                occurredAtEpochMs = command.occurredAtEpochMs,
+                notes = command.notes
+            )
+            exposureState.value = updated
+            return AppResult.Success(updated)
+        }
+
+        override suspend fun deleteExposure(id: Long): AppResult<Unit> {
+            exposureState.value = null
+            return AppResult.Success(Unit)
+        }
+    }
+
+    fun outbreakRepository(): OutbreakRepository = object : OutbreakRepository {
+        override suspend fun createOutbreak(command: com.example.app.features.outbreak.domain.CreateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
+
+        override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> {
+            return outbreakState.value?.takeIf { it.id == id }?.let { AppResult.Success(it) }
+                ?: AppResult.Error(com.example.app.core.common.error.DomainError.PersistenceError("Missing outbreak"))
+        }
+
+        override suspend fun updateOutbreak(command: UpdateOutbreakEventCommand): AppResult<OutbreakEvent> {
+            val current = outbreakState.value ?: return AppResult.Error(com.example.app.core.common.error.DomainError.PersistenceError("Missing outbreak"))
+            val updated = current.copy(
+                outbreakDescriptor = command.outbreakDescriptor,
+                bodyLocation = command.bodyLocation,
+                occurredAtEpochMs = command.occurredAtEpochMs,
+                notes = command.notes
+            )
+            outbreakState.value = updated
+            return AppResult.Success(updated)
+        }
+
+        override suspend fun deleteOutbreak(id: Long): AppResult<Unit> {
+            outbreakState.value = null
+            return AppResult.Success(Unit)
+        }
+    }
+}
+
+private fun IngestionEvent.toRecordSummary(): RecordSummary {
+    return RecordSummary(
+        id = "ingestion-$id",
+        sortKey = id,
+        typeLabel = "Ingestion",
+        title = itemName,
+        detailLabel = "$quantityLevel Light snack",
+        occurredAtEpochMs = occurredAtEpochMs,
+        sourceId = id,
+        eventType = RecordEventType.INGESTION
+    )
+}
+
+private fun ExposureEvent.toRecordSummary(): RecordSummary {
+    return RecordSummary(
+        id = "exposure-$id",
+        sortKey = id,
+        typeLabel = "Exposure",
+        title = exposureType,
+        detailLabel = "Exposure recorded",
+        occurredAtEpochMs = occurredAtEpochMs,
+        sourceId = id,
+        eventType = RecordEventType.EXPOSURE
+    )
+}
+
+private fun OutbreakEvent.toRecordSummary(): RecordSummary {
+    return RecordSummary(
+        id = "outbreak-$id",
+        sortKey = id,
+        typeLabel = "Outbreak",
+        title = outbreakDescriptor,
+        detailLabel = "$bodyLocation - ${notes ?: ""}".trimEnd(' ', '-'),
+        occurredAtEpochMs = occurredAtEpochMs,
+        sourceId = id,
+        eventType = RecordEventType.OUTBREAK
+    )
 }

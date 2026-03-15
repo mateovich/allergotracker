@@ -33,8 +33,10 @@ class EditIngestionViewModelTest {
         viewModel.onIntent(EditIngestionUiIntent.Load)
 
         assertEquals("Tea", viewModel.state.value.itemName)
+        assertEquals("Tea", viewModel.state.value.deleteRecordLabel)
         assertEquals(2, viewModel.state.value.selectedQuantityLevel)
         assertEquals("with honey", viewModel.state.value.notes)
+        assertTrue(viewModel.state.value.canDelete)
     }
 
     @Test
@@ -85,6 +87,17 @@ class EditIngestionViewModelTest {
         viewModel.onIntent(EditIngestionUiIntent.ConfirmDelete)
 
         assertEquals(EditIngestionUiEffect.NavigateToRecords, effect.await())
+    }
+
+    @Test
+    fun delete_confirmation_uses_persisted_label_not_unsaved_form_edit() = runBlocking {
+        val viewModel = buildViewModel()
+        viewModel.onIntent(EditIngestionUiIntent.Load)
+
+        viewModel.onIntent(EditIngestionUiIntent.UpdateItemName("Tea edited"))
+
+        assertEquals("Tea", viewModel.state.value.deleteRecordLabel)
+        assertTrue(viewModel.state.value.canDelete)
     }
 
     @Test

@@ -34,8 +34,10 @@ class EditExposureViewModelTest {
         viewModel.onIntent(EditExposureUiIntent.Load)
 
         assertEquals("Pollen", viewModel.state.value.exposureType)
+        assertEquals("Pollen", viewModel.state.value.deleteRecordLabel)
         assertEquals("outside", viewModel.state.value.notes)
         assertTrue(viewModel.state.value.occurredAtInput.isNotBlank())
+        assertTrue(viewModel.state.value.canDelete)
     }
 
     @Test
@@ -86,6 +88,17 @@ class EditExposureViewModelTest {
         viewModel.onIntent(EditExposureUiIntent.ConfirmDelete)
 
         assertEquals(EditExposureUiEffect.NavigateToRecords, effect.await())
+    }
+
+    @Test
+    fun delete_confirmation_uses_persisted_label_not_unsaved_form_edit() = runBlocking {
+        val viewModel = buildViewModel()
+        viewModel.onIntent(EditExposureUiIntent.Load)
+
+        viewModel.onIntent(EditExposureUiIntent.UpdateExposureType("Dust"))
+
+        assertEquals("Pollen", viewModel.state.value.deleteRecordLabel)
+        assertTrue(viewModel.state.value.canDelete)
     }
 
     @Test

@@ -35,7 +35,9 @@ class EditOutbreakViewModelTest {
 
         assertEquals("Skin flare", viewModel.state.value.outbreakDescriptor)
         assertEquals("Left arm", viewModel.state.value.bodyLocation)
+        assertEquals("Skin flare at Left arm", viewModel.state.value.deleteRecordLabel)
         assertEquals("after workout", viewModel.state.value.notes)
+        assertTrue(viewModel.state.value.canDelete)
     }
 
     @Test
@@ -86,6 +88,42 @@ class EditOutbreakViewModelTest {
         viewModel.onIntent(EditOutbreakUiIntent.ConfirmDelete)
 
         assertEquals(EditOutbreakUiEffect.NavigateToRecords, effect.await())
+    }
+
+    @Test
+    fun delete_confirmation_uses_persisted_label_not_unsaved_form_edit() = runBlocking {
+        val viewModel = buildViewModel()
+        viewModel.onIntent(EditOutbreakUiIntent.Load)
+
+        viewModel.onIntent(EditOutbreakUiIntent.UpdateOutbreakDescriptor("Skin flare edited"))
+        viewModel.onIntent(EditOutbreakUiIntent.UpdateBodyLocation("Right arm"))
+
+        assertEquals("Skin flare at Left arm", viewModel.state.value.deleteRecordLabel)
+        assertTrue(viewModel.state.value.canDelete)
+    }
+
+    @Test
+    fun delete_stays_unavailable_when_persisted_record_lacks_required_target_details() = runBlocking {
+        val repository = object : OutbreakRepository {
+            override suspend fun createOutbreak(command: com.example.app.features.outbreak.domain.CreateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
+            override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> = AppResult.Success(OutbreakEvent(id, "Skin flare", "", existingOccurredAt, "after workout"))
+            override suspend fun updateOutbreak(command: UpdateOutbreakEventCommand): AppResult<OutbreakEvent> = AppResult.Success(OutbreakEvent(command.id, command.outbreakDescriptor, command.bodyLocation, command.occurredAtEpochMs, command.notes))
+            override suspend fun deleteOutbreak(id: Long): AppResult<Unit> = AppResult.Success(Unit)
+        }
+        val viewModel = EditOutbreakViewModel(
+            recordId = 9L,
+            getOutbreakEventUseCase = GetOutbreakEventUseCase(repository),
+            deleteOutbreakEventUseCase = DeleteOutbreakEventUseCase(repository),
+            updateOutbreakEventUseCase = UpdateOutbreakEventUseCase(repository, CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = CurrentTimeProvider { fixedNow }
+        )
+
+        viewModel.onIntent(EditOutbreakUiIntent.Load)
+        viewModel.onIntent(EditOutbreakUiIntent.ShowDeleteConfirmation)
+
+        assertEquals("", viewModel.state.value.deleteRecordLabel)
+        assertTrue(!viewModel.state.value.canDelete)
+        assertTrue(!viewModel.state.value.isDeleteConfirmationVisible)
     }
 
     @Test

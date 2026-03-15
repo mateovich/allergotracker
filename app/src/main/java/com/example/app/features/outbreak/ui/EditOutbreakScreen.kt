@@ -81,9 +81,7 @@ fun EditOutbreakScreen(
                     onDismissRequest = { viewModel.onIntent(EditOutbreakUiIntent.DismissDeleteConfirmation) },
                     title = { Text("Delete record?") },
                     text = {
-                        Text(
-                            "Delete outbreak record \"${state.outbreakDescriptor}\" at \"${state.bodyLocation}\"? This cannot be undone."
-                        )
+                        Text("Delete outbreak record \"${state.deleteRecordLabel}\"? This cannot be undone.")
                     },
                     confirmButton = {
                         Button(
@@ -169,7 +167,7 @@ fun EditOutbreakScreen(
             }
             OutlinedButton(
                 onClick = { viewModel.onIntent(EditOutbreakUiIntent.ShowDeleteConfirmation) },
-                enabled = !state.isSaving && !state.isDeleting,
+                enabled = state.canDelete && !state.isSaving && !state.isDeleting,
                 modifier = Modifier.fillMaxWidth().testTag("edit-outbreak-delete")
             ) {
                 Text(if (state.isDeleting) "Deleting..." else "Delete record", color = MaterialTheme.colorScheme.error)

@@ -167,6 +167,55 @@ class RoomRecordsRepositoryTest {
     }
 
     @Test
+    fun deleting_exposure_and_outbreak_records_updates_timeline_and_count_without_stale_rows() = runBlocking {
+        val ingestionEventDao = FakeIngestionEventDao(
+            events = listOf(
+                IngestionEventEntity(
+                    id = 7L,
+                    itemName = "Tea",
+                    quantityLevel = 2,
+                    occurredAtEpochMs = 1_700_000_200_000L,
+                    notes = null,
+                    createdAtEpochMs = 1_700_000_200_000L
+                )
+            )
+        )
+        val exposureEventDao = FakeExposureEventDao(
+            events = listOf(
+                ExposureEventEntity(
+                    id = 5L,
+                    exposureType = "Pollen",
+                    occurredAtEpochMs = 1_700_000_100_000L,
+                    notes = null,
+                    createdAtEpochMs = 1_700_000_100_000L
+                )
+            )
+        )
+        val outbreakEventDao = FakeOutbreakEventDao(
+            events = listOf(
+                OutbreakEventEntity(
+                    id = 3L,
+                    outbreakDescriptor = "Skin flare",
+                    bodyLocation = "Arm",
+                    occurredAtEpochMs = 1_700_000_000_000L,
+                    notes = null,
+                    createdAtEpochMs = 1_700_000_000_000L
+                )
+            )
+        )
+        val repository = RoomRecordsRepository(ingestionEventDao, exposureEventDao, outbreakEventDao)
+
+        exposureEventDao.deleteById(5L)
+        outbreakEventDao.deleteById(3L)
+
+        val records = repository.observeRecords().first()
+        val count = repository.observeRecordCount().first()
+
+        assertEquals(1, count)
+        assertEquals(listOf("ingestion-7"), records.map { it.id })
+    }
+
+    @Test
     fun equal_timestamps_with_equal_ids_use_explicit_event_type_tie_break() = runBlocking {
         val sharedTimestamp = 1_700_000_000_000L
         val repository = RoomRecordsRepository(

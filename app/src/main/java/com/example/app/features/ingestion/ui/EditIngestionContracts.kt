@@ -3,6 +3,7 @@ package com.example.app.features.ingestion.ui
 data class EditIngestionUiState(
     val title: String = "Edit Ingestion",
     val itemName: String = "",
+    val deleteRecordLabel: String = "",
     val notes: String = "",
     val occurredAtEpochMs: Long = 0L,
     val occurredAtLabel: String = "",
@@ -17,7 +18,8 @@ data class EditIngestionUiState(
     val isSaving: Boolean = false,
     val isDeleting: Boolean = false,
     val isDeleteConfirmationVisible: Boolean = false,
-    val canSave: Boolean = false
+    val canSave: Boolean = false,
+    val canDelete: Boolean = false
 )
 
 sealed interface EditIngestionUiIntent {

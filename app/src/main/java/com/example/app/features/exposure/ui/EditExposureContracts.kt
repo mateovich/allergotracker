@@ -3,6 +3,7 @@ package com.example.app.features.exposure.ui
 data class EditExposureUiState(
     val title: String = "Edit Exposure",
     val exposureType: String = "",
+    val deleteRecordLabel: String = "",
     val notes: String = "",
     val occurredAtEpochMs: Long = 0L,
     val occurredAtInput: String = "",
@@ -16,7 +17,8 @@ data class EditExposureUiState(
     val isSaving: Boolean = false,
     val isDeleting: Boolean = false,
     val isDeleteConfirmationVisible: Boolean = false,
-    val canSave: Boolean = false
+    val canSave: Boolean = false,
+    val canDelete: Boolean = false
 )
 
 sealed interface EditExposureUiIntent {
