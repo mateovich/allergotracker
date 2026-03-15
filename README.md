@@ -32,3 +32,7 @@ Android Native starter project (Empty Activity, Kotlin, Jetpack Compose) prepare
 
 - This baseline intentionally avoids non-essential backend/network dependencies.
 - Future stories will scaffold architecture layers and persistence foundations.
+
+## Project workflow
+
+- Git workflow quick reference: `docs/git-workflow.md`
