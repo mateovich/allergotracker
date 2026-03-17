@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.DropdownMenu
@@ -15,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -47,10 +49,33 @@ fun RecordsScreen(
     AppScreenScaffold(
         title = state.title,
         floatingActionButton = {
-            PrimaryAddFab(
-                contentDescription = state.addActionLabel,
-                onClick = { viewModel.onIntent(RecordsUiIntent.OpenAddEntryPoint) }
-            )
+            Box(modifier = Modifier.wrapContentSize(Alignment.BottomEnd)) {
+                PrimaryAddFab(
+                    contentDescription = state.addActionLabel,
+                    onClick = { viewModel.onIntent(RecordsUiIntent.OpenAddEntryPoint) }
+                )
+                DropdownMenu(
+                    expanded = state.isQuickPickerVisible,
+                    onDismissRequest = {
+                        viewModel.onIntent(RecordsUiIntent.DismissAddEntryPoint)
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = state.quickPickerLabel
+                    }
+                ) {
+                    EventType.entries.forEach { eventType ->
+                        DropdownMenuItem(
+                            text = { Text(text = eventType.label) },
+                            onClick = {
+                                viewModel.onIntent(RecordsUiIntent.SelectEventType(eventType))
+                            },
+                            modifier = Modifier.semantics {
+                                contentDescription = eventType.label
+                            }
+                        )
+                    }
+                }
+            }
         }
     ) { contentModifier ->
         if (!state.hasRecords) {
@@ -82,30 +107,6 @@ fun RecordsScreen(
                         Text(text = record.occurredAtLabel)
                         HorizontalDivider()
                     }
-                }
-            }
-        }
-
-        Box(modifier = contentModifier) {
-            DropdownMenu(
-                expanded = state.isQuickPickerVisible,
-                onDismissRequest = {
-                    viewModel.onIntent(RecordsUiIntent.DismissAddEntryPoint)
-                },
-                modifier = Modifier.semantics {
-                    contentDescription = state.quickPickerLabel
-                }
-            ) {
-                EventType.entries.forEach { eventType ->
-                    DropdownMenuItem(
-                        text = { Text(text = eventType.label) },
-                        onClick = {
-                            viewModel.onIntent(RecordsUiIntent.SelectEventType(eventType))
-                        },
-                        modifier = Modifier.semantics {
-                            contentDescription = eventType.label
-                        }
-                    )
                 }
             }
         }

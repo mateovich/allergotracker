@@ -13,6 +13,7 @@ data class RecordSummary(
     val title: String,
     val detailLabel: String,
     val occurredAtEpochMs: Long,
+    val createdAtEpochMs: Long,
     val sourceId: Long,
     val eventType: RecordEventType
 )

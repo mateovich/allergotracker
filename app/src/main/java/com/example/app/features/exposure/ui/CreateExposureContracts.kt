@@ -22,6 +22,7 @@ data class CreateExposureUiState(
     val occurredAtEpochMs: Long = 0L,
     val occurredAtInput: String = "",
     val occurredAtLabel: String = "",
+    val isOccurredAtManuallyEdited: Boolean = false,
     val selectedTimePreset: ExposureTimePreset = ExposureTimePreset.NOW,
     val timeOptions: List<ExposureTimeOptionUiModel> = emptyList(),
     val exposureTypeError: String? = null,

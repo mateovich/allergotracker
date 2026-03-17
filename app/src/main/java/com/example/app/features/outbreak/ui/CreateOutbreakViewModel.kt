@@ -61,6 +61,7 @@ class CreateOutbreakViewModel(
                     occurredAtInput = intent.value,
                     occurredAtEpochMs = parsedOccurredAt ?: it.occurredAtEpochMs,
                     occurredAtLabel = parsedOccurredAt?.let(::formatTime).orEmpty(),
+                    isOccurredAtManuallyEdited = true,
                     occurredAtError = null,
                     formMessage = ""
                 )
@@ -74,6 +75,7 @@ class CreateOutbreakViewModel(
                         occurredAtEpochMs = nextOccurredAt,
                         occurredAtInput = formatDateTimeInput(nextOccurredAt),
                         occurredAtLabel = formatTime(nextOccurredAt),
+                        isOccurredAtManuallyEdited = false,
                         occurredAtError = null,
                         formMessage = ""
                     )
@@ -86,16 +88,21 @@ class CreateOutbreakViewModel(
 
     private fun save() {
         val currentState = mutableState.value
-        val parsedOccurredAt = parseOccurredAtInput(currentState.occurredAtInput)
-        if (parsedOccurredAt == null) {
-            updateState {
-                it.copy(
-                    isSaving = false,
-                    occurredAtError = "Enter date and time as yyyy-MM-dd HH:mm.",
-                    formMessage = "Please fix the highlighted fields."
-                )
+        val occurredAtEpochMs = if (currentState.isOccurredAtManuallyEdited) {
+            val parsedOccurredAt = parseOccurredAtInput(currentState.occurredAtInput)
+            if (parsedOccurredAt == null) {
+                updateState {
+                    it.copy(
+                        isSaving = false,
+                        occurredAtError = "Enter date and time as yyyy-MM-dd HH:mm.",
+                        formMessage = "Please fix the highlighted fields."
+                    )
+                }
+                return
             }
-            return
+            parsedOccurredAt
+        } else {
+            currentState.occurredAtEpochMs
         }
 
         updateState { it.copy(isSaving = true, formMessage = "") }
@@ -105,7 +112,7 @@ class CreateOutbreakViewModel(
                     CreateOutbreakEventCommand(
                         outbreakDescriptor = currentState.outbreakDescriptor,
                         bodyLocation = currentState.bodyLocation,
-                        occurredAtEpochMs = parsedOccurredAt,
+                        occurredAtEpochMs = occurredAtEpochMs,
                         notes = currentState.notes
                     )
                 )
@@ -138,6 +145,7 @@ class CreateOutbreakViewModel(
             occurredAtEpochMs = defaults.occurredAtEpochMs,
             occurredAtInput = formatDateTimeInput(defaults.occurredAtEpochMs),
             occurredAtLabel = formatTime(defaults.occurredAtEpochMs),
+            isOccurredAtManuallyEdited = false,
             timeOptions = OutbreakTimePreset.entries.map { preset ->
                 OutbreakTimeOptionUiModel(
                     key = preset.name,

@@ -91,6 +91,7 @@ class RecordsViewModelTest {
                         title = "Tea",
                         detailLabel = "2 Light snack",
                         occurredAtEpochMs = fixedNow,
+                        createdAtEpochMs = fixedNow,
                         sourceId = 7L,
                         eventType = RecordEventType.INGESTION
                     )
@@ -143,6 +144,7 @@ class RecordsViewModelTest {
                         title = "Tea",
                         detailLabel = "2 Light snack",
                         occurredAtEpochMs = previousDayEpochMs,
+                        createdAtEpochMs = fixedNow,
                         sourceId = 7L,
                         eventType = RecordEventType.INGESTION
                     )

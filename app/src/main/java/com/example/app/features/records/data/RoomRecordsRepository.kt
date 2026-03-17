@@ -6,6 +6,7 @@ import com.example.app.features.ingestion.domain.IngestionQuantityOption
 import com.example.app.features.outbreak.data.OutbreakEventDao
 import com.example.app.features.records.domain.RecordEventType
 import com.example.app.features.records.domain.RecordSummary
+import com.example.app.features.records.domain.RecordSummaryComparator
 import com.example.app.features.records.domain.RecordsRepository
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
@@ -40,6 +41,7 @@ class RoomRecordsRepository(
                     title = entity.itemName,
                     detailLabel = IngestionQuantityOption.fromLevel(entity.quantityLevel)?.label.orEmpty(),
                     occurredAtEpochMs = entity.occurredAtEpochMs,
+                    createdAtEpochMs = entity.createdAtEpochMs,
                     sourceId = entity.id,
                     eventType = RecordEventType.INGESTION
                 )
@@ -53,6 +55,7 @@ class RoomRecordsRepository(
                     title = entity.exposureType,
                     detailLabel = entity.notes?.takeIf { it.isNotBlank() } ?: "Exposure recorded",
                     occurredAtEpochMs = entity.occurredAtEpochMs,
+                    createdAtEpochMs = entity.createdAtEpochMs,
                     sourceId = entity.id,
                     eventType = RecordEventType.EXPOSURE
                 )
@@ -69,17 +72,14 @@ class RoomRecordsRepository(
                         entity.notes?.takeIf { it.isNotBlank() }
                     ).joinToString(" - "),
                     occurredAtEpochMs = entity.occurredAtEpochMs,
+                    createdAtEpochMs = entity.createdAtEpochMs,
                     sourceId = entity.id,
                     eventType = RecordEventType.OUTBREAK
                 )
             }
 
             (ingestionRecords + exposureRecords + outbreakRecords)
-                .sortedWith(
-                    compareByDescending<RecordSummary> { it.occurredAtEpochMs }
-                        .thenByDescending { it.sortKey }
-                        .thenBy { it.eventType.ordinal }
-                )
+                .sortedWith(RecordSummaryComparator)
         }
     }
 }

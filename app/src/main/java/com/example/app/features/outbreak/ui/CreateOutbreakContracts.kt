@@ -23,6 +23,7 @@ data class CreateOutbreakUiState(
     val occurredAtEpochMs: Long = 0L,
     val occurredAtInput: String = "",
     val occurredAtLabel: String = "",
+    val isOccurredAtManuallyEdited: Boolean = false,
     val selectedTimePreset: OutbreakTimePreset = OutbreakTimePreset.NOW,
     val timeOptions: List<OutbreakTimeOptionUiModel> = emptyList(),
     val outbreakDescriptorError: String? = null,

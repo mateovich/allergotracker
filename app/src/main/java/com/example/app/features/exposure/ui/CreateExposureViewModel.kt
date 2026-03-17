@@ -47,8 +47,12 @@ class CreateExposureViewModel(
             }
 
             is CreateExposureUiIntent.UpdateOccurredAtInput -> updateState {
+                val parsedOccurredAt = parseOccurredAtInput(intent.value)
                 it.copy(
                     occurredAtInput = intent.value,
+                    occurredAtEpochMs = parsedOccurredAt ?: it.occurredAtEpochMs,
+                    occurredAtLabel = parsedOccurredAt?.let(::formatTime).orEmpty(),
+                    isOccurredAtManuallyEdited = true,
                     occurredAtError = null,
                     formMessage = ""
                 )
@@ -62,6 +66,7 @@ class CreateExposureViewModel(
                         occurredAtEpochMs = nextOccurredAt,
                         occurredAtInput = formatDateTimeInput(nextOccurredAt),
                         occurredAtLabel = formatTime(nextOccurredAt),
+                        isOccurredAtManuallyEdited = false,
                         occurredAtError = null,
                         formMessage = ""
                     )
@@ -74,24 +79,30 @@ class CreateExposureViewModel(
 
     private fun save() {
         val currentState = mutableState.value
-        val parsedOccurredAt = parseOccurredAtInput(currentState.occurredAtInput)
-        if (parsedOccurredAt == null) {
-            updateState {
-                it.copy(
-                    isSaving = false,
-                    occurredAtError = "Enter date and time as yyyy-MM-dd HH:mm.",
-                    formMessage = "Please fix the highlighted fields."
-                )
+        val occurredAtEpochMs = if (currentState.isOccurredAtManuallyEdited) {
+            val parsedOccurredAt = parseOccurredAtInput(currentState.occurredAtInput)
+            if (parsedOccurredAt == null) {
+                updateState {
+                    it.copy(
+                        isSaving = false,
+                        occurredAtError = "Enter date and time as yyyy-MM-dd HH:mm.",
+                        formMessage = "Please fix the highlighted fields."
+                    )
+                }
+                return
             }
-            return
+            parsedOccurredAt
+        } else {
+            currentState.occurredAtEpochMs
         }
+
         updateState { it.copy(isSaving = true, formMessage = "") }
         viewModelScope.launch {
             when (
                 val result = createExposureEventUseCase(
                     CreateExposureEventCommand(
                         exposureType = currentState.exposureType,
-                        occurredAtEpochMs = parsedOccurredAt,
+                        occurredAtEpochMs = occurredAtEpochMs,
                         notes = currentState.notes
                     )
                 )
@@ -123,6 +134,7 @@ class CreateExposureViewModel(
             occurredAtEpochMs = defaults.occurredAtEpochMs,
             occurredAtInput = formatDateTimeInput(defaults.occurredAtEpochMs),
             occurredAtLabel = formatTime(defaults.occurredAtEpochMs),
+            isOccurredAtManuallyEdited = false,
             timeOptions = ExposureTimePreset.entries.map { preset ->
                 ExposureTimeOptionUiModel(
                     key = preset.name,
