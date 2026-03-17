@@ -43,6 +43,9 @@ import com.example.app.features.records.domain.RecordsRepository
 import com.example.app.features.records.ui.RecordsViewModelFactory
 import kotlinx.coroutines.runBlocking
 
+/**
+ * Application composition root. Core event flows are wired only to Room-backed repositories.
+ */
 class AppContainer(appContext: Context) {
     private val systemCurrentTimeProvider = CurrentTimeProvider { System.currentTimeMillis() }
     private val appDatabase: AppDatabase = Room.databaseBuilder(

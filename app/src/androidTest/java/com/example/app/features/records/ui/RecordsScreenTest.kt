@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -312,6 +313,113 @@ class RecordsScreenTest {
         composeRule.onNodeWithTag("records-empty-state").assertIsDisplayed()
         composeRule.onAllNodesWithText("Skin flare").assertCountEquals(0)
     }
+
+    @Test
+    fun ingestion_edit_form_shows_shared_offline_notice() {
+        val fixedNow = 1_700_000_000_000L
+
+        assertEditFormShowsOfflineNotice(
+            composeRule = composeRule,
+            host = {
+                val store = ReactiveRecordStore(
+                    ingestion = IngestionEvent(7L, "Tea", 2, fixedNow - 60_000L, "with honey")
+                )
+                IngestionEditJourneyHost(
+                    recordsFactory = recordsFactoryFor(store.recordsRepository(), fixedNow),
+                    editFactory = object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return EditIngestionViewModel(
+                                recordId = 7L,
+                                getIngestionEventUseCase = GetIngestionEventUseCase(store.ingestionRepository()),
+                                deleteIngestionEventUseCase = DeleteIngestionEventUseCase(store.ingestionRepository()),
+                                updateIngestionEventUseCase = UpdateIngestionEventUseCase(store.ingestionRepository(), CurrentTimeProvider { fixedNow }),
+                                currentTimeProvider = CurrentTimeProvider { fixedNow }
+                            ) as T
+                        }
+                    }
+                )
+            },
+            recordTag = "record-item-ingestion-7",
+            formTag = "edit-ingestion-form-screen"
+        )
+    }
+
+    @Test
+    fun exposure_edit_form_shows_shared_offline_notice() {
+        val fixedNow = 1_700_000_000_000L
+
+        assertEditFormShowsOfflineNotice(
+            composeRule = composeRule,
+            host = {
+                val store = ReactiveRecordStore(
+                    exposure = ExposureEvent(5L, "Pollen", fixedNow - 120_000L, "outside")
+                )
+                ExposureEditJourneyHost(
+                    recordsFactory = recordsFactoryFor(store.recordsRepository(), fixedNow),
+                    editFactory = object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return EditExposureViewModel(
+                                recordId = 5L,
+                                getExposureEventUseCase = GetExposureEventUseCase(store.exposureRepository()),
+                                deleteExposureEventUseCase = DeleteExposureEventUseCase(store.exposureRepository()),
+                                updateExposureEventUseCase = UpdateExposureEventUseCase(store.exposureRepository(), CurrentTimeProvider { fixedNow }),
+                                currentTimeProvider = CurrentTimeProvider { fixedNow }
+                            ) as T
+                        }
+                    }
+                )
+            },
+            recordTag = "record-item-exposure-5",
+            formTag = "edit-exposure-form-screen"
+        )
+    }
+
+    @Test
+    fun outbreak_edit_form_shows_shared_offline_notice() {
+        val fixedNow = 1_700_000_000_000L
+
+        assertEditFormShowsOfflineNotice(
+            composeRule = composeRule,
+            host = {
+                val store = ReactiveRecordStore(
+                    outbreak = OutbreakEvent(9L, "Skin flare", "Arm", fixedNow - 180_000L, "after workout")
+                )
+                OutbreakEditJourneyHost(
+                    recordsFactory = recordsFactoryFor(store.recordsRepository(), fixedNow),
+                    editFactory = object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return EditOutbreakViewModel(
+                                recordId = 9L,
+                                getOutbreakEventUseCase = GetOutbreakEventUseCase(store.outbreakRepository()),
+                                deleteOutbreakEventUseCase = DeleteOutbreakEventUseCase(store.outbreakRepository()),
+                                updateOutbreakEventUseCase = UpdateOutbreakEventUseCase(store.outbreakRepository(), CurrentTimeProvider { fixedNow }),
+                                currentTimeProvider = CurrentTimeProvider { fixedNow }
+                            ) as T
+                        }
+                    }
+                )
+            },
+            recordTag = "record-item-outbreak-9",
+            formTag = "edit-outbreak-form-screen"
+        )
+    }
+}
+
+private fun assertEditFormShowsOfflineNotice(
+    composeRule: AndroidComposeTestRule<*, *>,
+    host: @Composable () -> Unit,
+    recordTag: String,
+    formTag: String
+) {
+    composeRule.setContent { host() }
+
+    composeRule.onNodeWithTag(recordTag).performClick()
+    composeRule.onNodeWithTag(formTag).assertIsDisplayed()
+    composeRule.onNodeWithTag("local-only-notice").assertIsDisplayed()
+    composeRule.onNodeWithText("Works offline. Saved only on this device.").assertIsDisplayed()
 }
 
 @Composable

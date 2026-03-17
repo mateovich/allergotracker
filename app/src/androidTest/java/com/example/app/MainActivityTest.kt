@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -67,6 +68,13 @@ class MainActivityTest {
         assertNavigatesToForm("Ingestion", "Create Ingestion")
         assertNavigatesToForm("Exposure", "Create Exposure")
         assertNavigatesToForm("Outbreak", "Create Outbreak")
+    }
+
+    @Test
+    fun create_forms_show_calm_offline_notice() {
+        assertCreateFormShowsOfflineNotice("Ingestion", "create-ingestion-form-screen")
+        assertCreateFormShowsOfflineNotice("Exposure", "create-exposure-form-screen")
+        assertCreateFormShowsOfflineNotice("Outbreak", "create-outbreak-form-screen")
     }
 
     @Test
@@ -165,6 +173,107 @@ class MainActivityTest {
         composeRule.onNodeWithText("Enter date and time as yyyy-MM-dd HH:mm.").assertIsDisplayed()
     }
 
+    @Test
+    fun saved_record_remains_visible_after_normal_activity_recreation() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        composeRule.onNodeWithTag("ingestion-item-name").performTextInput("Tea")
+        composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performClick()
+
+        composeRule.onNodeWithText("Tea").assertIsDisplayed()
+
+        composeRule.activityRule.scenario.recreate()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Records").assertIsDisplayed()
+        composeRule.onNodeWithText("Tea").assertIsDisplayed()
+        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+    }
+
+    @Test
+    fun ingestion_record_can_be_edited_and_deleted_offline_end_to_end() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        composeRule.onNodeWithTag("ingestion-item-name").performTextInput("Tea")
+        composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performClick()
+
+        composeRule.onNodeWithText("Tea").performClick()
+        assertOfflineFormHasNoDependencyWarnings("edit-ingestion-form-screen")
+
+        composeRule.onNodeWithTag("edit-ingestion-item-name").performTextReplacement("Green tea")
+        composeRule.onNodeWithTag("edit-ingestion-quantity-3").performClick()
+        composeRule.onNodeWithTag("edit-ingestion-save").performClick()
+
+        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        composeRule.onNodeWithText("Green tea").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Tea").assertCountEquals(0)
+
+        composeRule.onNodeWithText("Green tea").performClick()
+        composeRule.onNodeWithTag("edit-ingestion-delete").performClick()
+        composeRule.onNodeWithTag("edit-ingestion-delete-confirm").performClick()
+
+        composeRule.onNodeWithTag("records-empty-state").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Green tea").assertCountEquals(0)
+    }
+
+    @Test
+    fun exposure_record_can_be_edited_and_deleted_offline_end_to_end() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Exposure").performClick()
+
+        composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
+        composeRule.onNodeWithTag("exposure-save").performClick()
+
+        composeRule.onNodeWithText("Pollen").performClick()
+        assertOfflineFormHasNoDependencyWarnings("edit-exposure-form-screen")
+
+        composeRule.onNodeWithTag("edit-exposure-type").performTextReplacement("Dust")
+        composeRule.onNodeWithTag("edit-exposure-save").performClick()
+
+        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        composeRule.onNodeWithText("Dust").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Pollen").assertCountEquals(0)
+
+        composeRule.onNodeWithText("Dust").performClick()
+        composeRule.onNodeWithTag("edit-exposure-delete").performClick()
+        composeRule.onNodeWithTag("edit-exposure-delete-confirm").performClick()
+
+        composeRule.onNodeWithTag("records-empty-state").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Dust").assertCountEquals(0)
+    }
+
+    @Test
+    fun outbreak_record_can_be_edited_and_deleted_offline_end_to_end() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Outbreak").performClick()
+
+        composeRule.onNodeWithTag("outbreak-descriptor").performTextInput("Skin flare")
+        composeRule.onNodeWithTag("outbreak-body-location").performTextInput("Arm")
+        composeRule.onNodeWithTag("outbreak-save").performClick()
+
+        composeRule.onNodeWithText("Skin flare").performClick()
+        assertOfflineFormHasNoDependencyWarnings("edit-outbreak-form-screen")
+
+        composeRule.onNodeWithTag("edit-outbreak-descriptor").performTextReplacement("Skin rash")
+        composeRule.onNodeWithTag("edit-outbreak-body-location").performTextReplacement("Left arm")
+        composeRule.onNodeWithTag("edit-outbreak-save").performClick()
+
+        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        composeRule.onNodeWithText("Skin rash").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Skin flare").assertCountEquals(0)
+
+        composeRule.onNodeWithText("Skin rash").performClick()
+        composeRule.onNodeWithTag("edit-outbreak-delete").performClick()
+        composeRule.onNodeWithTag("edit-outbreak-delete-confirm").performClick()
+
+        composeRule.onNodeWithTag("records-empty-state").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Skin rash").assertCountEquals(0)
+    }
+
     private fun assertNavigatesToForm(optionLabel: String, destinationTitle: String) {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText(optionLabel).performClick()
@@ -178,5 +287,29 @@ class MainActivityTest {
         composeRule.onNodeWithText(destinationTitle).assertIsDisplayed()
         composeRule.onNodeWithTag(destinationTag).assertIsDisplayed()
         pressBack()
+    }
+
+    private fun assertCreateFormShowsOfflineNotice(optionLabel: String, destinationTag: String) {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText(optionLabel).performClick()
+
+        composeRule.onNodeWithTag(destinationTag).assertIsDisplayed()
+        assertOfflineFormHasNoDependencyWarnings(destinationTag)
+
+        pressBack()
+    }
+
+    private fun assertOfflineFormHasNoDependencyWarnings(destinationTag: String) {
+        composeRule.onNodeWithTag(destinationTag).assertIsDisplayed()
+        composeRule.onNodeWithTag("local-only-notice").assertIsDisplayed()
+        composeRule.onNodeWithText("Works offline. Saved only on this device.").assertIsDisplayed()
+        when {
+            destinationTag.startsWith("create-ingestion") -> composeRule.onAllNodesWithText("Couldn't save ingestion locally. Try again.").assertCountEquals(0)
+            destinationTag.startsWith("create-exposure") -> composeRule.onAllNodesWithText("Couldn't save exposure locally. Try again.").assertCountEquals(0)
+            destinationTag.startsWith("create-outbreak") -> composeRule.onAllNodesWithText("Couldn't save outbreak locally. Try again.").assertCountEquals(0)
+            destinationTag.startsWith("edit-ingestion") -> composeRule.onAllNodesWithText("Couldn't update ingestion locally. Try again.").assertCountEquals(0)
+            destinationTag.startsWith("edit-exposure") -> composeRule.onAllNodesWithText("Couldn't update exposure locally. Try again.").assertCountEquals(0)
+            destinationTag.startsWith("edit-outbreak") -> composeRule.onAllNodesWithText("Couldn't update outbreak locally. Try again.").assertCountEquals(0)
+        }
     }
 }

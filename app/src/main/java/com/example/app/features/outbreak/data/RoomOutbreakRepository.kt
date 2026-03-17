@@ -9,6 +9,7 @@ import com.example.app.features.outbreak.domain.OutbreakEvent
 import com.example.app.features.outbreak.domain.OutbreakRepository
 import com.example.app.features.outbreak.domain.UpdateOutbreakEventCommand
 
+/** Local source of truth for outbreak events backed by Room only. */
 class RoomOutbreakRepository(
     private val outbreakEventDao: OutbreakEventDao,
     private val currentTimeProvider: CurrentTimeProvider

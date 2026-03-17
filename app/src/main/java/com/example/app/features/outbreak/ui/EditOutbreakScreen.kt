@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.core.designsystem.AppScreenScaffold
+import com.example.app.core.designsystem.LocalOnlyNotice
 import com.example.app.navigation.AppRoutes
 import kotlinx.coroutines.flow.collectLatest
 
@@ -105,6 +106,7 @@ fun EditOutbreakScreen(
                     }
                 )
             }
+            LocalOnlyNotice()
             OutlinedTextField(
                 value = state.outbreakDescriptor,
                 onValueChange = { viewModel.onIntent(EditOutbreakUiIntent.UpdateOutbreakDescriptor(it)) },

@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.core.designsystem.AppScreenScaffold
+import com.example.app.core.designsystem.LocalOnlyNotice
 import com.example.app.navigation.AppRoutes
 import kotlinx.coroutines.flow.collectLatest
 
@@ -48,6 +49,8 @@ fun CreateOutbreakScreen(
                 .testTag("create-outbreak-form-screen"),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            LocalOnlyNotice()
+
             OutlinedTextField(
                 value = state.outbreakDescriptor,
                 onValueChange = { viewModel.onIntent(CreateOutbreakUiIntent.UpdateOutbreakDescriptor(it)) },

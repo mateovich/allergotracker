@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.core.designsystem.AppScreenScaffold
+import com.example.app.core.designsystem.LocalOnlyNotice
 import com.example.app.navigation.AppRoutes
 import kotlinx.coroutines.flow.collectLatest
 
@@ -48,6 +49,8 @@ fun CreateExposureScreen(
                 .testTag("create-exposure-form-screen"),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            LocalOnlyNotice()
+
             OutlinedTextField(
                 value = state.exposureType,
                 onValueChange = { viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType(it)) },

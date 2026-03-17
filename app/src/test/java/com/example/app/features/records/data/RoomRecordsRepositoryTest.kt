@@ -2,13 +2,20 @@ package com.example.app.features.records.data
 
 import com.example.app.features.exposure.data.ExposureEventDao
 import com.example.app.features.exposure.data.ExposureEventEntity
+import com.example.app.features.exposure.data.RoomExposureRepository
 import com.example.app.features.ingestion.data.IngestionEventDao
 import com.example.app.features.ingestion.data.IngestionEventEntity
 import com.example.app.features.ingestion.data.RoomIngestionRepository
+import com.example.app.features.exposure.domain.CreateExposureEventCommand
+import com.example.app.features.exposure.domain.UpdateExposureEventCommand
+import com.example.app.features.ingestion.domain.CreateIngestionEventCommand
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
 import com.example.app.features.ingestion.domain.UpdateIngestionEventCommand
 import com.example.app.features.outbreak.data.OutbreakEventDao
 import com.example.app.features.outbreak.data.OutbreakEventEntity
+import com.example.app.features.outbreak.data.RoomOutbreakRepository
+import com.example.app.features.outbreak.domain.CreateOutbreakEventCommand
+import com.example.app.features.outbreak.domain.UpdateOutbreakEventCommand
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -259,6 +266,68 @@ class RoomRecordsRepositoryTest {
         val records = repository.observeRecords().first()
 
         assertEquals(listOf("ingestion-4", "exposure-4", "outbreak-4"), records.map { it.id })
+    }
+
+    @Test
+    fun consecutive_local_create_edit_delete_operations_keep_records_reactive_and_consistent() = runBlocking {
+        val now = 1_700_000_500_000L
+        val ingestionEventDao = FakeIngestionEventDao()
+        val exposureEventDao = FakeExposureEventDao()
+        val outbreakEventDao = FakeOutbreakEventDao()
+        val recordsRepository = RoomRecordsRepository(ingestionEventDao, exposureEventDao, outbreakEventDao)
+        val ingestionRepository = RoomIngestionRepository(ingestionEventDao, CurrentTimeProvider { now })
+        val exposureRepository = RoomExposureRepository(exposureEventDao, CurrentTimeProvider { now })
+        val outbreakRepository = RoomOutbreakRepository(outbreakEventDao, CurrentTimeProvider { now })
+
+        ingestionRepository.createIngestion(
+            CreateIngestionEventCommand(
+                itemName = "Tea",
+                quantityLevel = 2,
+                occurredAtEpochMs = now - 300_000L,
+                notes = null
+            )
+        )
+        exposureRepository.createExposure(
+            CreateExposureEventCommand(
+                exposureType = "Pollen",
+                occurredAtEpochMs = now - 200_000L,
+                notes = "outside"
+            )
+        )
+        outbreakRepository.createOutbreak(
+            CreateOutbreakEventCommand(
+                outbreakDescriptor = "Skin flare",
+                bodyLocation = "Arm",
+                occurredAtEpochMs = now - 100_000L,
+                notes = "after workout"
+            )
+        )
+        ingestionRepository.updateIngestion(
+            UpdateIngestionEventCommand(
+                id = 1L,
+                itemName = "Green tea",
+                quantityLevel = 3,
+                occurredAtEpochMs = now - 50_000L,
+                notes = "after lunch"
+            )
+        )
+        exposureRepository.updateExposure(
+            UpdateExposureEventCommand(
+                id = 1L,
+                exposureType = "Dust",
+                occurredAtEpochMs = now - 25_000L,
+                notes = "inside"
+            )
+        )
+        outbreakRepository.deleteOutbreak(1L)
+
+        val records = recordsRepository.observeRecords().first()
+        val count = recordsRepository.observeRecordCount().first()
+
+        assertEquals(2, count)
+        assertEquals(listOf("exposure-1", "ingestion-1"), records.map { it.id })
+        assertEquals("Dust", records.first().title)
+        assertEquals("Green tea", records.last().title)
     }
 }
 

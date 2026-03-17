@@ -9,6 +9,7 @@ import com.example.app.features.exposure.domain.ExposureRepository
 import com.example.app.features.exposure.domain.UpdateExposureEventCommand
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
 
+/** Local source of truth for exposure events backed by Room only. */
 class RoomExposureRepository(
     private val exposureEventDao: ExposureEventDao,
     private val currentTimeProvider: CurrentTimeProvider

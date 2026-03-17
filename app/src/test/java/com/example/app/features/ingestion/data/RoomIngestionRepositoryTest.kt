@@ -3,14 +3,65 @@ package com.example.app.features.ingestion.data
 import android.database.sqlite.SQLiteConstraintException
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.ingestion.domain.CreateIngestionEventCommand
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
+import com.example.app.features.ingestion.domain.UpdateIngestionEventCommand
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RoomIngestionRepositoryTest {
+
+    @Test
+    fun create_persists_ingestion_locally_through_room_dao() = runBlocking {
+        val dao = FakeIngestionEventDaoForRepository(getByIdResult = null)
+        val repository = RoomIngestionRepository(
+            ingestionEventDao = dao,
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_123_000L }
+        )
+
+        val result = repository.createIngestion(
+            CreateIngestionEventCommand(
+                itemName = "Tea",
+                quantityLevel = 2,
+                occurredAtEpochMs = 1_700_000_000_000L,
+                notes = "with honey"
+            )
+        )
+
+        val savedEntity = dao.inserted.single()
+        assertTrue(result is AppResult.Success)
+        assertEquals("Tea", savedEntity.itemName)
+        assertEquals(2, savedEntity.quantityLevel)
+        assertEquals(1_700_000_123_000L, savedEntity.createdAtEpochMs)
+    }
+
+    @Test
+    fun update_rewrites_existing_local_record_without_network_dependency() = runBlocking {
+        val existing = IngestionEventEntity(7L, "Tea", 2, 1_700_000_000_000L, null, 1_700_000_100_000L)
+        val dao = FakeIngestionEventDaoForRepository(getByIdResult = existing)
+        val repository = RoomIngestionRepository(
+            ingestionEventDao = dao,
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_123_000L }
+        )
+
+        repository.updateIngestion(
+            UpdateIngestionEventCommand(
+                id = 7L,
+                itemName = "Tea updated",
+                quantityLevel = 3,
+                occurredAtEpochMs = 1_700_000_200_000L,
+                notes = "after lunch"
+            )
+        )
+
+        assertEquals("Tea updated", dao.updated.single().itemName)
+        assertEquals(3, dao.updated.single().quantityLevel)
+        assertEquals(1_700_000_200_000L, dao.updated.single().occurredAtEpochMs)
+    }
 
     @Test
     fun delete_missing_record_returns_integrity_error() = runBlocking {
@@ -75,10 +126,19 @@ private class FakeIngestionEventDaoForRepository(
     private val deleteCount: Int = 1,
     private val deleteException: Exception? = null
 ) : IngestionEventDao {
-    override suspend fun insert(entity: IngestionEventEntity): Long = error("unused")
+    val inserted = mutableListOf<IngestionEventEntity>()
+    val updated = mutableListOf<IngestionEventEntity>()
+
+    override suspend fun insert(entity: IngestionEventEntity): Long {
+        inserted += entity
+        return 7L
+    }
     override fun observeRecordCount(): Flow<Int> = emptyFlow()
     override suspend fun getById(id: Long): IngestionEventEntity? = getByIdResult
-    override suspend fun update(entity: IngestionEventEntity): Int = error("unused")
+    override suspend fun update(entity: IngestionEventEntity): Int {
+        updated += entity
+        return 1
+    }
     override suspend fun deleteById(id: Long): Int {
         deleteException?.let { throw it }
         return deleteCount

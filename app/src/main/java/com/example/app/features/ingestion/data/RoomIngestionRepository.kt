@@ -9,6 +9,7 @@ import com.example.app.features.ingestion.domain.IngestionEvent
 import com.example.app.features.ingestion.domain.IngestionRepository
 import com.example.app.features.ingestion.domain.UpdateIngestionEventCommand
 
+/** Local source of truth for ingestion events backed by Room only. */
 class RoomIngestionRepository(
     private val ingestionEventDao: IngestionEventDao,
     private val currentTimeProvider: CurrentTimeProvider

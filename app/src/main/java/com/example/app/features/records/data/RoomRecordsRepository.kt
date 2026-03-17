@@ -10,6 +10,7 @@ import com.example.app.features.records.domain.RecordsRepository
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
 
+/** Reactive records timeline derived directly from Room flows for all event types. */
 class RoomRecordsRepository(
     private val ingestionEventDao: IngestionEventDao,
     private val exposureEventDao: ExposureEventDao,
