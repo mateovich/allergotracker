@@ -56,7 +56,9 @@ class CreateOutbreakViewModel(
             }
 
             is CreateOutbreakUiIntent.UpdateOccurredAtInput -> updateState {
-                val parsedOccurredAt = parseOccurredAtInput(intent.value)
+                val parsedOccurredAt = parseOccurredAtInput(
+                    value = intent.value
+                )
                 it.copy(
                     occurredAtInput = intent.value,
                     occurredAtEpochMs = parsedOccurredAt ?: it.occurredAtEpochMs,
@@ -89,7 +91,9 @@ class CreateOutbreakViewModel(
     private fun save() {
         val currentState = mutableState.value
         val occurredAtEpochMs = if (currentState.isOccurredAtManuallyEdited) {
-            val parsedOccurredAt = parseOccurredAtInput(currentState.occurredAtInput)
+            val parsedOccurredAt = parseOccurredAtInput(
+                value = currentState.occurredAtInput
+            )
             if (parsedOccurredAt == null) {
                 updateState {
                     it.copy(
@@ -166,8 +170,11 @@ class CreateOutbreakViewModel(
 
     private fun parseOccurredAtInput(value: String): Long? {
         return try {
+            val zoneId = ZoneId.systemDefault()
             LocalDateTime.parse(value.trim(), dateTimeFormatter)
-                .atZone(ZoneId.systemDefault())
+                .withSecond(0)
+                .withNano(0)
+                .atZone(zoneId)
                 .toInstant()
                 .toEpochMilli()
         } catch (_: DateTimeParseException) {

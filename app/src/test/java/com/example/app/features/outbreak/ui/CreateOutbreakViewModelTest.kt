@@ -81,10 +81,11 @@ class CreateOutbreakViewModelTest {
     }
 
     @Test
-    fun valid_manual_datetime_input_updates_visible_time_label() {
+    fun valid_manual_datetime_input_normalizes_hidden_subminute_precision() {
         val viewModel = buildViewModel()
+        val zoneId = ZoneId.systemDefault()
         val updatedEpochMs = Instant.ofEpochMilli(fixedNow)
-            .atZone(ZoneId.systemDefault())
+            .atZone(zoneId)
             .minusHours(2)
             .withMinute(5)
             .withSecond(0)
@@ -92,10 +93,10 @@ class CreateOutbreakViewModelTest {
             .toInstant()
             .toEpochMilli()
         val updatedInput = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-            .withZone(ZoneId.systemDefault())
+            .withZone(zoneId)
             .format(Instant.ofEpochMilli(updatedEpochMs))
         val expectedTimeLabel = DateTimeFormatter.ofPattern("HH:mm")
-            .withZone(ZoneId.systemDefault())
+            .withZone(zoneId)
             .format(Instant.ofEpochMilli(updatedEpochMs))
 
         viewModel.onIntent(CreateOutbreakUiIntent.UpdateOccurredAtInput(updatedInput))

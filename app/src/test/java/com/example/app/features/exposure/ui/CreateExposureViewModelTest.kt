@@ -77,6 +77,31 @@ class CreateExposureViewModelTest {
         assertEquals("Please fix the highlighted fields.", viewModel.state.value.formMessage)
     }
 
+    @Test
+    fun valid_manual_datetime_input_normalizes_hidden_subminute_precision() {
+        val viewModel = buildViewModel()
+        val zoneId = ZoneId.systemDefault()
+        val updatedEpochMs = Instant.ofEpochMilli(fixedNow)
+            .atZone(zoneId)
+            .minusHours(2)
+            .withMinute(5)
+            .withSecond(0)
+            .withNano(0)
+            .toInstant()
+            .toEpochMilli()
+        val updatedInput = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+            .withZone(zoneId)
+            .format(Instant.ofEpochMilli(updatedEpochMs))
+        val expectedTimeLabel = DateTimeFormatter.ofPattern("HH:mm")
+            .withZone(zoneId)
+            .format(Instant.ofEpochMilli(updatedEpochMs))
+
+        viewModel.onIntent(CreateExposureUiIntent.UpdateOccurredAtInput(updatedInput))
+
+        assertEquals(updatedEpochMs, viewModel.state.value.occurredAtEpochMs)
+        assertEquals(expectedTimeLabel, viewModel.state.value.occurredAtLabel)
+    }
+
     private fun buildViewModel(): CreateExposureViewModel {
         val timeProvider = object : CurrentTimeProvider {
             override fun nowEpochMillis(): Long = fixedNow
