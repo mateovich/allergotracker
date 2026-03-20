@@ -5,11 +5,14 @@ import com.example.app.features.ingestion.data.IngestionEventDao
 import com.example.app.features.ingestion.domain.IngestionQuantityOption
 import com.example.app.features.outbreak.data.OutbreakEventDao
 import com.example.app.features.records.domain.RecordEventType
+import com.example.app.features.records.domain.RecordsFilter
 import com.example.app.features.records.domain.RecordSummary
 import com.example.app.features.records.domain.RecordSummaryComparator
 import com.example.app.features.records.domain.RecordsRepository
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
+import java.time.Instant
+import java.time.ZoneId
 
 /** Reactive records timeline derived directly from Room flows for all event types. */
 class RoomRecordsRepository(
@@ -17,6 +20,8 @@ class RoomRecordsRepository(
     private val exposureEventDao: ExposureEventDao,
     private val outbreakEventDao: OutbreakEventDao
 ) : RecordsRepository {
+    private val zoneId = ZoneId.systemDefault()
+
     override fun observeRecordCount(): Flow<Int> {
         return combine(
             ingestionEventDao.observeRecordCount(),
@@ -27,8 +32,8 @@ class RoomRecordsRepository(
         }
     }
 
-    override fun observeRecords(): Flow<List<RecordSummary>> {
-        return combine(
+    override fun observeRecords(filters: Flow<RecordsFilter>): Flow<List<RecordSummary>> {
+        val recordsFlow = combine(
             ingestionEventDao.observeIngestionEvents(),
             exposureEventDao.observeExposureEvents(),
             outbreakEventDao.observeOutbreakEvents()
@@ -43,7 +48,8 @@ class RoomRecordsRepository(
                     occurredAtEpochMs = entity.occurredAtEpochMs,
                     createdAtEpochMs = entity.createdAtEpochMs,
                     sourceId = entity.id,
-                    eventType = RecordEventType.INGESTION
+                    eventType = RecordEventType.INGESTION,
+                    ingestionQuantityLevel = entity.quantityLevel
                 )
             }
 
@@ -57,7 +63,8 @@ class RoomRecordsRepository(
                     occurredAtEpochMs = entity.occurredAtEpochMs,
                     createdAtEpochMs = entity.createdAtEpochMs,
                     sourceId = entity.id,
-                    eventType = RecordEventType.EXPOSURE
+                    eventType = RecordEventType.EXPOSURE,
+                    ingestionQuantityLevel = null
                 )
             }
 
@@ -74,12 +81,40 @@ class RoomRecordsRepository(
                     occurredAtEpochMs = entity.occurredAtEpochMs,
                     createdAtEpochMs = entity.createdAtEpochMs,
                     sourceId = entity.id,
-                    eventType = RecordEventType.OUTBREAK
+                    eventType = RecordEventType.OUTBREAK,
+                    ingestionQuantityLevel = null
                 )
             }
 
             (ingestionRecords + exposureRecords + outbreakRecords)
                 .sortedWith(RecordSummaryComparator)
         }
+
+        return combine(recordsFlow, filters) { records, activeFilters ->
+            records.filter { record -> record.matches(activeFilters, zoneId) }
+        }
     }
+}
+
+private fun RecordSummary.matches(filters: RecordsFilter, zoneId: ZoneId): Boolean {
+    if (filters.eventTypes.isNotEmpty() && eventType !in filters.eventTypes) {
+        return false
+    }
+
+    val occurredOn = Instant.ofEpochMilli(occurredAtEpochMs).atZone(zoneId).toLocalDate()
+    if (filters.startDate != null && occurredOn.isBefore(filters.startDate)) {
+        return false
+    }
+    if (filters.endDate != null && occurredOn.isAfter(filters.endDate)) {
+        return false
+    }
+
+    if (filters.intensityLevels.isNotEmpty()) {
+        val matchingLevels = filters.intensityLevels.map { it.level }.toSet()
+        if (eventType != RecordEventType.INGESTION || ingestionQuantityLevel !in matchingLevels) {
+            return false
+        }
+    }
+
+    return true
 }

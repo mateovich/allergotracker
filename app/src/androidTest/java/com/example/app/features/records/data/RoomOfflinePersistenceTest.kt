@@ -28,19 +28,22 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class RoomOfflinePersistenceTest {
 
+    private lateinit var context: Context
     private lateinit var database: AppDatabase
+    private lateinit var databaseName: String
 
     @Before
     fun setUp() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
-            .allowMainThreadQueries()
-            .build()
+        context = ApplicationProvider.getApplicationContext()
+        databaseName = "records-test-${System.nanoTime()}"
+        context.deleteDatabase(databaseName)
+        database = buildDatabase()
     }
 
     @After
     fun tearDown() {
         database.close()
+        context.deleteDatabase(databaseName)
     }
 
     @Test
@@ -74,9 +77,16 @@ class RoomOfflinePersistenceTest {
             )
         ).requireSuccess().id
 
-        val ingestion = ingestionRepository.getIngestion(savedIngestion).requireSuccess()
-        val exposure = exposureRepository.getExposure(savedExposure).requireSuccess()
-        val outbreak = outbreakRepository.getOutbreak(savedOutbreak).requireSuccess()
+        database.close()
+        database = buildDatabase()
+
+        val reopenedIngestionRepository = RoomIngestionRepository(database.ingestionEventDao(), CurrentTimeProvider { now })
+        val reopenedExposureRepository = RoomExposureRepository(database.exposureEventDao(), CurrentTimeProvider { now })
+        val reopenedOutbreakRepository = RoomOutbreakRepository(database.outbreakEventDao(), CurrentTimeProvider { now })
+
+        val ingestion = reopenedIngestionRepository.getIngestion(savedIngestion).requireSuccess()
+        val exposure = reopenedExposureRepository.getExposure(savedExposure).requireSuccess()
+        val outbreak = reopenedOutbreakRepository.getOutbreak(savedOutbreak).requireSuccess()
 
         assertEquals("Tea", ingestion.itemName)
         assertEquals("Pollen", exposure.exposureType)
@@ -147,8 +157,48 @@ class RoomOfflinePersistenceTest {
         assertEquals("Green tea", records.last().title)
     }
 
+    @Test
+    fun room_records_timeline_uses_created_at_tie_break_across_types() = runBlocking {
+        val baseNow = 1_700_000_500_900L
+        val sharedOccurredAt = baseNow - 60_000L
+
+        val firstIngestionRepository = RoomIngestionRepository(database.ingestionEventDao(), CurrentTimeProvider { baseNow - 400L })
+        val laterExposureRepository = RoomExposureRepository(database.exposureEventDao(), CurrentTimeProvider { baseNow })
+        val recordsRepository = RoomRecordsRepository(
+            ingestionEventDao = database.ingestionEventDao(),
+            exposureEventDao = database.exposureEventDao(),
+            outbreakEventDao = database.outbreakEventDao()
+        )
+
+        firstIngestionRepository.createIngestion(
+            CreateIngestionEventCommand(
+                itemName = "Tea",
+                quantityLevel = 2,
+                occurredAtEpochMs = sharedOccurredAt,
+                notes = null
+            )
+        ).requireSuccess()
+        laterExposureRepository.createExposure(
+            CreateExposureEventCommand(
+                exposureType = "Pollen",
+                occurredAtEpochMs = sharedOccurredAt,
+                notes = null
+            )
+        ).requireSuccess()
+
+        val records = recordsRepository.observeRecords().first()
+
+        assertEquals(listOf("exposure-1", "ingestion-1"), records.map { it.id })
+    }
+
     private fun <T> AppResult<T>.requireSuccess(): T {
         assertTrue(this is AppResult.Success)
         return (this as AppResult.Success).value
+    }
+
+    private fun buildDatabase(): AppDatabase {
+        return Room.databaseBuilder(context, AppDatabase::class.java, databaseName)
+            .allowMainThreadQueries()
+            .build()
     }
 }

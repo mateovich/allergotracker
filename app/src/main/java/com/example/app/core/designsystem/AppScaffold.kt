@@ -10,6 +10,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -24,12 +25,16 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun AppScreenScaffold(
     title: String,
+    topBarActions: @Composable (() -> Unit)? = null,
     floatingActionButton: @Composable (() -> Unit)? = null,
     content: @Composable (Modifier) -> Unit
 ) {
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text(text = title) })
+            TopAppBar(
+                title = { Text(text = title) },
+                actions = { topBarActions?.invoke() }
+            )
         },
         floatingActionButton = {
             floatingActionButton?.invoke()
@@ -67,6 +72,8 @@ fun PrimaryAddFab(
 fun EmptyStateMessage(
     title: String,
     message: String,
+    actionLabel: String? = null,
+    onActionClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -80,6 +87,17 @@ fun EmptyStateMessage(
             Text(text = title)
             Spacer(modifier = Modifier.size(8.dp))
             Text(text = message, textAlign = TextAlign.Center)
+            if (!actionLabel.isNullOrBlank() && onActionClick != null) {
+                Spacer(modifier = Modifier.size(12.dp))
+                TextButton(
+                    onClick = onActionClick,
+                    modifier = Modifier
+                        .testTag("records-empty-state-action")
+                        .semantics { contentDescription = actionLabel }
+                ) {
+                    Text(text = actionLabel)
+                }
+            }
         }
     }
 }

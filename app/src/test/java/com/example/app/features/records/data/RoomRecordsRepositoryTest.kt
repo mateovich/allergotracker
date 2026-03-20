@@ -10,21 +10,120 @@ import com.example.app.features.exposure.domain.CreateExposureEventCommand
 import com.example.app.features.exposure.domain.UpdateExposureEventCommand
 import com.example.app.features.ingestion.domain.CreateIngestionEventCommand
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
+import com.example.app.features.ingestion.domain.IngestionQuantityOption
 import com.example.app.features.ingestion.domain.UpdateIngestionEventCommand
 import com.example.app.features.outbreak.data.OutbreakEventDao
 import com.example.app.features.outbreak.data.OutbreakEventEntity
 import com.example.app.features.outbreak.data.RoomOutbreakRepository
 import com.example.app.features.outbreak.domain.CreateOutbreakEventCommand
 import com.example.app.features.outbreak.domain.UpdateOutbreakEventCommand
+import com.example.app.features.records.domain.RecordEventType
+import com.example.app.features.records.domain.RecordsFilter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
+import java.time.LocalDate
+import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class RoomRecordsRepositoryTest {
+
+    @Test
+    fun filters_records_by_date_type_and_intensity_with_and_semantics() = runBlocking {
+        val zoneId = ZoneId.systemDefault()
+        val matchingDay = LocalDate.of(2026, 3, 18)
+        val matchingEpoch = matchingDay.atTime(9, 0).atZone(zoneId).toInstant().toEpochMilli()
+        val repository = RoomRecordsRepository(
+            ingestionEventDao = FakeIngestionEventDao(
+                events = listOf(
+                    IngestionEventEntity(
+                        id = 7L,
+                        itemName = "Tea",
+                        quantityLevel = 3,
+                        occurredAtEpochMs = matchingEpoch,
+                        notes = null,
+                        createdAtEpochMs = matchingEpoch
+                    ),
+                    IngestionEventEntity(
+                        id = 8L,
+                        itemName = "Coffee",
+                        quantityLevel = 2,
+                        occurredAtEpochMs = matchingEpoch,
+                        notes = null,
+                        createdAtEpochMs = matchingEpoch
+                    )
+                )
+            ),
+            exposureEventDao = FakeExposureEventDao(
+                events = listOf(
+                    ExposureEventEntity(
+                        id = 5L,
+                        exposureType = "Pollen",
+                        occurredAtEpochMs = matchingEpoch,
+                        notes = null,
+                        createdAtEpochMs = matchingEpoch
+                    )
+                )
+            ),
+            outbreakEventDao = FakeOutbreakEventDao()
+        )
+
+        val records = repository.observeRecords(
+            flowOf(
+                RecordsFilter(
+                    startDate = matchingDay,
+                    endDate = matchingDay,
+                    eventTypes = setOf(RecordEventType.INGESTION),
+                    intensityLevels = setOf(IngestionQuantityOption.STANDARD)
+                )
+            )
+        ).first()
+
+        assertEquals(listOf("ingestion-7"), records.map { it.id })
+    }
+
+    @Test
+    fun intensity_filter_excludes_non_ingestion_records_and_reset_restores_full_timeline() = runBlocking {
+        val timestamp = 1_700_000_000_000L
+        val repository = RoomRecordsRepository(
+            ingestionEventDao = FakeIngestionEventDao(
+                events = listOf(
+                    IngestionEventEntity(
+                        id = 1L,
+                        itemName = "Tea",
+                        quantityLevel = 2,
+                        occurredAtEpochMs = timestamp,
+                        notes = null,
+                        createdAtEpochMs = timestamp
+                    )
+                )
+            ),
+            exposureEventDao = FakeExposureEventDao(
+                events = listOf(
+                    ExposureEventEntity(
+                        id = 2L,
+                        exposureType = "Pollen",
+                        occurredAtEpochMs = timestamp - 1_000L,
+                        notes = null,
+                        createdAtEpochMs = timestamp - 1_000L
+                    )
+                )
+            ),
+            outbreakEventDao = FakeOutbreakEventDao()
+        )
+
+        val filtered = repository.observeRecords(
+            flowOf(RecordsFilter(intensityLevels = setOf(IngestionQuantityOption.LIGHT_SNACK)))
+        ).first()
+        val reset = repository.observeRecords(flowOf(RecordsFilter())).first()
+
+        assertEquals(listOf("ingestion-1"), filtered.map { it.id })
+        assertEquals(listOf("ingestion-1", "exposure-2"), reset.map { it.id })
+    }
 
     @Test
     fun outbreak_records_keep_body_location_visible_when_notes_exist() = runBlocking {
@@ -266,6 +365,41 @@ class RoomRecordsRepositoryTest {
         val records = repository.observeRecords().first()
 
         assertEquals(listOf("ingestion-4", "exposure-4", "outbreak-4"), records.map { it.id })
+    }
+
+    @Test
+    fun cross_type_ties_prefer_last_saved_record_before_source_id_or_type() = runBlocking {
+        val sharedOccurredAt = 1_700_000_000_000L
+        val repository = RoomRecordsRepository(
+            ingestionEventDao = FakeIngestionEventDao(
+                events = listOf(
+                    IngestionEventEntity(
+                        id = 10L,
+                        itemName = "Tea",
+                        quantityLevel = 2,
+                        occurredAtEpochMs = sharedOccurredAt,
+                        notes = null,
+                        createdAtEpochMs = 100L
+                    )
+                )
+            ),
+            exposureEventDao = FakeExposureEventDao(
+                events = listOf(
+                    ExposureEventEntity(
+                        id = 1L,
+                        exposureType = "Pollen",
+                        occurredAtEpochMs = sharedOccurredAt,
+                        notes = null,
+                        createdAtEpochMs = 200L
+                    )
+                )
+            ),
+            outbreakEventDao = FakeOutbreakEventDao()
+        )
+
+        val records = repository.observeRecords().first()
+
+        assertEquals(listOf("exposure-1", "ingestion-10"), records.map { it.id })
     }
 
     @Test
