@@ -140,6 +140,7 @@ class CreateExposureViewModel(
 
     private fun save() {
         val currentState = mutableState.value
+        if (currentState.isSaving) return
         val occurredAtEpochMs = if (currentState.isOccurredAtManuallyEdited) {
             val parsedOccurredAt = parseOccurredAtInput(currentState.occurredAtInput)
             if (parsedOccurredAt == null) {

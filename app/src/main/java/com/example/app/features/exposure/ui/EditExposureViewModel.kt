@@ -51,17 +51,22 @@ class EditExposureViewModel(
         viewModelScope.launch {
             observeReusableEventCatalogUseCase(ReusableEventCatalogKind.EXPOSURE_TYPE).collect { entries ->
                 updateState {
+                    val availableExposureTypes = entries.map { entry ->
+                        ReusableEventCatalogOptionUiModel(
+                            id = entry.id,
+                            name = entry.name,
+                            kind = entry.kind,
+                            usageCount = entry.usageCount,
+                            lastUsedAtEpochMs = entry.lastUsedAtEpochMs,
+                            updatedAtEpochMs = entry.updatedAtEpochMs
+                        )
+                    }
+                    val selectedExposureTypeSummary = it.selectedExposureTypeCatalogId
+                        ?.takeIf { selectedId -> availableExposureTypes.any { option -> option.id == selectedId } }
+                        ?.let { _ -> "Saved exposure type selected: ${it.exposureType}" }
                     it.copy(
-                        availableExposureTypes = entries.map { entry ->
-                            ReusableEventCatalogOptionUiModel(
-                                id = entry.id,
-                                name = entry.name,
-                                kind = entry.kind,
-                                usageCount = entry.usageCount,
-                                lastUsedAtEpochMs = entry.lastUsedAtEpochMs,
-                                updatedAtEpochMs = entry.updatedAtEpochMs
-                            )
-                        }
+                        availableExposureTypes = availableExposureTypes,
+                        selectedExposureTypeSummary = selectedExposureTypeSummary
                     ).withFilteredExposureTypes()
                 }
             }
@@ -159,7 +164,9 @@ class EditExposureViewModel(
                             occurredAtInput = formatDateTimeInput(event.occurredAtEpochMs),
                             occurredAtLabel = formatTime(event.occurredAtEpochMs),
                             selectedExposureTypeCatalogId = event.exposureTypeCatalogId,
-                            selectedExposureTypeSummary = event.exposureTypeCatalogId?.let { _ ->
+                            selectedExposureTypeSummary = event.exposureTypeCatalogId
+                                ?.takeIf { selectedId -> it.availableExposureTypes.any { option -> option.id == selectedId } }
+                                ?.let { _ ->
                                 "Saved exposure type selected: ${event.exposureType}"
                             },
                             isLoading = false,

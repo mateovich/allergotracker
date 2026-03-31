@@ -51,17 +51,22 @@ class EditOutbreakViewModel(
         viewModelScope.launch {
             observeReusableEventCatalogUseCase(ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR).collect { entries ->
                 updateState {
+                    val availableOutbreakDescriptors = entries.map { entry ->
+                        ReusableEventCatalogOptionUiModel(
+                            id = entry.id,
+                            name = entry.name,
+                            kind = entry.kind,
+                            usageCount = entry.usageCount,
+                            lastUsedAtEpochMs = entry.lastUsedAtEpochMs,
+                            updatedAtEpochMs = entry.updatedAtEpochMs
+                        )
+                    }
+                    val selectedOutbreakDescriptorSummary = it.selectedOutbreakDescriptorCatalogId
+                        ?.takeIf { selectedId -> availableOutbreakDescriptors.any { option -> option.id == selectedId } }
+                        ?.let { _ -> "Saved outbreak descriptor selected: ${it.outbreakDescriptor}" }
                     it.copy(
-                        availableOutbreakDescriptors = entries.map { entry ->
-                            ReusableEventCatalogOptionUiModel(
-                                id = entry.id,
-                                name = entry.name,
-                                kind = entry.kind,
-                                usageCount = entry.usageCount,
-                                lastUsedAtEpochMs = entry.lastUsedAtEpochMs,
-                                updatedAtEpochMs = entry.updatedAtEpochMs
-                            )
-                        }
+                        availableOutbreakDescriptors = availableOutbreakDescriptors,
+                        selectedOutbreakDescriptorSummary = selectedOutbreakDescriptorSummary
                     ).withFilteredCatalogs()
                 }
             }
@@ -69,17 +74,22 @@ class EditOutbreakViewModel(
         viewModelScope.launch {
             observeReusableEventCatalogUseCase(ReusableEventCatalogKind.BODY_LOCATION).collect { entries ->
                 updateState {
+                    val availableBodyLocations = entries.map { entry ->
+                        ReusableEventCatalogOptionUiModel(
+                            id = entry.id,
+                            name = entry.name,
+                            kind = entry.kind,
+                            usageCount = entry.usageCount,
+                            lastUsedAtEpochMs = entry.lastUsedAtEpochMs,
+                            updatedAtEpochMs = entry.updatedAtEpochMs
+                        )
+                    }
+                    val selectedBodyLocationSummary = it.selectedBodyLocationCatalogId
+                        ?.takeIf { selectedId -> availableBodyLocations.any { option -> option.id == selectedId } }
+                        ?.let { _ -> "Saved body location selected: ${it.bodyLocation}" }
                     it.copy(
-                        availableBodyLocations = entries.map { entry ->
-                            ReusableEventCatalogOptionUiModel(
-                                id = entry.id,
-                                name = entry.name,
-                                kind = entry.kind,
-                                usageCount = entry.usageCount,
-                                lastUsedAtEpochMs = entry.lastUsedAtEpochMs,
-                                updatedAtEpochMs = entry.updatedAtEpochMs
-                            )
-                        }
+                        availableBodyLocations = availableBodyLocations,
+                        selectedBodyLocationSummary = selectedBodyLocationSummary
                     ).withFilteredCatalogs()
                 }
             }
@@ -216,11 +226,15 @@ class EditOutbreakViewModel(
                             occurredAtInput = formatDateTimeInput(event.occurredAtEpochMs),
                             occurredAtLabel = formatTime(event.occurredAtEpochMs),
                             selectedOutbreakDescriptorCatalogId = event.outbreakDescriptorCatalogId,
-                            selectedOutbreakDescriptorSummary = event.outbreakDescriptorCatalogId?.let { _ ->
+                            selectedOutbreakDescriptorSummary = event.outbreakDescriptorCatalogId
+                                ?.takeIf { selectedId -> it.availableOutbreakDescriptors.any { option -> option.id == selectedId } }
+                                ?.let { _ ->
                                 "Saved outbreak descriptor selected: ${event.outbreakDescriptor}"
                             },
                             selectedBodyLocationCatalogId = event.bodyLocationCatalogId,
-                            selectedBodyLocationSummary = event.bodyLocationCatalogId?.let { _ ->
+                            selectedBodyLocationSummary = event.bodyLocationCatalogId
+                                ?.takeIf { selectedId -> it.availableBodyLocations.any { option -> option.id == selectedId } }
+                                ?.let { _ ->
                                 "Saved body location selected: ${event.bodyLocation}"
                             },
                             isLoading = false,

@@ -37,6 +37,8 @@ class RoomExposureRepository(
                     exposureTypeCatalogId = entity.exposureTypeCatalogId
                 )
             )
+        } catch (error: MissingReusableCatalogReferenceException) {
+            AppResult.Error(DomainError.IntegrityError(error.message ?: "Saved exposure type no longer exists."))
         } catch (_: Exception) {
             AppResult.Error(
                 DomainError.PersistenceError("Couldn't save exposure locally. Try again.")
@@ -69,6 +71,8 @@ class RoomExposureRepository(
                 return AppResult.Error(DomainError.IntegrityError("Exposure record no longer exists."))
             }
             AppResult.Success(updatedEntity.toDomain())
+        } catch (error: MissingReusableCatalogReferenceException) {
+            AppResult.Error(DomainError.IntegrityError(error.message ?: "Saved exposure type no longer exists."))
         } catch (_: Exception) {
             AppResult.Error(DomainError.PersistenceError("Couldn't update exposure locally. Try again."))
         }
@@ -105,7 +109,10 @@ class RoomExposureRepository(
         val repository = eventCatalogRepository ?: return selectedCatalogId
         if (selectedCatalogId != null) {
             return repository.getCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, selectedCatalogId)?.id
+                ?: throw MissingReusableCatalogReferenceException("Saved exposure type no longer exists.")
         }
         return repository.ensureCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, name).id
     }
 }
+
+private class MissingReusableCatalogReferenceException(message: String) : IllegalStateException(message)

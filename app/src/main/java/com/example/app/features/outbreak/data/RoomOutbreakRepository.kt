@@ -50,6 +50,8 @@ class RoomOutbreakRepository(
                     bodyLocationCatalogId = entity.bodyLocationCatalogId
                 )
             )
+        } catch (error: MissingReusableCatalogReferenceException) {
+            AppResult.Error(DomainError.IntegrityError(error.message ?: "Saved reusable value no longer exists."))
         } catch (_: Exception) {
             AppResult.Error(
                 DomainError.PersistenceError("Couldn't save outbreak locally. Try again.")
@@ -92,6 +94,8 @@ class RoomOutbreakRepository(
                 return AppResult.Error(DomainError.IntegrityError("Outbreak record no longer exists."))
             }
             AppResult.Success(updatedEntity.toDomain())
+        } catch (error: MissingReusableCatalogReferenceException) {
+            AppResult.Error(DomainError.IntegrityError(error.message ?: "Saved reusable value no longer exists."))
         } catch (_: Exception) {
             AppResult.Error(DomainError.PersistenceError("Couldn't update outbreak locally. Try again."))
         }
@@ -134,7 +138,16 @@ class RoomOutbreakRepository(
         val repository = eventCatalogRepository ?: return selectedCatalogId
         if (selectedCatalogId != null) {
             return repository.getCatalogEntry(kind, selectedCatalogId)?.id
+                ?: throw MissingReusableCatalogReferenceException(
+                    when (kind) {
+                        ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR -> "Saved outbreak descriptor no longer exists."
+                        ReusableEventCatalogKind.BODY_LOCATION -> "Saved body location no longer exists."
+                        ReusableEventCatalogKind.EXPOSURE_TYPE -> "Saved exposure type no longer exists."
+                    }
+                )
         }
         return repository.ensureCatalogEntry(kind, name).id
     }
 }
+
+private class MissingReusableCatalogReferenceException(message: String) : IllegalStateException(message)

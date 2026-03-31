@@ -16,6 +16,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -130,6 +131,48 @@ class CreateExposureViewModelTest {
         assertEquals(5L, viewModel.state.value.selectedExposureTypeCatalogId)
         assertEquals("Saved exposure type selected: Pollen", viewModel.state.value.selectedExposureTypeSummary)
         assertEquals("Pollen", viewModel.state.value.exposureType)
+    }
+
+    @Test
+    fun second_save_while_first_is_in_flight_is_ignored() = runBlocking {
+        var createCalls = 0
+        val saveGate = CompletableDeferred<Unit>()
+        val timeProvider = object : CurrentTimeProvider {
+            override fun nowEpochMillis(): Long = fixedNow
+        }
+        val viewModel = CreateExposureViewModel(
+            createExposureDefaultsUseCase = CreateExposureDefaultsUseCase(timeProvider),
+            createExposureEventUseCase = CreateExposureEventUseCase(
+                repository = object : ExposureRepository {
+                    override suspend fun createExposure(command: CreateExposureEventCommand): AppResult<ExposureEvent> {
+                        createCalls += 1
+                        saveGate.await()
+                        return AppResult.Success(
+                            ExposureEvent(
+                                id = 11L,
+                                exposureType = command.exposureType,
+                                occurredAtEpochMs = command.occurredAtEpochMs,
+                                notes = command.notes
+                            )
+                        )
+                    }
+
+                    override suspend fun getExposure(id: Long): AppResult<ExposureEvent> = error("unused")
+                    override suspend fun updateExposure(command: com.example.app.features.exposure.domain.UpdateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
+                    override suspend fun deleteExposure(id: Long): AppResult<Unit> = error("unused")
+                },
+                currentTimeProvider = timeProvider
+            )
+        )
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType("Pollen"))
+        viewModel.onIntent(CreateExposureUiIntent.Save)
+        viewModel.onIntent(CreateExposureUiIntent.Save)
+        saveGate.complete(Unit)
+
+        assertEquals(CreateExposureUiEffect.NavigateToRecords, effect.await())
+        assertEquals(1, createCalls)
     }
 
     private fun buildViewModel(

@@ -69,6 +69,31 @@ class RoomExposureRepositoryTest {
     }
 
     @Test
+    fun update_missing_selected_catalog_reference_returns_integrity_error() = runBlocking {
+        val existing = ExposureEventEntity(5L, "Pollen", 1_700_000_000_000L, null, 1_700_000_100_000L, 9L)
+        val repository = RoomExposureRepository(
+            exposureEventDao = FakeExposureEventDaoForRepository(getByIdResult = existing),
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_123_000L },
+            eventCatalogRepository = MissingExposureCatalogRepository()
+        )
+
+        val result = repository.updateExposure(
+            UpdateExposureEventCommand(
+                id = 5L,
+                exposureType = "Pollen",
+                occurredAtEpochMs = 1_700_000_200_000L,
+                notes = "indoors",
+                exposureTypeCatalogId = 9L
+            )
+        )
+
+        assertEquals(
+            DomainError.IntegrityError("Saved exposure type no longer exists."),
+            (result as AppResult.Error).error
+        )
+    }
+
+    @Test
     fun delete_missing_record_returns_integrity_error() = runBlocking {
         val repository = RoomExposureRepository(
             exposureEventDao = FakeExposureEventDaoForRepository(getByIdResult = null),
@@ -156,6 +181,15 @@ private class FakeExposureCatalogRepository : ReusableEventCatalogRepository {
             updatedAtEpochMs = 1L,
             lastUsedAtEpochMs = 1L
         )
+    }
+}
+
+private class MissingExposureCatalogRepository : ReusableEventCatalogRepository {
+    override fun observeCatalog(kind: ReusableEventCatalogKind): Flow<List<ReusableEventCatalog>> = flowOf(emptyList())
+    override suspend fun getCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? = null
+    override suspend fun existsCatalogEntry(kind: ReusableEventCatalogKind, id: Long): Boolean = false
+    override suspend fun ensureCatalogEntry(kind: ReusableEventCatalogKind, name: String): ReusableEventCatalog {
+        error("unused")
     }
 }
 

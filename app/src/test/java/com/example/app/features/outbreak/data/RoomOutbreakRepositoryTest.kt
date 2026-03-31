@@ -72,6 +72,33 @@ class RoomOutbreakRepositoryTest {
     }
 
     @Test
+    fun update_missing_selected_catalog_reference_returns_integrity_error() = runBlocking {
+        val existing = OutbreakEventEntity(9L, "Skin flare", "Arm", 1_700_000_000_000L, null, 1_700_000_100_000L, 11L, 12L)
+        val repository = RoomOutbreakRepository(
+            outbreakEventDao = FakeOutbreakEventDaoForRepository(getByIdResult = existing),
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_123_000L },
+            eventCatalogRepository = MissingOutbreakCatalogRepository()
+        )
+
+        val result = repository.updateOutbreak(
+            UpdateOutbreakEventCommand(
+                id = 9L,
+                outbreakDescriptor = "Skin flare",
+                bodyLocation = "Arm",
+                occurredAtEpochMs = 1_700_000_200_000L,
+                notes = "settling",
+                outbreakDescriptorCatalogId = 11L,
+                bodyLocationCatalogId = 12L
+            )
+        )
+
+        assertEquals(
+            DomainError.IntegrityError("Saved outbreak descriptor no longer exists."),
+            (result as AppResult.Error).error
+        )
+    }
+
+    @Test
     fun delete_missing_record_returns_integrity_error() = runBlocking {
         val repository = RoomOutbreakRepository(
             outbreakEventDao = FakeOutbreakEventDaoForRepository(getByIdResult = null),
@@ -161,6 +188,15 @@ private class FakeOutbreakCatalogRepository : ReusableEventCatalogRepository {
             updatedAtEpochMs = 1L,
             lastUsedAtEpochMs = 1L
         )
+    }
+}
+
+private class MissingOutbreakCatalogRepository : ReusableEventCatalogRepository {
+    override fun observeCatalog(kind: ReusableEventCatalogKind): Flow<List<ReusableEventCatalog>> = flowOf(emptyList())
+    override suspend fun getCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? = null
+    override suspend fun existsCatalogEntry(kind: ReusableEventCatalogKind, id: Long): Boolean = false
+    override suspend fun ensureCatalogEntry(kind: ReusableEventCatalogKind, name: String): ReusableEventCatalog {
+        error("unused")
     }
 }
 

@@ -56,15 +56,17 @@ private fun backfillCatalogForColumn(
     kind: String
 ) {
     db.query(
-        "SELECT DISTINCT TRIM($nameColumn) AS canonical_name, LOWER(TRIM($nameColumn)) AS normalized_name FROM $sourceTable WHERE TRIM($nameColumn) != ''"
+        "SELECT LOWER(TRIM($nameColumn)) AS normalized_name, MIN(TRIM($nameColumn)) AS canonical_name, COUNT(*) AS usage_count, MAX(occurred_at_epoch_ms) AS last_used_at_epoch_ms FROM $sourceTable WHERE TRIM($nameColumn) != '' GROUP BY LOWER(TRIM($nameColumn))"
     ).use { cursor ->
         val canonicalNameIndex = cursor.getColumnIndexOrThrow("canonical_name")
         val normalizedNameIndex = cursor.getColumnIndexOrThrow("normalized_name")
+        val usageCountIndex = cursor.getColumnIndexOrThrow("usage_count")
+        val lastUsedAtIndex = cursor.getColumnIndexOrThrow("last_used_at_epoch_ms")
         while (cursor.moveToNext()) {
             val canonicalName = cursor.getString(canonicalNameIndex)
             val normalizedName = cursor.getString(normalizedNameIndex)
-            val usageCount = countOccurrences(db, sourceTable, nameColumn, normalizedName)
-            val lastUsedAt = latestOccurredAt(db, sourceTable, nameColumn, normalizedName)
+            val usageCount = cursor.getInt(usageCountIndex)
+            val lastUsedAt = cursor.getLong(lastUsedAtIndex)
             db.execSQL(
                 "INSERT INTO reusable_event_catalog(kind, name, normalized_name, usage_count, created_at_epoch_ms, updated_at_epoch_ms, last_used_at_epoch_ms) VALUES(?, ?, ?, ?, ?, ?, ?)",
                 arrayOf(kind, canonicalName, normalizedName, usageCount, lastUsedAt, lastUsedAt, lastUsedAt)
@@ -76,34 +78,4 @@ private fun backfillCatalogForColumn(
         "UPDATE $sourceTable SET $targetColumn = (SELECT catalog.id FROM reusable_event_catalog AS catalog WHERE catalog.kind = ? AND catalog.normalized_name = LOWER(TRIM($nameColumn))) WHERE TRIM($nameColumn) != ''",
         arrayOf(kind)
     )
-}
-
-private fun countOccurrences(
-    db: SupportSQLiteDatabase,
-    sourceTable: String,
-    nameColumn: String,
-    normalizedName: String
-): Int {
-    db.query(
-        "SELECT COUNT(*) AS usage_count FROM $sourceTable WHERE LOWER(TRIM($nameColumn)) = ?",
-        arrayOf(normalizedName)
-    ).use { cursor ->
-        cursor.moveToFirst()
-        return cursor.getInt(cursor.getColumnIndexOrThrow("usage_count"))
-    }
-}
-
-private fun latestOccurredAt(
-    db: SupportSQLiteDatabase,
-    sourceTable: String,
-    nameColumn: String,
-    normalizedName: String
-): Long {
-    db.query(
-        "SELECT MAX(occurred_at_epoch_ms) AS last_used_at_epoch_ms FROM $sourceTable WHERE LOWER(TRIM($nameColumn)) = ?",
-        arrayOf(normalizedName)
-    ).use { cursor ->
-        cursor.moveToFirst()
-        return cursor.getLong(cursor.getColumnIndexOrThrow("last_used_at_epoch_ms"))
-    }
 }

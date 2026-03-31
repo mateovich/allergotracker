@@ -15,6 +15,7 @@ import com.example.app.features.outbreak.domain.OutbreakRepository
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -142,6 +143,50 @@ class CreateOutbreakViewModelTest {
         assertEquals(11L, viewModel.state.value.selectedOutbreakDescriptorCatalogId)
         assertEquals(12L, viewModel.state.value.selectedBodyLocationCatalogId)
         assertTrue(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun second_save_while_first_is_in_flight_is_ignored() = runBlocking {
+        var createCalls = 0
+        val saveGate = CompletableDeferred<Unit>()
+        val timeProvider = object : CurrentTimeProvider {
+            override fun nowEpochMillis(): Long = fixedNow
+        }
+        val viewModel = CreateOutbreakViewModel(
+            createOutbreakDefaultsUseCase = CreateOutbreakDefaultsUseCase(timeProvider),
+            createOutbreakEventUseCase = CreateOutbreakEventUseCase(
+                repository = object : OutbreakRepository {
+                    override suspend fun createOutbreak(command: CreateOutbreakEventCommand): AppResult<OutbreakEvent> {
+                        createCalls += 1
+                        saveGate.await()
+                        return AppResult.Success(
+                            OutbreakEvent(
+                                id = 17L,
+                                outbreakDescriptor = command.outbreakDescriptor,
+                                bodyLocation = command.bodyLocation,
+                                occurredAtEpochMs = command.occurredAtEpochMs,
+                                notes = command.notes
+                            )
+                        )
+                    }
+
+                    override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> = error("unused")
+                    override suspend fun updateOutbreak(command: com.example.app.features.outbreak.domain.UpdateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
+                    override suspend fun deleteOutbreak(id: Long): AppResult<Unit> = error("unused")
+                },
+                currentTimeProvider = timeProvider
+            )
+        )
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.onIntent(CreateOutbreakUiIntent.UpdateOutbreakDescriptor("Skin flare"))
+        viewModel.onIntent(CreateOutbreakUiIntent.UpdateBodyLocation("Left arm"))
+        viewModel.onIntent(CreateOutbreakUiIntent.Save)
+        viewModel.onIntent(CreateOutbreakUiIntent.Save)
+        saveGate.complete(Unit)
+
+        assertEquals(CreateOutbreakUiEffect.NavigateToRecords, effect.await())
+        assertEquals(1, createCalls)
     }
 
     private fun buildViewModel(

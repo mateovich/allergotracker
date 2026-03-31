@@ -3,6 +3,10 @@ package com.example.app.features.outbreak.ui
 import com.example.app.MainDispatcherRule
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.eventcatalog.domain.ObserveReusableEventCatalogUseCase
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalog
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogRepository
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
 import com.example.app.features.outbreak.domain.DeleteOutbreakEventUseCase
 import com.example.app.features.outbreak.domain.GetOutbreakEventUseCase
@@ -12,7 +16,9 @@ import com.example.app.features.outbreak.domain.UpdateOutbreakEventCommand
 import com.example.app.features.outbreak.domain.UpdateOutbreakEventUseCase
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -309,6 +315,53 @@ class EditOutbreakViewModelTest {
         assertEquals(2, loadAttempts)
     }
 
+    @Test
+    fun stale_saved_catalog_references_do_not_show_saved_summaries() = runBlocking {
+        val repository = object : OutbreakRepository {
+            override suspend fun createOutbreak(command: com.example.app.features.outbreak.domain.CreateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
+            override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> = AppResult.Success(
+                OutbreakEvent(
+                    id = id,
+                    outbreakDescriptor = "Skin flare",
+                    bodyLocation = "Left arm",
+                    occurredAtEpochMs = existingOccurredAt,
+                    notes = "after workout",
+                    outbreakDescriptorCatalogId = 101L,
+                    bodyLocationCatalogId = 102L
+                )
+            )
+            override suspend fun updateOutbreak(command: UpdateOutbreakEventCommand): AppResult<OutbreakEvent> = AppResult.Success(
+                OutbreakEvent(
+                    command.id,
+                    command.outbreakDescriptor,
+                    command.bodyLocation,
+                    command.occurredAtEpochMs,
+                    command.notes,
+                    command.outbreakDescriptorCatalogId,
+                    command.bodyLocationCatalogId
+                )
+            )
+            override suspend fun deleteOutbreak(id: Long): AppResult<Unit> = AppResult.Success(Unit)
+        }
+        val viewModel = EditOutbreakViewModel(
+            recordId = 9L,
+            getOutbreakEventUseCase = GetOutbreakEventUseCase(repository),
+            deleteOutbreakEventUseCase = DeleteOutbreakEventUseCase(repository),
+            updateOutbreakEventUseCase = UpdateOutbreakEventUseCase(repository, CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = CurrentTimeProvider { fixedNow },
+            observeReusableEventCatalogUseCase = ObserveReusableEventCatalogUseCase(
+                FakeEditOutbreakReusableEventCatalogRepository(emptyList())
+            )
+        )
+
+        viewModel.onIntent(EditOutbreakUiIntent.Load)
+
+        assertEquals(101L, viewModel.state.value.selectedOutbreakDescriptorCatalogId)
+        assertEquals(102L, viewModel.state.value.selectedBodyLocationCatalogId)
+        assertEquals(null, viewModel.state.value.selectedOutbreakDescriptorSummary)
+        assertEquals(null, viewModel.state.value.selectedBodyLocationSummary)
+    }
+
     private fun buildViewModel(): EditOutbreakViewModel {
         val repository = object : OutbreakRepository {
             override suspend fun createOutbreak(command: com.example.app.features.outbreak.domain.CreateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
@@ -332,5 +385,25 @@ class EditOutbreakViewModelTest {
             updateOutbreakEventUseCase = UpdateOutbreakEventUseCase(repository, CurrentTimeProvider { fixedNow }),
             currentTimeProvider = CurrentTimeProvider { fixedNow }
         )
+    }
+}
+
+private class FakeEditOutbreakReusableEventCatalogRepository(
+    private val entries: List<ReusableEventCatalog>
+) : ReusableEventCatalogRepository {
+    override fun observeCatalog(kind: ReusableEventCatalogKind): Flow<List<ReusableEventCatalog>> {
+        return flowOf(entries.filter { it.kind == kind })
+    }
+
+    override suspend fun getCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? {
+        return entries.firstOrNull { it.kind == kind && it.id == id }
+    }
+
+    override suspend fun existsCatalogEntry(kind: ReusableEventCatalogKind, id: Long): Boolean {
+        return entries.any { it.kind == kind && it.id == id }
+    }
+
+    override suspend fun ensureCatalogEntry(kind: ReusableEventCatalogKind, name: String): ReusableEventCatalog {
+        return entries.first { it.kind == kind && it.name == name }
     }
 }
