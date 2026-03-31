@@ -95,6 +95,13 @@ class AppContainer(appContext: Context) {
                 ReusableEntityKind.INGREDIENT -> reusableIngredientDao.existsById(id)
                 ReusableEntityKind.COMPOUND -> reusableCompoundDao.existsById(id)
             }
+        },
+        touchReusableEntity = { kind, id ->
+            val updatedAt = systemCurrentTimeProvider.nowEpochMillis()
+            when (kind) {
+                ReusableEntityKind.INGREDIENT -> reusableIngredientDao.touchById(id, updatedAt)
+                ReusableEntityKind.COMPOUND -> reusableCompoundDao.touchById(id, updatedAt)
+            }
         }
     )
     private val exposureRepository = RoomExposureRepository(exposureEventDao, systemCurrentTimeProvider, reusableEventCatalogRepository)

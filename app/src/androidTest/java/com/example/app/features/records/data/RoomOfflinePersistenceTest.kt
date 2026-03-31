@@ -173,6 +173,55 @@ class RoomOfflinePersistenceTest {
     }
 
     @Test
+    fun compound_reuse_reference_survives_database_reopen_and_records_mapping() = runBlocking {
+        val now = 1_700_000_123_000L
+        val compoundRepository = RoomReusableCompoundRepository(database.reusableCompoundDao()) { now }
+        val reusableCompound = compoundRepository.createCompound(
+            CreateReusableCompoundCommand(name = "Breakfast mix", notes = "Draft")
+        ).requireSuccess()
+        val ingestionRepository = RoomIngestionRepository(
+            database.ingestionEventDao(),
+            CurrentTimeProvider { now },
+            reusableEntityExists = { kind, id ->
+                when (kind) {
+                    ReusableEntityKind.INGREDIENT -> database.reusableIngredientDao().existsById(id)
+                    ReusableEntityKind.COMPOUND -> database.reusableCompoundDao().existsById(id)
+                }
+            }
+        )
+
+        val ingestionId = ingestionRepository.createIngestion(
+            CreateIngestionEventCommand(
+                itemName = reusableCompound.name,
+                quantityLevel = 2,
+                occurredAtEpochMs = now - 1_000L,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.COMPOUND,
+                reusableEntityId = reusableCompound.id
+            )
+        ).requireSuccess().id
+
+        database.close()
+        database = buildDatabase()
+
+        val reopenedIngestionRepository = RoomIngestionRepository(database.ingestionEventDao(), CurrentTimeProvider { now })
+        val reopenedRecordsRepository = RoomRecordsRepository(
+            ingestionEventDao = database.ingestionEventDao(),
+            exposureEventDao = database.exposureEventDao(),
+            outbreakEventDao = database.outbreakEventDao()
+        )
+
+        val ingestion = reopenedIngestionRepository.getIngestion(ingestionId).requireSuccess()
+        val record = reopenedRecordsRepository.observeRecords().first().single()
+
+        assertEquals("Breakfast mix", ingestion.itemName)
+        assertEquals(ReusableEntityKind.COMPOUND, ingestion.reusableEntityKind)
+        assertEquals(reusableCompound.id, ingestion.reusableEntityId)
+        assertEquals("Breakfast mix", record.title)
+        assertEquals("2 Light snack - Reusable compound", record.detailLabel)
+    }
+
+    @Test
     fun room_records_timeline_reacts_to_create_edit_delete_sequence() = runBlocking {
         val now = 1_700_000_500_000L
         val ingestionRepository = RoomIngestionRepository(database.ingestionEventDao(), CurrentTimeProvider { now })

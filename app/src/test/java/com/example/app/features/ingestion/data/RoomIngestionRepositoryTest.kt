@@ -178,12 +178,16 @@ class RoomIngestionRepositoryTest {
     fun create_persists_valid_reusable_identity_without_recreating_entity() = runBlocking {
         val dao = FakeIngestionEventDaoForRepository(getByIdResult = null)
         val existenceChecks = mutableListOf<Pair<ReusableEntityKind, Long>>()
+        val touched = mutableListOf<Pair<ReusableEntityKind, Long>>()
         val repository = RoomIngestionRepository(
             ingestionEventDao = dao,
             currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L },
             reusableEntityExists = { kind, id ->
                 existenceChecks += kind to id
                 true
+            },
+            touchReusableEntity = { kind, id ->
+                touched += kind to id
             }
         )
 
@@ -200,8 +204,37 @@ class RoomIngestionRepositoryTest {
 
         assertTrue(result is AppResult.Success)
         assertEquals(listOf(ReusableEntityKind.INGREDIENT to 11L), existenceChecks)
+        assertEquals(listOf(ReusableEntityKind.INGREDIENT to 11L), touched)
         assertEquals(ReusableEntityKind.INGREDIENT.storageValue, dao.inserted.single().reusableEntityKind)
         assertEquals(11L, dao.inserted.single().reusableEntityId)
+    }
+
+    @Test
+    fun update_touches_compound_reference_after_successful_reuse() = runBlocking {
+        val existing = IngestionEventEntity(7L, "Breakfast mix", 2, 1_700_000_000_000L, null, ReusableEntityKind.COMPOUND.storageValue, 22L, 1_700_000_100_000L)
+        val dao = FakeIngestionEventDaoForRepository(getByIdResult = existing)
+        val touched = mutableListOf<Pair<ReusableEntityKind, Long>>()
+        val repository = RoomIngestionRepository(
+            ingestionEventDao = dao,
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L },
+            reusableEntityExists = { _, _ -> true },
+            touchReusableEntity = { kind, id -> touched += kind to id }
+        )
+
+        val result = repository.updateIngestion(
+            UpdateIngestionEventCommand(
+                id = 7L,
+                itemName = "Breakfast mix",
+                quantityLevel = 2,
+                occurredAtEpochMs = 1_700_000_200_000L,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.COMPOUND,
+                reusableEntityId = 22L
+            )
+        )
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(listOf(ReusableEntityKind.COMPOUND to 22L), touched)
     }
 }
 

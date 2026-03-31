@@ -16,6 +16,7 @@ import com.example.app.features.ingredients.domain.ObserveReusableIngredientsUse
 import com.example.app.features.ingredients.domain.ReusableIngredient
 import com.example.app.features.ingredients.domain.ReusableIngredientRepository
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
@@ -195,6 +196,64 @@ class CreateIngestionViewModelTest {
 
         assertEquals("Selected reusable item is no longer available.", viewModel.state.value.formMessage)
         assertFalse(viewModel.state.value.isSaving)
+    }
+
+    @Test
+    fun second_save_while_first_is_in_flight_is_ignored() = runBlocking {
+        var createCalls = 0
+        val saveGate = CompletableDeferred<Unit>()
+        val timeProvider = object : CurrentTimeProvider {
+            override fun nowEpochMillis(): Long = fixedNow
+        }
+        val viewModel = CreateIngestionViewModel(
+            createIngestionDefaultsUseCase = CreateIngestionDefaultsUseCase(timeProvider),
+            createIngestionEventUseCase = CreateIngestionEventUseCase(
+                repository = object : IngestionRepository {
+                    override suspend fun createIngestion(command: CreateIngestionEventCommand): AppResult<IngestionEvent> {
+                        createCalls += 1
+                        saveGate.await()
+                        return AppResult.Success(
+                            IngestionEvent(
+                                id = 7L,
+                                itemName = command.itemName,
+                                quantityLevel = command.quantityLevel ?: 0,
+                                occurredAtEpochMs = command.occurredAtEpochMs,
+                                notes = command.notes,
+                                reusableEntityKind = command.reusableEntityKind,
+                                reusableEntityId = command.reusableEntityId
+                            )
+                        )
+                    }
+
+                    override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> = error("unused")
+                    override suspend fun updateIngestion(command: com.example.app.features.ingestion.domain.UpdateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
+                    override suspend fun deleteIngestion(id: Long): AppResult<Unit> = error("unused")
+                },
+                currentTimeProvider = timeProvider
+            ),
+            observeReusableIngredientsUseCase = ObserveReusableIngredientsUseCase(
+                repository = object : ReusableIngredientRepository {
+                    override suspend fun createIngredient(command: com.example.app.features.ingredients.domain.CreateReusableIngredientCommand): AppResult<ReusableIngredient> = error("unused")
+                    override fun observeIngredients(): Flow<List<ReusableIngredient>> = flowOf(emptyList())
+                }
+            ),
+            observeReusableCompoundsUseCase = ObserveReusableCompoundsUseCase(
+                repository = object : ReusableCompoundRepository {
+                    override suspend fun createCompound(command: com.example.app.features.compounds.domain.CreateReusableCompoundCommand): AppResult<ReusableCompound> = error("unused")
+                    override fun observeCompounds(): Flow<List<ReusableCompound>> = flowOf(emptyList())
+                }
+            )
+        )
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.onIntent(CreateIngestionUiIntent.UpdateItemName("Tea"))
+        viewModel.onIntent(CreateIngestionUiIntent.SelectQuantityLevel(2))
+        viewModel.onIntent(CreateIngestionUiIntent.Save)
+        viewModel.onIntent(CreateIngestionUiIntent.Save)
+        saveGate.complete(Unit)
+
+        assertEquals(CreateIngestionUiEffect.NavigateToRecords, effect.await())
+        assertEquals(1, createCalls)
     }
 
     private fun buildViewModel(

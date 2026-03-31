@@ -131,6 +131,9 @@ class CreateIngestionViewModel(
 
     private fun save() {
         val currentState = mutableState.value
+        if (currentState.isSaving) {
+            return
+        }
         if (!currentState.canSave) {
             updateState {
                 it.copy(

@@ -84,6 +84,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -739,10 +740,61 @@ class RecordsScreenTest {
         composeRule.onNodeWithTag("record-item-ingestion-1").assertIsDisplayed()
         composeRule.onNodeWithTag("record-item-exposure-5").assertIsDisplayed()
 
+        assertNodeAppearsAbove("record-item-ingestion-1", "record-item-exposure-5")
+
         val orderedIds = runBlocking {
             store.recordsRepository().observeRecords(flowOf(RecordsFilter())).first().map { it.id }
         }
         assertEquals(listOf("ingestion-1", "exposure-5"), orderedIds)
+    }
+
+    @Test
+    fun equal_visible_timestamps_render_last_saved_record_above_older_cross_type_row() {
+        val sharedOccurredAt = 1_700_000_000_000L
+        val repository = object : RecordsRepository {
+            override fun observeRecordCount() = flowOf(2)
+
+            override fun observeRecords(filters: Flow<RecordsFilter>) = flowOf(
+                listOf(
+                    RecordSummary(
+                        id = "ingestion-10",
+                        sortKey = 10L,
+                        typeLabel = "Ingestion",
+                        title = "Tea",
+                        detailLabel = "2 Light snack",
+                        occurredAtEpochMs = sharedOccurredAt,
+                        createdAtEpochMs = 100L,
+                        sourceId = 10L,
+                        eventType = RecordEventType.INGESTION,
+                        ingestionQuantityLevel = 2
+                    ),
+                    RecordSummary(
+                        id = "exposure-1",
+                        sortKey = 1L,
+                        typeLabel = "Exposure",
+                        title = "Pollen",
+                        detailLabel = "Exposure recorded",
+                        occurredAtEpochMs = sharedOccurredAt,
+                        createdAtEpochMs = 200L,
+                        sourceId = 1L,
+                        eventType = RecordEventType.EXPOSURE,
+                        ingestionQuantityLevel = null
+                    )
+                ).sortedWith(RecordSummaryComparator)
+            )
+        }
+
+        composeRule.setContent {
+            RecordsScreen(
+                onNavigateToRoute = {},
+                viewModelFactory = recordsFactoryFor(repository, fixedNow = sharedOccurredAt)
+            )
+        }
+
+        composeRule.onNodeWithTag("record-item-exposure-1").assertIsDisplayed()
+        composeRule.onNodeWithTag("record-item-ingestion-10").assertIsDisplayed()
+
+        assertNodeAppearsAbove("record-item-exposure-1", "record-item-ingestion-10")
     }
 
     @Test
@@ -781,6 +833,12 @@ private fun assertEditFormShowsOfflineNotice(
     composeRule.onNodeWithTag(formTag).assertIsDisplayed()
     composeRule.onNodeWithTag("local-only-notice").assertIsDisplayed()
     composeRule.onNodeWithText("Works offline. Saved only on this device.").assertIsDisplayed()
+}
+
+private fun RecordsScreenTest.assertNodeAppearsAbove(upperTag: String, lowerTag: String) {
+    val upperTop = composeRule.onNodeWithTag(upperTag).fetchSemanticsNode().boundsInRoot.top
+    val lowerTop = composeRule.onNodeWithTag(lowerTag).fetchSemanticsNode().boundsInRoot.top
+    assertTrue("Expected $upperTag above $lowerTag but got $upperTop >= $lowerTop", upperTop < lowerTop)
 }
 
 @Composable

@@ -18,6 +18,9 @@ interface ReusableCompoundDao {
     @Query("SELECT EXISTS(SELECT 1 FROM reusable_compounds WHERE id = :id)")
     suspend fun existsById(id: Long): Boolean
 
+    @Query("UPDATE reusable_compounds SET updated_at_epoch_ms = :updatedAtEpochMs WHERE id = :id")
+    suspend fun touchById(id: Long, updatedAtEpochMs: Long): Int
+
     @Transaction
     @Query("SELECT * FROM reusable_compounds ORDER BY name COLLATE NOCASE ASC, id ASC")
     fun observeAll(): Flow<List<ReusableCompoundWithComponents>>

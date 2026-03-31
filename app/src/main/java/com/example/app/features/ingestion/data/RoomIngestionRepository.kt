@@ -14,7 +14,8 @@ import com.example.app.features.ingestion.domain.UpdateIngestionEventCommand
 class RoomIngestionRepository(
     private val ingestionEventDao: IngestionEventDao,
     private val currentTimeProvider: CurrentTimeProvider,
-    private val reusableEntityExists: suspend (ReusableEntityKind, Long) -> Boolean = { _, _ -> true }
+    private val reusableEntityExists: suspend (ReusableEntityKind, Long) -> Boolean = { _, _ -> true },
+    private val touchReusableEntity: suspend (ReusableEntityKind, Long) -> Unit = { _, _ -> }
 ) : IngestionRepository {
     override suspend fun createIngestion(command: CreateIngestionEventCommand): AppResult<IngestionEvent> {
         return try {
@@ -34,6 +35,11 @@ class RoomIngestionRepository(
                 createdAtEpochMs = currentTimeProvider.nowEpochMillis()
             )
             val id = ingestionEventDao.insert(entity)
+            command.reusableEntityKind?.let { kind ->
+                command.reusableEntityId?.let { reusableId ->
+                    touchReusableEntity(kind, reusableId)
+                }
+            }
             AppResult.Success(
                 IngestionEvent(
                     id = id,
@@ -83,6 +89,11 @@ class RoomIngestionRepository(
             val updatedCount = ingestionEventDao.update(updatedEntity)
             if (updatedCount == 0) {
                 return AppResult.Error(DomainError.IntegrityError("Ingestion record no longer exists."))
+            }
+            command.reusableEntityKind?.let { kind ->
+                command.reusableEntityId?.let { reusableId ->
+                    touchReusableEntity(kind, reusableId)
+                }
             }
             AppResult.Success(updatedEntity.toDomain())
         } catch (_: Exception) {

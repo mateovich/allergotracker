@@ -131,6 +131,28 @@ class MainActivityTest {
     }
 
     @Test
+    fun ingestion_flow_can_create_reusable_compound_inline_save_and_render_reused_record() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        composeRule.onNodeWithTag("ingestion-notes").performTextInput("Post workout")
+        composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
+        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
+        composeRule.onNodeWithTag("compound-name").performTextInput("Breakfast mix")
+        composeRule.onNodeWithTag("compound-save").performClick()
+
+        composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("ingestion-item-name").assertTextContains("Breakfast mix")
+        composeRule.onNodeWithTag("ingestion-notes").assertTextContains("Post workout")
+        composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable compound selected: Breakfast mix")
+        composeRule.onNodeWithTag("ingestion-save").performClick()
+
+        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        composeRule.onNodeWithText("Breakfast mix").assertIsDisplayed()
+        composeRule.onNodeWithText("2 Light snack - Reusable compound").assertIsDisplayed()
+    }
+
+    @Test
     fun ingestion_flow_can_reuse_saved_ingredient_in_a_later_capture() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()

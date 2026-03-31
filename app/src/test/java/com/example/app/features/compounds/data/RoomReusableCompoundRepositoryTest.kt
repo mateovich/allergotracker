@@ -75,5 +75,7 @@ private class FakeReusableCompoundDao(
 
     override suspend fun existsById(id: Long): Boolean = existing?.id == id
 
+    override suspend fun touchById(id: Long, updatedAtEpochMs: Long): Int = if (existing?.id == id) 1 else 0
+
     override fun observeAll(): Flow<List<ReusableCompoundWithComponents>> = emptyFlow()
 }
