@@ -51,13 +51,13 @@ fun RecordsScreen(
 
     LaunchedEffect(viewModel) {
         viewModel.onIntent(RecordsUiIntent.Load)
-        viewModel.effects.collectLatest { effect ->
-            when (effect) {
-                is RecordsUiEffect.NavigateToCreateForm -> onNavigateToRoute(effect.route)
-                is RecordsUiEffect.NavigateToEditForm -> onNavigateToRoute(effect.route)
+            viewModel.effects.collectLatest { effect ->
+                when (effect) {
+                    is RecordsUiEffect.NavigateToCreateForm -> onNavigateToRoute(effect.route)
+                    is RecordsUiEffect.NavigateToRecordDetail -> onNavigateToRoute(effect.route)
+                }
             }
         }
-    }
 
     AppScreenScaffold(
         title = state.title,
@@ -110,6 +110,14 @@ fun RecordsScreen(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .semantics {
+                                        contentDescription = listOf(
+                                            record.typeLabel,
+                                            record.title,
+                                            record.detailLabel.takeIf { it.isNotBlank() },
+                                            record.occurredAtLabel
+                                        ).joinToString(separator = ", ")
+                                    }
                                     .clickable(enabled = record.isEditable) {
                                         viewModel.onIntent(RecordsUiIntent.OpenRecord(record.id))
                                     }

@@ -4,6 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.eventcatalog.domain.ObserveReusableEventCatalogUseCase
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.domain.emptyObserveReusableEventCatalogUseCase
+import com.example.app.features.eventcatalog.ui.ReusableEventCatalogOptionUiModel
+import com.example.app.features.eventcatalog.ui.filterForQuery
+import com.example.app.features.eventcatalog.ui.hasExactName
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
 import com.example.app.features.outbreak.domain.DeleteOutbreakEventUseCase
 import com.example.app.features.outbreak.domain.GetOutbreakEventUseCase
@@ -26,7 +32,8 @@ class EditOutbreakViewModel(
     private val getOutbreakEventUseCase: GetOutbreakEventUseCase,
     private val deleteOutbreakEventUseCase: DeleteOutbreakEventUseCase,
     private val updateOutbreakEventUseCase: UpdateOutbreakEventUseCase,
-    private val currentTimeProvider: CurrentTimeProvider
+    private val currentTimeProvider: CurrentTimeProvider,
+    private val observeReusableEventCatalogUseCase: ObserveReusableEventCatalogUseCase = emptyObserveReusableEventCatalogUseCase()
 ) : ViewModel() {
     private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
     private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
@@ -40,24 +47,123 @@ class EditOutbreakViewModel(
     private val effectChannel = Channel<EditOutbreakUiEffect>(capacity = Channel.BUFFERED)
     val effects = effectChannel.receiveAsFlow()
 
+    init {
+        viewModelScope.launch {
+            observeReusableEventCatalogUseCase(ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR).collect { entries ->
+                updateState {
+                    it.copy(
+                        availableOutbreakDescriptors = entries.map { entry ->
+                            ReusableEventCatalogOptionUiModel(
+                                id = entry.id,
+                                name = entry.name,
+                                kind = entry.kind,
+                                usageCount = entry.usageCount,
+                                lastUsedAtEpochMs = entry.lastUsedAtEpochMs,
+                                updatedAtEpochMs = entry.updatedAtEpochMs
+                            )
+                        }
+                    ).withFilteredCatalogs()
+                }
+            }
+        }
+        viewModelScope.launch {
+            observeReusableEventCatalogUseCase(ReusableEventCatalogKind.BODY_LOCATION).collect { entries ->
+                updateState {
+                    it.copy(
+                        availableBodyLocations = entries.map { entry ->
+                            ReusableEventCatalogOptionUiModel(
+                                id = entry.id,
+                                name = entry.name,
+                                kind = entry.kind,
+                                usageCount = entry.usageCount,
+                                lastUsedAtEpochMs = entry.lastUsedAtEpochMs,
+                                updatedAtEpochMs = entry.updatedAtEpochMs
+                            )
+                        }
+                    ).withFilteredCatalogs()
+                }
+            }
+        }
+    }
+
     fun onIntent(intent: EditOutbreakUiIntent) {
         when (intent) {
             EditOutbreakUiIntent.Load -> loadIfNeeded()
             is EditOutbreakUiIntent.UpdateOutbreakDescriptor -> updateState {
                 it.copy(
                     outbreakDescriptor = intent.value,
+                    selectedOutbreakDescriptorCatalogId = null,
+                    selectedOutbreakDescriptorSummary = null,
                     outbreakDescriptorError = null,
                     formMessage = "",
                     canSave = canSave(intent.value, it.bodyLocation)
-                )
+                ).withFilteredCatalogs()
+            }
+            is EditOutbreakUiIntent.SelectOutbreakDescriptorCatalogOption -> updateState {
+                it.copy(
+                    outbreakDescriptor = intent.name,
+                    selectedOutbreakDescriptorCatalogId = intent.id,
+                    selectedOutbreakDescriptorSummary = "Saved outbreak descriptor selected: ${intent.name}",
+                    outbreakDescriptorError = null,
+                    formMessage = "",
+                    canSave = canSave(intent.name, it.bodyLocation)
+                ).withFilteredCatalogs()
+            }
+            EditOutbreakUiIntent.UseTypedOutbreakDescriptor -> updateState {
+                it.copy(
+                    selectedOutbreakDescriptorCatalogId = null,
+                    selectedOutbreakDescriptorSummary = "New outbreak descriptor will be saved locally.",
+                    outbreakDescriptorError = null,
+                    formMessage = "",
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                ).withFilteredCatalogs()
+            }
+            EditOutbreakUiIntent.ClearOutbreakDescriptorCatalogSelection -> updateState {
+                it.copy(
+                    selectedOutbreakDescriptorCatalogId = null,
+                    selectedOutbreakDescriptorSummary = null,
+                    outbreakDescriptorError = null,
+                    formMessage = "",
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                ).withFilteredCatalogs()
             }
             is EditOutbreakUiIntent.UpdateBodyLocation -> updateState {
                 it.copy(
                     bodyLocation = intent.value,
+                    selectedBodyLocationCatalogId = null,
+                    selectedBodyLocationSummary = null,
                     bodyLocationError = null,
                     formMessage = "",
                     canSave = canSave(it.outbreakDescriptor, intent.value)
-                )
+                ).withFilteredCatalogs()
+            }
+            is EditOutbreakUiIntent.SelectBodyLocationCatalogOption -> updateState {
+                it.copy(
+                    bodyLocation = intent.name,
+                    selectedBodyLocationCatalogId = intent.id,
+                    selectedBodyLocationSummary = "Saved body location selected: ${intent.name}",
+                    bodyLocationError = null,
+                    formMessage = "",
+                    canSave = canSave(it.outbreakDescriptor, intent.name)
+                ).withFilteredCatalogs()
+            }
+            EditOutbreakUiIntent.UseTypedBodyLocation -> updateState {
+                it.copy(
+                    selectedBodyLocationCatalogId = null,
+                    selectedBodyLocationSummary = "New body location will be saved locally.",
+                    bodyLocationError = null,
+                    formMessage = "",
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                ).withFilteredCatalogs()
+            }
+            EditOutbreakUiIntent.ClearBodyLocationCatalogSelection -> updateState {
+                it.copy(
+                    selectedBodyLocationCatalogId = null,
+                    selectedBodyLocationSummary = null,
+                    bodyLocationError = null,
+                    formMessage = "",
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                ).withFilteredCatalogs()
             }
             is EditOutbreakUiIntent.UpdateNotes -> updateState { it.copy(notes = intent.value) }
             is EditOutbreakUiIntent.UpdateOccurredAtInput -> {
@@ -109,10 +215,18 @@ class EditOutbreakViewModel(
                             occurredAtEpochMs = event.occurredAtEpochMs,
                             occurredAtInput = formatDateTimeInput(event.occurredAtEpochMs),
                             occurredAtLabel = formatTime(event.occurredAtEpochMs),
+                            selectedOutbreakDescriptorCatalogId = event.outbreakDescriptorCatalogId,
+                            selectedOutbreakDescriptorSummary = event.outbreakDescriptorCatalogId?.let { _ ->
+                                "Saved outbreak descriptor selected: ${event.outbreakDescriptor}"
+                            },
+                            selectedBodyLocationCatalogId = event.bodyLocationCatalogId,
+                            selectedBodyLocationSummary = event.bodyLocationCatalogId?.let { _ ->
+                                "Saved body location selected: ${event.bodyLocation}"
+                            },
                             isLoading = false,
                             canSave = canSave(event.outbreakDescriptor, event.bodyLocation),
-                            canDelete = canDelete(event.outbreakDescriptor, event.bodyLocation)
-                        )
+                            canDelete = true
+                        ).withFilteredCatalogs()
                     }
                 }
                 is AppResult.Error -> updateState { it.copy(isLoading = false, formMessage = result.error.message) }
@@ -143,7 +257,9 @@ class EditOutbreakViewModel(
                         outbreakDescriptor = currentState.outbreakDescriptor,
                         bodyLocation = currentState.bodyLocation,
                         occurredAtEpochMs = parsedOccurredAt,
-                        notes = currentState.notes
+                        notes = currentState.notes,
+                        outbreakDescriptorCatalogId = currentState.selectedOutbreakDescriptorCatalogId,
+                        bodyLocationCatalogId = currentState.selectedBodyLocationCatalogId
                     )
                 )
             ) {
@@ -170,12 +286,7 @@ class EditOutbreakViewModel(
 
     private fun delete() {
         val currentState = mutableState.value
-        if (
-            !currentState.isDeleteConfirmationVisible ||
-            currentState.isDeleting ||
-            currentState.isSaving ||
-            currentState.isLoading
-        ) return
+        if (!currentState.isDeleteConfirmationVisible || currentState.isDeleting || currentState.isSaving || currentState.isLoading) return
         updateState {
             it.copy(
                 isDeleting = true,
@@ -208,12 +319,9 @@ class EditOutbreakViewModel(
         updateState { it.copy(isDeleteConfirmationVisible = true, formMessage = "") }
     }
 
-    private fun canDelete(outbreakDescriptor: String, bodyLocation: String): Boolean {
-        return outbreakDescriptor.isNotBlank() && bodyLocation.isNotBlank()
-    }
-
     private fun deleteRecordLabel(outbreakDescriptor: String, bodyLocation: String): String {
-        if (!canDelete(outbreakDescriptor, bodyLocation)) return ""
+        if (outbreakDescriptor.isBlank() && bodyLocation.isBlank()) return ""
+        if (bodyLocation.isBlank()) return outbreakDescriptor
         return "$outbreakDescriptor at $bodyLocation"
     }
 
@@ -244,5 +352,14 @@ class EditOutbreakViewModel(
             is DomainError.ValidationError -> fieldErrors[key]
             else -> null
         }
+    }
+
+    private fun EditOutbreakUiState.withFilteredCatalogs(): EditOutbreakUiState {
+        return copy(
+            filteredOutbreakDescriptors = availableOutbreakDescriptors.filterForQuery(outbreakDescriptor),
+            showCreateOutbreakDescriptorOption = outbreakDescriptor.trim().isNotBlank() && !availableOutbreakDescriptors.hasExactName(outbreakDescriptor),
+            filteredBodyLocations = availableBodyLocations.filterForQuery(bodyLocation),
+            showCreateBodyLocationOption = bodyLocation.trim().isNotBlank() && !availableBodyLocations.hasExactName(bodyLocation)
+        )
     }
 }

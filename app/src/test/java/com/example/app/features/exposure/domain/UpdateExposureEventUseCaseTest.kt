@@ -36,6 +36,22 @@ class UpdateExposureEventUseCaseTest {
         assertEquals("Pollen", repository.updatedCommands.single().exposureType)
         assertEquals("windy", repository.updatedCommands.single().notes)
     }
+
+    @Test
+    fun rejects_missing_saved_catalog_reference_without_updating_repository() = runBlocking {
+        val repository = FakeEditableExposureRepository()
+        val useCase = UpdateExposureEventUseCase(
+            repository,
+            FakeExposureCurrentTimeProvider(fixedNow),
+            exposureCatalogExists = { false }
+        )
+
+        val result = useCase(UpdateExposureEventCommand(5L, "Pollen", fixedNow, null, exposureTypeCatalogId = 77L))
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Choose a saved exposure type that still exists.", error.fieldErrors["exposureType"])
+        assertTrue(repository.updatedCommands.isEmpty())
+    }
 }
 
 private class FakeEditableExposureRepository : ExposureRepository {

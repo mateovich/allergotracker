@@ -2,17 +2,37 @@ package com.example.app.navigation
 
 object AppRoutes {
     const val RECORD_ID_ARG = "recordId"
+    const val RECORD_EVENT_TYPE_ARG = "eventType"
+    const val OPEN_DELETE_ARG = "openDelete"
     const val RECORDS = "records"
+    const val RECORD_DETAIL = "record-detail/{$RECORD_EVENT_TYPE_ARG}/{$RECORD_ID_ARG}"
     const val CREATE_INGESTION = "create/ingestion"
     const val CREATE_EXPOSURE = "create/exposure"
     const val CREATE_OUTBREAK = "create/outbreak"
+    const val CREATE_INGREDIENT = "create/ingredient"
+    const val CREATE_COMPOUND = "create/compound"
     const val EDIT_INGESTION = "edit/ingestion/{$RECORD_ID_ARG}"
     const val EDIT_EXPOSURE = "edit/exposure/{$RECORD_ID_ARG}"
-    const val EDIT_OUTBREAK = "edit/outbreak/{$RECORD_ID_ARG}"
+    const val EDIT_OUTBREAK = "edit/outbreak/{$RECORD_ID_ARG}?$OPEN_DELETE_ARG={$OPEN_DELETE_ARG}"
+    const val REUSABLE_ENTITY_ID_RESULT = "reusableEntityId"
+    const val REUSABLE_ENTITY_NAME_RESULT = "reusableEntityName"
+    const val REUSABLE_ENTITY_KIND_RESULT = "reusableEntityKind"
 
     fun editIngestion(recordId: Long): String = "edit/ingestion/$recordId"
 
     fun editExposure(recordId: Long): String = "edit/exposure/$recordId"
 
-    fun editOutbreak(recordId: Long): String = "edit/outbreak/$recordId"
+    fun editOutbreak(recordId: Long, openDelete: Boolean = false): String {
+        return "edit/outbreak/$recordId?$OPEN_DELETE_ARG=$openDelete"
+    }
+
+    fun recordDetail(eventType: com.example.app.features.records.domain.RecordEventType, recordId: Long): String {
+        return "record-detail/${eventType.name.lowercase()}/$recordId"
+    }
+
+    fun parseRecordEventType(rawValue: String): com.example.app.features.records.domain.RecordEventType? {
+        return com.example.app.features.records.domain.RecordEventType.entries.firstOrNull {
+            it.name.equals(rawValue, ignoreCase = true)
+        }
+    }
 }

@@ -3,11 +3,15 @@ package com.example.app.features.outbreak.data
 import android.database.sqlite.SQLiteConstraintException
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalog
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogRepository
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
 import com.example.app.features.outbreak.domain.CreateOutbreakEventCommand
 import com.example.app.features.outbreak.domain.UpdateOutbreakEventCommand
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -18,9 +22,11 @@ class RoomOutbreakRepositoryTest {
     @Test
     fun create_persists_outbreak_locally_through_room_dao() = runBlocking {
         val dao = FakeOutbreakEventDaoForRepository(getByIdResult = null)
+        val catalogRepository = FakeOutbreakCatalogRepository()
         val repository = RoomOutbreakRepository(
             outbreakEventDao = dao,
-            currentTimeProvider = CurrentTimeProvider { 1_700_000_123_000L }
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_123_000L },
+            eventCatalogRepository = catalogRepository
         )
 
         val result = repository.createOutbreak(
@@ -37,6 +43,8 @@ class RoomOutbreakRepositoryTest {
         assertEquals("Skin flare", savedEntity.outbreakDescriptor)
         assertEquals("Arm", savedEntity.bodyLocation)
         assertEquals(1_700_000_123_000L, savedEntity.createdAtEpochMs)
+        assertEquals(101L, savedEntity.outbreakDescriptorCatalogId)
+        assertEquals(102L, savedEntity.bodyLocationCatalogId)
     }
 
     @Test
@@ -121,6 +129,41 @@ class RoomOutbreakRepositoryTest {
     }
 }
 
+private class FakeOutbreakCatalogRepository : ReusableEventCatalogRepository {
+    override fun observeCatalog(kind: ReusableEventCatalogKind): Flow<List<ReusableEventCatalog>> = flowOf(emptyList())
+
+    override suspend fun getCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? {
+        return ReusableEventCatalog(
+            id = id,
+            kind = kind,
+            name = "Existing",
+            usageCount = 1,
+            createdAtEpochMs = 1L,
+            updatedAtEpochMs = 1L,
+            lastUsedAtEpochMs = 1L
+        )
+    }
+
+    override suspend fun existsCatalogEntry(kind: ReusableEventCatalogKind, id: Long): Boolean = true
+
+    override suspend fun ensureCatalogEntry(kind: ReusableEventCatalogKind, name: String): ReusableEventCatalog {
+        val id = when (kind) {
+            ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR -> 101L
+            ReusableEventCatalogKind.BODY_LOCATION -> 102L
+            ReusableEventCatalogKind.EXPOSURE_TYPE -> 103L
+        }
+        return ReusableEventCatalog(
+            id = id,
+            kind = kind,
+            name = name,
+            usageCount = 1,
+            createdAtEpochMs = 1L,
+            updatedAtEpochMs = 1L,
+            lastUsedAtEpochMs = 1L
+        )
+    }
+}
+
 private class FakeOutbreakEventDaoForRepository(
     private val getByIdResult: OutbreakEventEntity?,
     private val deleteCount: Int = 1,
@@ -135,6 +178,7 @@ private class FakeOutbreakEventDaoForRepository(
     }
     override fun observeRecordCount(): Flow<Int> = emptyFlow()
     override suspend fun getById(id: Long): OutbreakEventEntity? = getByIdResult
+    override fun observeById(id: Long): Flow<OutbreakEventEntity?> = emptyFlow()
     override suspend fun update(entity: OutbreakEventEntity): Int {
         updated += entity
         return 1

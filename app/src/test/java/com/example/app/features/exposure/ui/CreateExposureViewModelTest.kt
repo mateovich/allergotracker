@@ -1,6 +1,10 @@
 package com.example.app.features.exposure.ui
 
 import com.example.app.MainDispatcherRule
+import com.example.app.features.eventcatalog.domain.ObserveReusableEventCatalogUseCase
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalog
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogRepository
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.exposure.domain.CreateExposureDefaultsUseCase
 import com.example.app.features.exposure.domain.CreateExposureEventCommand
@@ -12,7 +16,9 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -102,7 +108,33 @@ class CreateExposureViewModelTest {
         assertEquals(expectedTimeLabel, viewModel.state.value.occurredAtLabel)
     }
 
-    private fun buildViewModel(): CreateExposureViewModel {
+    @Test
+    fun selecting_saved_exposure_type_sets_catalog_reference_and_summary() {
+        val viewModel = buildViewModel(
+            availableCatalog = listOf(
+                ReusableEventCatalog(
+                    id = 5L,
+                    kind = ReusableEventCatalogKind.EXPOSURE_TYPE,
+                    name = "Pollen",
+                    usageCount = 3,
+                    createdAtEpochMs = fixedNow - 1000L,
+                    updatedAtEpochMs = fixedNow - 500L,
+                    lastUsedAtEpochMs = fixedNow - 500L
+                )
+            )
+        )
+
+        viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType("Pol"))
+        viewModel.onIntent(CreateExposureUiIntent.SelectExposureCatalogOption(5L, "Pollen"))
+
+        assertEquals(5L, viewModel.state.value.selectedExposureTypeCatalogId)
+        assertEquals("Saved exposure type selected: Pollen", viewModel.state.value.selectedExposureTypeSummary)
+        assertEquals("Pollen", viewModel.state.value.exposureType)
+    }
+
+    private fun buildViewModel(
+        availableCatalog: List<ReusableEventCatalog> = emptyList()
+    ): CreateExposureViewModel {
         val timeProvider = object : CurrentTimeProvider {
             override fun nowEpochMillis(): Long = fixedNow
         }
@@ -134,7 +166,30 @@ class CreateExposureViewModelTest {
                     }
                 },
                 currentTimeProvider = timeProvider
+            ),
+            observeReusableEventCatalogUseCase = ObserveReusableEventCatalogUseCase(
+                FakeReusableEventCatalogRepository(availableCatalog)
             )
         )
+    }
+}
+
+private class FakeReusableEventCatalogRepository(
+    private val entries: List<ReusableEventCatalog>
+) : ReusableEventCatalogRepository {
+    override fun observeCatalog(kind: ReusableEventCatalogKind): Flow<List<ReusableEventCatalog>> {
+        return flowOf(entries.filter { it.kind == kind })
+    }
+
+    override suspend fun getCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? {
+        return entries.firstOrNull { it.kind == kind && it.id == id }
+    }
+
+    override suspend fun existsCatalogEntry(kind: ReusableEventCatalogKind, id: Long): Boolean {
+        return entries.any { it.kind == kind && it.id == id }
+    }
+
+    override suspend fun ensureCatalogEntry(kind: ReusableEventCatalogKind, name: String): ReusableEventCatalog {
+        return entries.first { it.kind == kind && it.name == name }
     }
 }

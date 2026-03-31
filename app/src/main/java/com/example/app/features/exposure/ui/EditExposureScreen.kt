@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -105,15 +106,66 @@ fun EditExposureScreen(
                 )
             }
             LocalOnlyNotice()
-            OutlinedTextField(
-                value = state.exposureType,
-                onValueChange = { viewModel.onIntent(EditExposureUiIntent.UpdateExposureType(it)) },
-                modifier = Modifier.fillMaxWidth().testTag("edit-exposure-type"),
-                label = { Text("What were you exposed to?") },
-                supportingText = { state.exposureTypeError?.let { Text(it) } },
-                isError = state.exposureTypeError != null,
-                singleLine = true
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = "Exposure type", style = MaterialTheme.typography.titleSmall)
+                OutlinedTextField(
+                    value = state.exposureType,
+                    onValueChange = { viewModel.onIntent(EditExposureUiIntent.UpdateExposureType(it)) },
+                    modifier = Modifier.fillMaxWidth().testTag("edit-exposure-type"),
+                    label = { Text("What were you exposed to?") },
+                    supportingText = { state.exposureTypeError?.let { Text(it) } },
+                    isError = state.exposureTypeError != null,
+                    singleLine = true
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (state.showCreateExposureTypeOption) {
+                        AssistChip(
+                            onClick = { viewModel.onIntent(EditExposureUiIntent.UseTypedExposureType) },
+                            label = { Text("Use \"${state.exposureType.trim()}\"") },
+                            modifier = Modifier.testTag("edit-exposure-type-create-inline")
+                        )
+                    }
+                    state.filteredExposureTypes.forEach { option ->
+                        AssistChip(
+                            onClick = {
+                                viewModel.onIntent(
+                                    EditExposureUiIntent.SelectExposureCatalogOption(option.id, option.name)
+                                )
+                            },
+                            label = { Text(option.name) },
+                            modifier = Modifier.testTag("edit-exposure-type-option-${option.id}")
+                        )
+                    }
+                }
+                if (state.filteredExposureTypes.isEmpty()) {
+                    Text(
+                        text = if (state.exposureType.isBlank()) {
+                            "Recent saved exposure types appear here."
+                        } else {
+                            "No saved exposure types match yet. Use the typed value to save it inline."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("edit-exposure-type-empty")
+                    )
+                }
+                state.selectedExposureTypeSummary?.let { summary ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.testTag("edit-exposure-type-summary")
+                        )
+                        if (state.selectedExposureTypeCatalogId != null) {
+                            TextButton(
+                                onClick = { viewModel.onIntent(EditExposureUiIntent.ClearExposureCatalogSelection) },
+                                modifier = Modifier.testTag("edit-exposure-type-clear")
+                            ) {
+                                Text("Clear saved selection")
+                            }
+                        }
+                    }
+                }
+            }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = "When did it happen?", style = MaterialTheme.typography.titleSmall)
                 OutlinedTextField(

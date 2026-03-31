@@ -103,7 +103,7 @@ class EditOutbreakViewModelTest {
     }
 
     @Test
-    fun delete_stays_unavailable_when_persisted_record_lacks_required_target_details() = runBlocking {
+    fun delete_remains_available_when_persisted_record_lacks_body_location() = runBlocking {
         val repository = object : OutbreakRepository {
             override suspend fun createOutbreak(command: com.example.app.features.outbreak.domain.CreateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
             override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> = AppResult.Success(OutbreakEvent(id, "Skin flare", "", existingOccurredAt, "after workout"))
@@ -121,9 +121,9 @@ class EditOutbreakViewModelTest {
         viewModel.onIntent(EditOutbreakUiIntent.Load)
         viewModel.onIntent(EditOutbreakUiIntent.ShowDeleteConfirmation)
 
-        assertEquals("", viewModel.state.value.deleteRecordLabel)
-        assertTrue(!viewModel.state.value.canDelete)
-        assertTrue(!viewModel.state.value.isDeleteConfirmationVisible)
+        assertEquals("Skin flare", viewModel.state.value.deleteRecordLabel)
+        assertTrue(viewModel.state.value.canDelete)
+        assertTrue(viewModel.state.value.isDeleteConfirmationVisible)
     }
 
     @Test

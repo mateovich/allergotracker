@@ -1,9 +1,13 @@
 package com.example.app.features.records.data
 
+import com.example.app.core.common.error.DomainError
+import com.example.app.core.common.result.AppResult
 import com.example.app.features.exposure.data.ExposureEventDao
 import com.example.app.features.ingestion.data.IngestionEventDao
 import com.example.app.features.ingestion.domain.IngestionQuantityOption
+import com.example.app.features.ingestion.domain.ReusableEntityKind
 import com.example.app.features.outbreak.data.OutbreakEventDao
+import com.example.app.features.records.domain.RecordDetail
 import com.example.app.features.records.domain.RecordEventType
 import com.example.app.features.records.domain.RecordsFilter
 import com.example.app.features.records.domain.RecordSummary
@@ -11,6 +15,7 @@ import com.example.app.features.records.domain.RecordSummaryComparator
 import com.example.app.features.records.domain.RecordsRepository
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.ZoneId
 
@@ -38,53 +43,9 @@ class RoomRecordsRepository(
             exposureEventDao.observeExposureEvents(),
             outbreakEventDao.observeOutbreakEvents()
         ) { ingestionEntities, exposureEntities, outbreakEntities ->
-            val ingestionRecords = ingestionEntities.map { entity ->
-                RecordSummary(
-                    id = "ingestion-${entity.id}",
-                    sortKey = entity.id,
-                    typeLabel = "Ingestion",
-                    title = entity.itemName,
-                    detailLabel = IngestionQuantityOption.fromLevel(entity.quantityLevel)?.label.orEmpty(),
-                    occurredAtEpochMs = entity.occurredAtEpochMs,
-                    createdAtEpochMs = entity.createdAtEpochMs,
-                    sourceId = entity.id,
-                    eventType = RecordEventType.INGESTION,
-                    ingestionQuantityLevel = entity.quantityLevel
-                )
-            }
-
-            val exposureRecords = exposureEntities.map { entity ->
-                RecordSummary(
-                    id = "exposure-${entity.id}",
-                    sortKey = entity.id,
-                    typeLabel = "Exposure",
-                    title = entity.exposureType,
-                    detailLabel = entity.notes?.takeIf { it.isNotBlank() } ?: "Exposure recorded",
-                    occurredAtEpochMs = entity.occurredAtEpochMs,
-                    createdAtEpochMs = entity.createdAtEpochMs,
-                    sourceId = entity.id,
-                    eventType = RecordEventType.EXPOSURE,
-                    ingestionQuantityLevel = null
-                )
-            }
-
-            val outbreakRecords = outbreakEntities.map { entity ->
-                RecordSummary(
-                    id = "outbreak-${entity.id}",
-                    sortKey = entity.id,
-                    typeLabel = "Outbreak",
-                    title = entity.outbreakDescriptor,
-                    detailLabel = listOfNotNull(
-                        entity.bodyLocation.takeIf { it.isNotBlank() },
-                        entity.notes?.takeIf { it.isNotBlank() }
-                    ).joinToString(" - "),
-                    occurredAtEpochMs = entity.occurredAtEpochMs,
-                    createdAtEpochMs = entity.createdAtEpochMs,
-                    sourceId = entity.id,
-                    eventType = RecordEventType.OUTBREAK,
-                    ingestionQuantityLevel = null
-                )
-            }
+            val ingestionRecords = ingestionEntities.map { entity -> entity.toRecordSummary() }
+            val exposureRecords = exposureEntities.map { entity -> entity.toRecordSummary() }
+            val outbreakRecords = outbreakEntities.map { entity -> entity.toRecordSummary() }
 
             (ingestionRecords + exposureRecords + outbreakRecords)
                 .sortedWith(RecordSummaryComparator)
@@ -94,6 +55,116 @@ class RoomRecordsRepository(
             records.filter { record -> record.matches(activeFilters, zoneId) }
         }
     }
+
+    override fun observeRecordDetail(recordId: Long, eventType: RecordEventType): Flow<AppResult<RecordDetail>> {
+        return when (eventType) {
+            RecordEventType.INGESTION -> ingestionEventDao.observeById(recordId).map { entity ->
+                if (entity != null) {
+                    AppResult.Success(entity.toRecordDetail())
+                } else {
+                    AppResult.Error(DomainError.PersistenceError("This record is no longer available."))
+                }
+            }
+
+            RecordEventType.EXPOSURE -> exposureEventDao.observeById(recordId).map { entity ->
+                if (entity != null) {
+                    AppResult.Success(entity.toRecordDetail())
+                } else {
+                    AppResult.Error(DomainError.PersistenceError("This record is no longer available."))
+                }
+            }
+
+            RecordEventType.OUTBREAK -> outbreakEventDao.observeById(recordId).map { entity ->
+                if (entity != null) {
+                    AppResult.Success(entity.toRecordDetail())
+                } else {
+                    AppResult.Error(DomainError.PersistenceError("This record is no longer available."))
+                }
+            }
+        }
+    }
+}
+
+private fun com.example.app.features.ingestion.data.IngestionEventEntity.toRecordSummary(): RecordSummary {
+    return RecordSummary(
+        id = "ingestion-$id",
+        sortKey = id,
+        typeLabel = "Ingestion",
+        title = itemName,
+        detailLabel = listOfNotNull(
+            IngestionQuantityOption.fromLevel(quantityLevel)?.label,
+            ReusableEntityKind.fromStorageValue(reusableEntityKind)?.label
+        ).joinToString(" - "),
+        occurredAtEpochMs = occurredAtEpochMs,
+        createdAtEpochMs = createdAtEpochMs,
+        sourceId = id,
+        eventType = RecordEventType.INGESTION,
+        ingestionQuantityLevel = quantityLevel
+    )
+}
+
+private fun com.example.app.features.exposure.data.ExposureEventEntity.toRecordSummary(): RecordSummary {
+    return RecordSummary(
+        id = "exposure-$id",
+        sortKey = id,
+        typeLabel = "Exposure",
+        title = exposureType,
+        detailLabel = notes?.takeIf { it.isNotBlank() } ?: "Exposure recorded",
+        occurredAtEpochMs = occurredAtEpochMs,
+        createdAtEpochMs = createdAtEpochMs,
+        sourceId = id,
+        eventType = RecordEventType.EXPOSURE,
+        ingestionQuantityLevel = null
+    )
+}
+
+private fun com.example.app.features.outbreak.data.OutbreakEventEntity.toRecordSummary(): RecordSummary {
+    return RecordSummary(
+        id = "outbreak-$id",
+        sortKey = id,
+        typeLabel = "Outbreak",
+        title = outbreakDescriptor,
+        detailLabel = listOfNotNull(
+            bodyLocation.takeIf { it.isNotBlank() },
+            notes?.takeIf { it.isNotBlank() }
+        ).joinToString(" - "),
+        occurredAtEpochMs = occurredAtEpochMs,
+        createdAtEpochMs = createdAtEpochMs,
+        sourceId = id,
+        eventType = RecordEventType.OUTBREAK,
+        ingestionQuantityLevel = null
+    )
+}
+
+private fun com.example.app.features.ingestion.data.IngestionEventEntity.toRecordDetail(): RecordDetail {
+    return RecordDetail.Ingestion(
+        recordId = id,
+        occurredAtEpochMs = occurredAtEpochMs,
+        itemName = itemName,
+        quantityLabel = IngestionQuantityOption.fromLevel(quantityLevel)?.label.orEmpty(),
+        reusableEntityKind = ReusableEntityKind.fromStorageValue(reusableEntityKind),
+        reusableEntityId = reusableEntityId,
+        notes = notes
+    )
+}
+
+private fun com.example.app.features.exposure.data.ExposureEventEntity.toRecordDetail(): RecordDetail {
+    return RecordDetail.Exposure(
+        recordId = id,
+        occurredAtEpochMs = occurredAtEpochMs,
+        exposureType = exposureType,
+        notes = notes
+    )
+}
+
+private fun com.example.app.features.outbreak.data.OutbreakEventEntity.toRecordDetail(): RecordDetail {
+    return RecordDetail.Outbreak(
+        recordId = id,
+        occurredAtEpochMs = occurredAtEpochMs,
+        outbreakDescriptor = outbreakDescriptor,
+        bodyLocation = bodyLocation,
+        notes = notes
+    )
 }
 
 private fun RecordSummary.matches(filters: RecordsFilter, zoneId: ZoneId): Boolean {

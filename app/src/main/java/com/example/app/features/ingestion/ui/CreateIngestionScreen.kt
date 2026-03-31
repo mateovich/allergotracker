@@ -7,19 +7,25 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.layout.imePadding
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.core.designsystem.AppScreenScaffold
@@ -32,14 +38,26 @@ import androidx.compose.ui.unit.dp
 fun CreateIngestionScreen(
     onNavigateToRoute: (String) -> Unit,
     viewModelFactory: ViewModelProvider.Factory,
+    selectedReusableEntity: IngestionReusableSelectionResult? = null,
+    onReusableEntityConsumed: () -> Unit = {},
     viewModel: CreateIngestionViewModel = viewModel(factory = viewModelFactory)
 ) {
     val state by viewModel.state.collectAsState()
+    val focusManager = LocalFocusManager.current
+
+    LaunchedEffect(selectedReusableEntity) {
+        selectedReusableEntity?.let {
+            viewModel.onIntent(CreateIngestionUiIntent.ApplyReusableSelection(it))
+            onReusableEntityConsumed()
+        }
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collectLatest { effect ->
             when (effect) {
                 CreateIngestionUiEffect.NavigateToRecords -> onNavigateToRoute(AppRoutes.RECORDS)
+                CreateIngestionUiEffect.NavigateToCreateIngredient -> onNavigateToRoute(AppRoutes.CREATE_INGREDIENT)
+                CreateIngestionUiEffect.NavigateToCreateCompound -> onNavigateToRoute(AppRoutes.CREATE_COMPOUND)
             }
         }
     }
@@ -48,11 +66,93 @@ fun CreateIngestionScreen(
         Column(
             modifier = contentModifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
                 .padding(16.dp)
                 .testTag("create-ingestion-form-screen"),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             LocalOnlyNotice()
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = "Reusable item", style = MaterialTheme.typography.titleSmall)
+                OutlinedTextField(
+                    value = state.reusableSearchQuery,
+                    onValueChange = { viewModel.onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery(it)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("ingestion-reusable-search"),
+                    label = { Text("Search saved ingredients or compounds") },
+                    singleLine = true
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AssistChip(
+                        onClick = { viewModel.onIntent(CreateIngestionUiIntent.CreateNewIngredient) },
+                        label = { Text("New ingredient") },
+                        modifier = Modifier.testTag("ingestion-create-ingredient")
+                    )
+                    AssistChip(
+                        onClick = { viewModel.onIntent(CreateIngestionUiIntent.CreateNewCompound) },
+                        label = { Text("New compound") },
+                        modifier = Modifier.testTag("ingestion-create-compound")
+                    )
+                }
+                if (state.filteredReusableEntities.isNotEmpty()) {
+                    Text(
+                        text = if (state.reusableSearchQuery.isBlank()) "Recent reusable items" else "Search results",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        state.filteredReusableEntities.forEach { option ->
+                            AssistChip(
+                                onClick = {
+                                    viewModel.onIntent(
+                                        CreateIngestionUiIntent.SelectReusableEntity(
+                                            IngestionReusableSelectionResult(
+                                                id = option.id,
+                                                name = option.name,
+                                                kind = option.kind
+                                            )
+                                        )
+                                    )
+                                },
+                                label = { Text("${option.name} - ${option.supportingLabel}") },
+                                modifier = Modifier.testTag(
+                                    "ingestion-existing-${option.kind.storageValue}-${option.id}"
+                                )
+                            )
+                        }
+                    }
+                } else {
+                    Text(
+                        text = if (state.reusableSearchQuery.isBlank()) {
+                            "Search to find a saved reusable item, or create a new ingredient or compound inline."
+                        } else {
+                            "No saved reusable items match. Create a new ingredient or compound inline."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("ingestion-reusable-empty")
+                    )
+                }
+                state.selectedReusableEntitySummary?.let { summary ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.testTag("ingestion-reusable-summary")
+                        )
+                        TextButton(
+                            onClick = {
+                                viewModel.onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery(""))
+                                viewModel.onIntent(CreateIngestionUiIntent.UpdateItemName(""))
+                            },
+                            modifier = Modifier.testTag("ingestion-reusable-clear")
+                        ) {
+                            Text("Clear reusable selection")
+                        }
+                    }
+                }
+            }
 
             OutlinedTextField(
                 value = state.itemName,
@@ -103,16 +203,6 @@ fun CreateIngestionScreen(
                 state.quantityError?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
             }
 
-            OutlinedTextField(
-                value = state.notes,
-                onValueChange = { viewModel.onIntent(CreateIngestionUiIntent.UpdateNotes(it)) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("ingestion-notes"),
-                label = { Text("Notes (optional)") },
-                minLines = 3
-            )
-
             if (state.formMessage.isNotBlank()) {
                 Text(
                     text = state.formMessage,
@@ -122,7 +212,10 @@ fun CreateIngestionScreen(
             }
 
             Button(
-                onClick = { viewModel.onIntent(CreateIngestionUiIntent.Save) },
+                onClick = {
+                    focusManager.clearFocus(force = true)
+                    viewModel.onIntent(CreateIngestionUiIntent.Save)
+                },
                 enabled = !state.isSaving,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -130,6 +223,16 @@ fun CreateIngestionScreen(
             ) {
                 Text(if (state.isSaving) "Saving..." else "Save ingestion")
             }
+
+            OutlinedTextField(
+                value = state.notes,
+                onValueChange = { viewModel.onIntent(CreateIngestionUiIntent.UpdateNotes(it)) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("ingestion-notes"),
+                label = { Text("Notes (optional)") },
+                minLines = 3
+            )
         }
     }
 }

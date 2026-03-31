@@ -4,7 +4,9 @@ data class CreateIngestionEventCommand(
     val itemName: String,
     val quantityLevel: Int?,
     val occurredAtEpochMs: Long,
-    val notes: String?
+    val notes: String?,
+    val reusableEntityKind: ReusableEntityKind? = null,
+    val reusableEntityId: Long? = null
 )
 
 data class UpdateIngestionEventCommand(
@@ -12,7 +14,9 @@ data class UpdateIngestionEventCommand(
     val itemName: String,
     val quantityLevel: Int?,
     val occurredAtEpochMs: Long,
-    val notes: String?
+    val notes: String?,
+    val reusableEntityKind: ReusableEntityKind? = null,
+    val reusableEntityId: Long? = null
 )
 
 data class IngestionEvent(
@@ -20,7 +24,9 @@ data class IngestionEvent(
     val itemName: String,
     val quantityLevel: Int,
     val occurredAtEpochMs: Long,
-    val notes: String?
+    val notes: String?,
+    val reusableEntityKind: ReusableEntityKind? = null,
+    val reusableEntityId: Long? = null
 )
 
 data class CreateIngestionDefaults(

@@ -18,6 +18,9 @@ interface IngestionEventDao {
     @Query("SELECT * FROM ingestion_events WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): IngestionEventEntity?
 
+    @Query("SELECT * FROM ingestion_events WHERE id = :id LIMIT 1")
+    fun observeById(id: Long): Flow<IngestionEventEntity?>
+
     @Update
     suspend fun update(entity: IngestionEventEntity): Int
 

@@ -1,5 +1,7 @@
 package com.example.app.features.exposure.ui
 
+import com.example.app.features.eventcatalog.ui.ReusableEventCatalogOptionUiModel
+
 data class EditExposureUiState(
     val title: String = "Edit Exposure",
     val exposureType: String = "",
@@ -10,6 +12,11 @@ data class EditExposureUiState(
     val occurredAtLabel: String = "",
     val selectedTimePreset: ExposureTimePreset = ExposureTimePreset.NOW,
     val timeOptions: List<ExposureTimeOptionUiModel> = emptyList(),
+    val selectedExposureTypeCatalogId: Long? = null,
+    val selectedExposureTypeSummary: String? = null,
+    val availableExposureTypes: List<ReusableEventCatalogOptionUiModel> = emptyList(),
+    val filteredExposureTypes: List<ReusableEventCatalogOptionUiModel> = emptyList(),
+    val showCreateExposureTypeOption: Boolean = false,
     val exposureTypeError: String? = null,
     val occurredAtError: String? = null,
     val formMessage: String = "",
@@ -24,6 +31,9 @@ data class EditExposureUiState(
 sealed interface EditExposureUiIntent {
     data object Load : EditExposureUiIntent
     data class UpdateExposureType(val value: String) : EditExposureUiIntent
+    data class SelectExposureCatalogOption(val id: Long, val name: String) : EditExposureUiIntent
+    data object UseTypedExposureType : EditExposureUiIntent
+    data object ClearExposureCatalogSelection : EditExposureUiIntent
     data class UpdateNotes(val value: String) : EditExposureUiIntent
     data class UpdateOccurredAtInput(val value: String) : EditExposureUiIntent
     data class SelectTimePreset(val preset: ExposureTimePreset) : EditExposureUiIntent

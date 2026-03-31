@@ -21,6 +21,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.example.app.core.common.result.AppResult
+import com.example.app.core.common.error.DomainError
 import com.example.app.features.exposure.domain.DeleteExposureEventUseCase
 import com.example.app.features.exposure.domain.ExposureEvent
 import com.example.app.features.exposure.domain.ExposureRepository
@@ -29,6 +30,9 @@ import com.example.app.features.exposure.domain.UpdateExposureEventCommand
 import com.example.app.features.exposure.domain.UpdateExposureEventUseCase
 import com.example.app.features.exposure.ui.EditExposureScreen
 import com.example.app.features.exposure.ui.EditExposureViewModel
+import com.example.app.features.compounds.domain.ObserveReusableCompoundsUseCase
+import com.example.app.features.compounds.domain.ReusableCompound
+import com.example.app.features.compounds.domain.ReusableCompoundRepository
 import com.example.app.features.ingestion.domain.CreateIngestionDefaultsUseCase
 import com.example.app.features.ingestion.domain.CreateIngestionEventCommand
 import com.example.app.features.ingestion.domain.CreateIngestionEventUseCase
@@ -38,6 +42,9 @@ import com.example.app.features.ingestion.domain.GetIngestionEventUseCase
 import com.example.app.features.ingestion.domain.IngestionEvent
 import com.example.app.features.ingestion.domain.IngestionQuantityOption
 import com.example.app.features.ingestion.domain.IngestionRepository
+import com.example.app.features.ingredients.domain.ObserveReusableIngredientsUseCase
+import com.example.app.features.ingredients.domain.ReusableIngredient
+import com.example.app.features.ingredients.domain.ReusableIngredientRepository
 import com.example.app.features.ingestion.domain.UpdateIngestionEventCommand
 import com.example.app.features.ingestion.domain.UpdateIngestionEventUseCase
 import com.example.app.features.ingestion.ui.CreateIngestionScreen
@@ -52,6 +59,8 @@ import com.example.app.features.outbreak.domain.UpdateOutbreakEventCommand
 import com.example.app.features.outbreak.domain.UpdateOutbreakEventUseCase
 import com.example.app.features.outbreak.ui.EditOutbreakScreen
 import com.example.app.features.outbreak.ui.EditOutbreakViewModel
+import com.example.app.features.records.domain.ObserveRecordDetailUseCase
+import com.example.app.features.records.domain.RecordDetail
 import com.example.app.features.records.domain.ObserveRecordCountUseCase
 import com.example.app.features.records.domain.ObserveRecordsUseCase
 import com.example.app.features.records.domain.RecordEventType
@@ -59,10 +68,14 @@ import com.example.app.features.records.domain.RecordSummary
 import com.example.app.features.records.domain.RecordSummaryComparator
 import com.example.app.features.records.domain.RecordsFilter
 import com.example.app.features.records.domain.RecordsRepository
+import com.example.app.features.records.ui.RecordDetailScreen
+import com.example.app.features.records.ui.RecordDetailViewModel
+import com.example.app.features.records.ui.RecordDetailViewModelFactory
 import com.example.app.navigation.AppRoutes
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -80,7 +93,7 @@ class RecordsScreenTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun clicking_record_row_navigates_to_matching_edit_route() {
+    fun clicking_record_row_navigates_to_matching_detail_route() {
         val repository = object : RecordsRepository {
             override fun observeRecordCount() = flowOf(1)
 
@@ -122,7 +135,82 @@ class RecordsScreenTest {
 
         composeRule.onNodeWithTag("record-item-ingestion-7").performClick()
 
-        assertEquals(AppRoutes.editIngestion(7L), navigatedRoute)
+        assertEquals(AppRoutes.recordDetail(RecordEventType.INGESTION, 7L), navigatedRoute)
+    }
+
+    @Test
+    fun records_detail_flow_preserves_active_filters_after_back_navigation() {
+        val fixedNow = 1_700_000_000_000L
+        val store = ReactiveRecordStore(
+            ingestion = IngestionEvent(7L, "Tea", 2, fixedNow - 60_000L, "with honey"),
+            exposure = ExposureEvent(5L, "Pollen", fixedNow - 120_000L, "outside")
+        )
+
+        composeRule.setContent {
+            RecordsDetailJourneyHost(
+                recordsFactory = recordsFactoryFor(store.recordsRepository(), fixedNow),
+                detailFactoryProvider = detailFactoryProviderFor(store.detailRepository(), fixedNow)
+            )
+        }
+
+        composeRule.onNodeWithTag("records-filter-action").performClick()
+        composeRule.onNodeWithTag("records-filter-type-ingestion").performClick()
+        composeRule.onNodeWithTag("records-filter-apply").performClick()
+        composeRule.onNodeWithTag("record-item-ingestion-7").performClick()
+
+        composeRule.onNodeWithTag("record-detail-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("record-detail-field-0").assertIsDisplayed()
+        composeRule.onNodeWithTag("record-detail-back").performClick()
+
+        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Active filter: Types: Ingestion").assertIsDisplayed()
+        composeRule.onNodeWithText("Tea").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Pollen").assertCountEquals(0)
+    }
+
+    @Test
+    fun unavailable_record_detail_shows_clear_message_and_returns_to_records() {
+        val fixedNow = 1_700_000_000_000L
+        val timeline = MutableStateFlow(
+            listOf(
+                RecordSummary(
+                    id = "ingestion-7",
+                    sortKey = 7L,
+                    typeLabel = "Ingestion",
+                    title = "Tea",
+                    detailLabel = "2 Light snack",
+                    occurredAtEpochMs = fixedNow,
+                    createdAtEpochMs = fixedNow,
+                    sourceId = 7L,
+                    eventType = RecordEventType.INGESTION,
+                    ingestionQuantityLevel = 2
+                )
+            )
+        )
+        val recordsRepository = object : RecordsRepository {
+            override fun observeRecordCount() = timeline.map { it.size }
+
+            override fun observeRecords(filters: Flow<RecordsFilter>) = timeline
+
+            override fun observeRecordDetail(recordId: Long, eventType: RecordEventType): Flow<AppResult<RecordDetail>> {
+                timeline.value = emptyList()
+                return flowOf(AppResult.Error(DomainError.PersistenceError("This record is no longer available.")))
+            }
+        }
+
+        composeRule.setContent {
+            RecordsDetailJourneyHost(
+                recordsFactory = recordsFactoryFor(recordsRepository, fixedNow),
+                detailFactoryProvider = detailFactoryProviderFor(recordsRepository, fixedNow)
+            )
+        }
+
+        composeRule.onNodeWithTag("record-item-ingestion-7").performClick()
+        composeRule.onNodeWithText("This record is no longer available.").assertIsDisplayed()
+        composeRule.onNodeWithTag("record-detail-unavailable-confirm").performClick()
+
+        composeRule.onNodeWithTag("records-empty-state").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Tea").assertCountEquals(0)
     }
 
     @Test
@@ -156,6 +244,27 @@ class RecordsScreenTest {
             override fun observeRecordCount(): Flow<Int> = timeline.map { it.size }
 
             override fun observeRecords(filters: Flow<RecordsFilter>): Flow<List<RecordSummary>> = timeline
+
+            override fun observeRecordDetail(recordId: Long, eventType: RecordEventType): Flow<AppResult<RecordDetail>> {
+                return timeline.map { records ->
+                    val record = records.firstOrNull { it.sourceId == recordId && it.eventType == eventType }
+                    if (record == null) {
+                        AppResult.Error(DomainError.PersistenceError("This record is no longer available."))
+                    } else {
+                        AppResult.Success(
+                            RecordDetail.Ingestion(
+                                recordId = record.sourceId,
+                                occurredAtEpochMs = record.occurredAtEpochMs,
+                                itemName = currentEvent.itemName,
+                                quantityLabel = record.detailLabel,
+                                reusableEntityKind = currentEvent.reusableEntityKind,
+                                reusableEntityId = currentEvent.reusableEntityId,
+                                notes = currentEvent.notes
+                            )
+                        )
+                    }
+                }
+            }
         }
         val ingestionRepository = object : IngestionRepository {
             override suspend fun createIngestion(command: com.example.app.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> {
@@ -219,11 +328,13 @@ class RecordsScreenTest {
         composeRule.setContent {
             IngestionEditJourneyHost(
                 recordsFactory = recordsFactory,
+                detailFactoryProvider = detailFactoryProviderFor(recordsRepository, fixedNow),
                 editFactory = editFactory
             )
         }
 
         composeRule.onNodeWithTag("record-item-ingestion-7").performClick()
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
         composeRule.onNodeWithTag("edit-ingestion-form-screen").assertIsDisplayed()
 
         composeRule.onNodeWithTag("edit-ingestion-item-name").performTextReplacement("Tea updated")
@@ -256,10 +367,15 @@ class RecordsScreenTest {
         }
 
         composeRule.setContent {
-            IngestionEditJourneyHost(recordsFactory = recordsFactory, editFactory = editFactory)
+            IngestionEditJourneyHost(
+                recordsFactory = recordsFactory,
+                detailFactoryProvider = detailFactoryProviderFor(store.detailRepository(), fixedNow),
+                editFactory = editFactory
+            )
         }
 
         composeRule.onNodeWithTag("record-item-ingestion-7").performClick()
+        composeRule.onNodeWithTag("record-detail-delete").performClick()
         composeRule.onNodeWithTag("edit-ingestion-delete").performClick()
         composeRule.onNodeWithText("Delete ingestion record \"Tea\"? This cannot be undone.").assertIsDisplayed()
         composeRule.onNodeWithTag("edit-ingestion-delete-confirm").performClick()
@@ -290,10 +406,15 @@ class RecordsScreenTest {
         }
 
         composeRule.setContent {
-            ExposureEditJourneyHost(recordsFactory = recordsFactory, editFactory = editFactory)
+            ExposureEditJourneyHost(
+                recordsFactory = recordsFactory,
+                detailFactoryProvider = detailFactoryProviderFor(store.detailRepository(), fixedNow),
+                editFactory = editFactory
+            )
         }
 
         composeRule.onNodeWithTag("record-item-exposure-5").performClick()
+        composeRule.onNodeWithTag("record-detail-delete").performClick()
         composeRule.onNodeWithTag("edit-exposure-delete").performClick()
         composeRule.onNodeWithText("Delete exposure record \"Pollen\"? This cannot be undone.").assertIsDisplayed()
         composeRule.onNodeWithTag("edit-exposure-delete-confirm").performClick()
@@ -324,10 +445,15 @@ class RecordsScreenTest {
         }
 
         composeRule.setContent {
-            OutbreakEditJourneyHost(recordsFactory = recordsFactory, editFactory = editFactory)
+            OutbreakEditJourneyHost(
+                recordsFactory = recordsFactory,
+                detailFactoryProvider = detailFactoryProviderFor(store.detailRepository(), fixedNow),
+                editFactory = editFactory
+            )
         }
 
         composeRule.onNodeWithTag("record-item-outbreak-9").performClick()
+        composeRule.onNodeWithTag("record-detail-delete").performClick()
         composeRule.onNodeWithTag("edit-outbreak-delete").performClick()
         composeRule.onNodeWithText("Delete outbreak record \"Skin flare at Arm\"? This cannot be undone.").assertIsDisplayed()
         composeRule.onNodeWithTag("edit-outbreak-delete-confirm").performClick()
@@ -348,6 +474,7 @@ class RecordsScreenTest {
                 )
                 IngestionEditJourneyHost(
                     recordsFactory = recordsFactoryFor(store.recordsRepository(), fixedNow),
+                    detailFactoryProvider = detailFactoryProviderFor(store.detailRepository(), fixedNow),
                     editFactory = object : ViewModelProvider.Factory {
                         @Suppress("UNCHECKED_CAST")
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -379,6 +506,7 @@ class RecordsScreenTest {
                 )
                 ExposureEditJourneyHost(
                     recordsFactory = recordsFactoryFor(store.recordsRepository(), fixedNow),
+                    detailFactoryProvider = detailFactoryProviderFor(store.detailRepository(), fixedNow),
                     editFactory = object : ViewModelProvider.Factory {
                         @Suppress("UNCHECKED_CAST")
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -410,6 +538,7 @@ class RecordsScreenTest {
                 )
                 OutbreakEditJourneyHost(
                     recordsFactory = recordsFactoryFor(store.recordsRepository(), fixedNow),
+                    detailFactoryProvider = detailFactoryProviderFor(store.detailRepository(), fixedNow),
                     editFactory = object : ViewModelProvider.Factory {
                         @Suppress("UNCHECKED_CAST")
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -572,6 +701,24 @@ class RecordsScreenTest {
                             createIngestionEventUseCase = CreateIngestionEventUseCase(
                                 repository = store.ingestionRepository(),
                                 currentTimeProvider = CurrentTimeProvider { fixedNow }
+                            ),
+                            observeReusableIngredientsUseCase = ObserveReusableIngredientsUseCase(
+                                object : ReusableIngredientRepository {
+                                    override suspend fun createIngredient(command: com.example.app.features.ingredients.domain.CreateReusableIngredientCommand): AppResult<ReusableIngredient> {
+                                        error("unused")
+                                    }
+
+                                    override fun observeIngredients(): Flow<List<ReusableIngredient>> = emptyFlow()
+                                }
+                            ),
+                            observeReusableCompoundsUseCase = ObserveReusableCompoundsUseCase(
+                                object : ReusableCompoundRepository {
+                                    override suspend fun createCompound(command: com.example.app.features.compounds.domain.CreateReusableCompoundCommand): AppResult<ReusableCompound> {
+                                        error("unused")
+                                    }
+
+                                    override fun observeCompounds(): Flow<List<ReusableCompound>> = emptyFlow()
+                                }
                             )
                         ) as T
                     }
@@ -630,6 +777,7 @@ private fun assertEditFormShowsOfflineNotice(
     composeRule.setContent { host() }
 
     composeRule.onNodeWithTag(recordTag).performClick()
+    composeRule.onNodeWithTag("record-detail-edit").performClick()
     composeRule.onNodeWithTag(formTag).assertIsDisplayed()
     composeRule.onNodeWithTag("local-only-notice").assertIsDisplayed()
     composeRule.onNodeWithText("Works offline. Saved only on this device.").assertIsDisplayed()
@@ -638,6 +786,7 @@ private fun assertEditFormShowsOfflineNotice(
 @Composable
 private fun IngestionEditJourneyHost(
     recordsFactory: ViewModelProvider.Factory,
+    detailFactoryProvider: (Long, RecordEventType) -> ViewModelProvider.Factory,
     editFactory: ViewModelProvider.Factory
 ) {
     var currentRoute by remember { mutableStateOf(AppRoutes.RECORDS) }
@@ -646,6 +795,11 @@ private fun IngestionEditJourneyHost(
         AppRoutes.RECORDS -> RecordsScreen(
             onNavigateToRoute = { currentRoute = it },
             viewModelFactory = recordsFactory
+        )
+
+        AppRoutes.recordDetail(RecordEventType.INGESTION, 7L) -> RecordDetailScreen(
+            onNavigateToRoute = { currentRoute = it },
+            viewModelFactory = detailFactoryProvider(7L, RecordEventType.INGESTION)
         )
 
         AppRoutes.editIngestion(7L) -> EditIngestionScreen(
@@ -688,6 +842,7 @@ private fun CreateIngestionJourneyHost(
 @Composable
 private fun ExposureEditJourneyHost(
     recordsFactory: ViewModelProvider.Factory,
+    detailFactoryProvider: (Long, RecordEventType) -> ViewModelProvider.Factory,
     editFactory: ViewModelProvider.Factory
 ) {
     var currentRoute by remember { mutableStateOf(AppRoutes.RECORDS) }
@@ -696,6 +851,11 @@ private fun ExposureEditJourneyHost(
         AppRoutes.RECORDS -> RecordsScreen(
             onNavigateToRoute = { currentRoute = it },
             viewModelFactory = recordsFactory
+        )
+
+        AppRoutes.recordDetail(RecordEventType.EXPOSURE, 5L) -> RecordDetailScreen(
+            onNavigateToRoute = { currentRoute = it },
+            viewModelFactory = detailFactoryProvider(5L, RecordEventType.EXPOSURE)
         )
 
         AppRoutes.editExposure(5L) -> EditExposureScreen(
@@ -713,6 +873,7 @@ private fun ExposureEditJourneyHost(
 @Composable
 private fun OutbreakEditJourneyHost(
     recordsFactory: ViewModelProvider.Factory,
+    detailFactoryProvider: (Long, RecordEventType) -> ViewModelProvider.Factory,
     editFactory: ViewModelProvider.Factory
 ) {
     var currentRoute by remember { mutableStateOf(AppRoutes.RECORDS) }
@@ -723,8 +884,14 @@ private fun OutbreakEditJourneyHost(
             viewModelFactory = recordsFactory
         )
 
-        AppRoutes.editOutbreak(9L) -> EditOutbreakScreen(
+        AppRoutes.recordDetail(RecordEventType.OUTBREAK, 9L) -> RecordDetailScreen(
             onNavigateToRoute = { currentRoute = it },
+            viewModelFactory = detailFactoryProvider(9L, RecordEventType.OUTBREAK)
+        )
+
+        AppRoutes.editOutbreak(9L), AppRoutes.editOutbreak(9L, openDelete = true) -> EditOutbreakScreen(
+            onNavigateToRoute = { currentRoute = it },
+            openDeleteOnStart = currentRoute == AppRoutes.editOutbreak(9L, openDelete = true),
             viewModelFactory = editFactory
         )
 
@@ -748,6 +915,59 @@ private fun recordsFactoryFor(
                 observeRecordsUseCase = ObserveRecordsUseCase(recordsRepository)
             ) as T
         }
+    }
+}
+
+private fun detailFactoryProviderFor(
+    recordsRepository: RecordsRepository,
+    fixedNow: Long
+): (Long, RecordEventType) -> ViewModelProvider.Factory {
+    return { recordId, eventType ->
+        object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return RecordDetailViewModel(
+                    recordId = recordId,
+                    eventType = eventType,
+                    observeRecordDetailUseCase = ObserveRecordDetailUseCase(recordsRepository)
+                ) as T
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecordsDetailJourneyHost(
+    recordsFactory: ViewModelProvider.Factory,
+    detailFactoryProvider: (Long, RecordEventType) -> ViewModelProvider.Factory
+) {
+    var currentRoute by remember { mutableStateOf(AppRoutes.RECORDS) }
+
+    when (currentRoute) {
+        AppRoutes.RECORDS -> RecordsScreen(
+            onNavigateToRoute = { currentRoute = it },
+            viewModelFactory = recordsFactory
+        )
+
+        AppRoutes.recordDetail(RecordEventType.INGESTION, 7L) -> RecordDetailScreen(
+            onNavigateToRoute = { currentRoute = it },
+            viewModelFactory = detailFactoryProvider(7L, RecordEventType.INGESTION)
+        )
+
+        AppRoutes.recordDetail(RecordEventType.EXPOSURE, 5L) -> RecordDetailScreen(
+            onNavigateToRoute = { currentRoute = it },
+            viewModelFactory = detailFactoryProvider(5L, RecordEventType.EXPOSURE)
+        )
+
+        AppRoutes.recordDetail(RecordEventType.OUTBREAK, 9L) -> RecordDetailScreen(
+            onNavigateToRoute = { currentRoute = it },
+            viewModelFactory = detailFactoryProvider(9L, RecordEventType.OUTBREAK)
+        )
+
+        else -> RecordsScreen(
+            onNavigateToRoute = { currentRoute = it },
+            viewModelFactory = recordsFactory
+        )
     }
 }
 
@@ -782,7 +1002,52 @@ private class ReactiveRecordStore(
                 }
             }
         }
+
+        override fun observeRecordDetail(recordId: Long, eventType: RecordEventType): Flow<AppResult<RecordDetail>> {
+            return combine(ingestionState, exposureState, outbreakState) { ingestionEvent, exposureEvent, outbreakEvent ->
+                when (eventType) {
+                    RecordEventType.INGESTION -> ingestionEvent?.takeIf { it.id == recordId }?.let {
+                        AppResult.Success(
+                            RecordDetail.Ingestion(
+                                recordId = it.id,
+                                occurredAtEpochMs = it.occurredAtEpochMs,
+                                itemName = it.itemName,
+                                quantityLabel = "${it.quantityLevel} Light snack",
+                                reusableEntityKind = it.reusableEntityKind,
+                                reusableEntityId = it.reusableEntityId,
+                                notes = it.notes
+                            )
+                        )
+                    }
+
+                    RecordEventType.EXPOSURE -> exposureEvent?.takeIf { it.id == recordId }?.let {
+                        AppResult.Success(
+                            RecordDetail.Exposure(
+                                recordId = it.id,
+                                occurredAtEpochMs = it.occurredAtEpochMs,
+                                exposureType = it.exposureType,
+                                notes = it.notes
+                            )
+                        )
+                    }
+
+                    RecordEventType.OUTBREAK -> outbreakEvent?.takeIf { it.id == recordId }?.let {
+                        AppResult.Success(
+                            RecordDetail.Outbreak(
+                                recordId = it.id,
+                                occurredAtEpochMs = it.occurredAtEpochMs,
+                                outbreakDescriptor = it.outbreakDescriptor,
+                                bodyLocation = it.bodyLocation,
+                                notes = it.notes
+                            )
+                        )
+                    }
+                } ?: AppResult.Error(DomainError.PersistenceError("This record is no longer available."))
+            }
+        }
     }
+
+    fun detailRepository(): RecordsRepository = recordsRepository()
 
     fun ingestionRepository(): IngestionRepository = object : IngestionRepository {
         override suspend fun createIngestion(command: CreateIngestionEventCommand): AppResult<IngestionEvent> {

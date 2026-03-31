@@ -44,6 +44,8 @@ class EditIngestionViewModel(
             is EditIngestionUiIntent.UpdateItemName -> updateState {
                 it.copy(
                     itemName = intent.value,
+                    selectedReusableEntityKind = null,
+                    selectedReusableEntityId = null,
                     itemNameError = null,
                     formMessage = "",
                     canSave = canSave(intent.value, it.selectedQuantityLevel)
@@ -93,6 +95,8 @@ class EditIngestionViewModel(
                             occurredAtEpochMs = event.occurredAtEpochMs,
                             occurredAtLabel = formatTime(event.occurredAtEpochMs),
                             selectedQuantityLevel = event.quantityLevel,
+                            selectedReusableEntityKind = event.reusableEntityKind,
+                            selectedReusableEntityId = event.reusableEntityId,
                             isLoading = false,
                             canSave = canSave(event.itemName, event.quantityLevel),
                             canDelete = event.itemName.isNotBlank()
@@ -123,7 +127,9 @@ class EditIngestionViewModel(
                         itemName = currentState.itemName,
                         quantityLevel = currentState.selectedQuantityLevel,
                         occurredAtEpochMs = currentState.occurredAtEpochMs,
-                        notes = currentState.notes
+                        notes = currentState.notes,
+                        reusableEntityKind = currentState.selectedReusableEntityKind,
+                        reusableEntityId = currentState.selectedReusableEntityId
                     )
                 )
             ) {

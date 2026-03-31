@@ -1,5 +1,6 @@
 package com.example.app.features.records.ui
 
+import com.example.app.features.records.domain.RecordEventType
 import com.example.app.navigation.AppRoutes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -32,17 +33,17 @@ class RecordsContractsTest {
     }
 
     @Test
-    fun default_record_summary_ui_model_is_actionable_for_editing() {
+    fun default_record_summary_ui_model_is_actionable_for_detail_drill_in() {
         val model = RecordSummaryUiModel(
             id = "ingestion-9",
             typeLabel = "Ingestion",
             title = "Tea",
             detailLabel = "2 Light snack",
             occurredAtLabel = "08:15",
-            editRoute = AppRoutes.editIngestion(9L)
+            detailRoute = AppRoutes.recordDetail(RecordEventType.INGESTION, 9L)
         )
 
         assertTrue(model.isEditable)
-        assertEquals("edit/ingestion/9", model.editRoute)
+        assertEquals("record-detail/ingestion/9", model.detailRoute)
     }
 }

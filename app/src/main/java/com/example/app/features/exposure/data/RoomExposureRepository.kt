@@ -3,6 +3,8 @@ package com.example.app.features.exposure.data
 import android.database.sqlite.SQLiteConstraintException
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogRepository
 import com.example.app.features.exposure.domain.CreateExposureEventCommand
 import com.example.app.features.exposure.domain.ExposureEvent
 import com.example.app.features.exposure.domain.ExposureRepository
@@ -12,15 +14,18 @@ import com.example.app.features.ingestion.domain.CurrentTimeProvider
 /** Local source of truth for exposure events backed by Room only. */
 class RoomExposureRepository(
     private val exposureEventDao: ExposureEventDao,
-    private val currentTimeProvider: CurrentTimeProvider
+    private val currentTimeProvider: CurrentTimeProvider,
+    private val eventCatalogRepository: ReusableEventCatalogRepository? = null
 ) : ExposureRepository {
     override suspend fun createExposure(command: CreateExposureEventCommand): AppResult<ExposureEvent> {
         return try {
+            val exposureCatalogId = resolveExposureCatalogId(command.exposureTypeCatalogId, command.exposureType)
             val entity = ExposureEventEntity(
                 exposureType = command.exposureType,
                 occurredAtEpochMs = command.occurredAtEpochMs,
                 notes = command.notes,
-                createdAtEpochMs = currentTimeProvider.nowEpochMillis()
+                createdAtEpochMs = currentTimeProvider.nowEpochMillis(),
+                exposureTypeCatalogId = exposureCatalogId
             )
             val id = exposureEventDao.insert(entity)
             AppResult.Success(
@@ -28,7 +33,8 @@ class RoomExposureRepository(
                     id = id,
                     exposureType = entity.exposureType,
                     occurredAtEpochMs = entity.occurredAtEpochMs,
-                    notes = entity.notes
+                    notes = entity.notes,
+                    exposureTypeCatalogId = entity.exposureTypeCatalogId
                 )
             )
         } catch (_: Exception) {
@@ -55,7 +61,8 @@ class RoomExposureRepository(
             val updatedEntity = currentEntity.copy(
                 exposureType = command.exposureType,
                 occurredAtEpochMs = command.occurredAtEpochMs,
-                notes = command.notes
+                notes = command.notes,
+                exposureTypeCatalogId = resolveExposureCatalogId(command.exposureTypeCatalogId, command.exposureType)
             )
             val updatedCount = exposureEventDao.update(updatedEntity)
             if (updatedCount == 0) {
@@ -88,7 +95,17 @@ class RoomExposureRepository(
             id = id,
             exposureType = exposureType,
             occurredAtEpochMs = occurredAtEpochMs,
-            notes = notes
+            notes = notes,
+            exposureTypeCatalogId = exposureTypeCatalogId
         )
+    }
+
+    private suspend fun resolveExposureCatalogId(selectedCatalogId: Long?, name: String): Long? {
+        if (name.isBlank()) return null
+        val repository = eventCatalogRepository ?: return selectedCatalogId
+        if (selectedCatalogId != null) {
+            return repository.getCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, selectedCatalogId)?.id
+        }
+        return repository.ensureCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, name).id
     }
 }

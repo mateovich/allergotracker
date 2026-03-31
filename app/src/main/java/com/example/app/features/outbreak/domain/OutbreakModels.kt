@@ -4,7 +4,9 @@ data class CreateOutbreakEventCommand(
     val outbreakDescriptor: String,
     val bodyLocation: String,
     val occurredAtEpochMs: Long,
-    val notes: String?
+    val notes: String?,
+    val outbreakDescriptorCatalogId: Long? = null,
+    val bodyLocationCatalogId: Long? = null
 )
 
 data class UpdateOutbreakEventCommand(
@@ -12,7 +14,9 @@ data class UpdateOutbreakEventCommand(
     val outbreakDescriptor: String,
     val bodyLocation: String,
     val occurredAtEpochMs: Long,
-    val notes: String?
+    val notes: String?,
+    val outbreakDescriptorCatalogId: Long? = null,
+    val bodyLocationCatalogId: Long? = null
 )
 
 data class OutbreakEvent(
@@ -20,7 +24,9 @@ data class OutbreakEvent(
     val outbreakDescriptor: String,
     val bodyLocation: String,
     val occurredAtEpochMs: Long,
-    val notes: String?
+    val notes: String?,
+    val outbreakDescriptorCatalogId: Long? = null,
+    val bodyLocationCatalogId: Long? = null
 )
 
 data class CreateOutbreakDefaults(

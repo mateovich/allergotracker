@@ -18,6 +18,9 @@ interface OutbreakEventDao {
     @Query("SELECT * FROM outbreak_events WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): OutbreakEventEntity?
 
+    @Query("SELECT * FROM outbreak_events WHERE id = :id LIMIT 1")
+    fun observeById(id: Long): Flow<OutbreakEventEntity?>
+
     @Update
     suspend fun update(entity: OutbreakEventEntity): Int
 

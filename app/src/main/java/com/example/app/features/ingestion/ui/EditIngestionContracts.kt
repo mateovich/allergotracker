@@ -1,5 +1,7 @@
 package com.example.app.features.ingestion.ui
 
+import com.example.app.features.ingestion.domain.ReusableEntityKind
+
 data class EditIngestionUiState(
     val title: String = "Edit Ingestion",
     val itemName: String = "",
@@ -10,6 +12,8 @@ data class EditIngestionUiState(
     val selectedTimePreset: IngestionTimePreset = IngestionTimePreset.NOW,
     val quantityOptions: List<QuantityOptionUiModel> = emptyList(),
     val selectedQuantityLevel: Int? = null,
+    val selectedReusableEntityKind: ReusableEntityKind? = null,
+    val selectedReusableEntityId: Long? = null,
     val itemNameError: String? = null,
     val quantityError: String? = null,
     val occurredAtError: String? = null,

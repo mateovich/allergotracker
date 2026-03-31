@@ -5,6 +5,7 @@ import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.ingestion.domain.CreateIngestionEventCommand
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
+import com.example.app.features.ingestion.domain.ReusableEntityKind
 import com.example.app.features.ingestion.domain.UpdateIngestionEventCommand
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -41,7 +42,7 @@ class RoomIngestionRepositoryTest {
 
     @Test
     fun update_rewrites_existing_local_record_without_network_dependency() = runBlocking {
-        val existing = IngestionEventEntity(7L, "Tea", 2, 1_700_000_000_000L, null, 1_700_000_100_000L)
+        val existing = IngestionEventEntity(7L, "Tea", 2, 1_700_000_000_000L, null, null, null, 1_700_000_100_000L)
         val dao = FakeIngestionEventDaoForRepository(getByIdResult = existing)
         val repository = RoomIngestionRepository(
             ingestionEventDao = dao,
@@ -79,7 +80,7 @@ class RoomIngestionRepositoryTest {
     fun delete_zero_rows_after_lookup_returns_integrity_error() = runBlocking {
         val repository = RoomIngestionRepository(
             ingestionEventDao = FakeIngestionEventDaoForRepository(
-                getByIdResult = IngestionEventEntity(7L, "Tea", 2, 1_700_000_000_000L, null, 1_700_000_000_000L),
+                getByIdResult = IngestionEventEntity(7L, "Tea", 2, 1_700_000_000_000L, null, null, null, 1_700_000_000_000L),
                 deleteCount = 0
             ),
             currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L }
@@ -94,7 +95,7 @@ class RoomIngestionRepositoryTest {
     fun delete_constraint_failure_returns_integrity_error() = runBlocking {
         val repository = RoomIngestionRepository(
             ingestionEventDao = FakeIngestionEventDaoForRepository(
-                getByIdResult = IngestionEventEntity(7L, "Tea", 2, 1_700_000_000_000L, null, 1_700_000_000_000L),
+                getByIdResult = IngestionEventEntity(7L, "Tea", 2, 1_700_000_000_000L, null, null, null, 1_700_000_000_000L),
                 deleteException = SQLiteConstraintException()
             ),
             currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L }
@@ -109,7 +110,7 @@ class RoomIngestionRepositoryTest {
     fun delete_unexpected_failure_returns_persistence_error() = runBlocking {
         val repository = RoomIngestionRepository(
             ingestionEventDao = FakeIngestionEventDaoForRepository(
-                getByIdResult = IngestionEventEntity(7L, "Tea", 2, 1_700_000_000_000L, null, 1_700_000_000_000L),
+                getByIdResult = IngestionEventEntity(7L, "Tea", 2, 1_700_000_000_000L, null, null, null, 1_700_000_000_000L),
                 deleteException = IllegalStateException("boom")
             ),
             currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L }
@@ -118,6 +119,89 @@ class RoomIngestionRepositoryTest {
         val result = repository.deleteIngestion(7L)
 
         assertEquals(DomainError.PersistenceError("Couldn't delete ingestion locally. Try again."), (result as AppResult.Error).error)
+    }
+
+    @Test
+    fun create_rejects_missing_reusable_reference() = runBlocking {
+        val repository = RoomIngestionRepository(
+            ingestionEventDao = FakeIngestionEventDaoForRepository(getByIdResult = null),
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L },
+            reusableEntityExists = { _, _ -> false }
+        )
+
+        val result = repository.createIngestion(
+            CreateIngestionEventCommand(
+                itemName = "Tea",
+                quantityLevel = 2,
+                occurredAtEpochMs = 1_700_000_000_000L,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.INGREDIENT,
+                reusableEntityId = 99L
+            )
+        )
+
+        assertEquals(
+            DomainError.IntegrityError("Selected reusable item is no longer available."),
+            (result as AppResult.Error).error
+        )
+    }
+
+    @Test
+    fun create_rejects_inconsistent_reusable_identity() = runBlocking {
+        val repository = RoomIngestionRepository(
+            ingestionEventDao = FakeIngestionEventDaoForRepository(getByIdResult = null),
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L }
+        )
+
+        val result = repository.createIngestion(
+            CreateIngestionEventCommand(
+                itemName = "Tea",
+                quantityLevel = 2,
+                occurredAtEpochMs = 1_700_000_000_000L,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.INGREDIENT,
+                reusableEntityId = null
+            )
+        )
+
+        assertTrue(result is AppResult.Error)
+        assertEquals(
+            DomainError.ValidationError(
+                "Please fix the highlighted fields.",
+                mapOf("itemName" to "Choose a valid reusable item or clear the selection.")
+            ),
+            (result as AppResult.Error).error
+        )
+    }
+
+    @Test
+    fun create_persists_valid_reusable_identity_without_recreating_entity() = runBlocking {
+        val dao = FakeIngestionEventDaoForRepository(getByIdResult = null)
+        val existenceChecks = mutableListOf<Pair<ReusableEntityKind, Long>>()
+        val repository = RoomIngestionRepository(
+            ingestionEventDao = dao,
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L },
+            reusableEntityExists = { kind, id ->
+                existenceChecks += kind to id
+                true
+            }
+        )
+
+        val result = repository.createIngestion(
+            CreateIngestionEventCommand(
+                itemName = "Oat milk",
+                quantityLevel = 2,
+                occurredAtEpochMs = 1_700_000_000_000L,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.INGREDIENT,
+                reusableEntityId = 11L
+            )
+        )
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(listOf(ReusableEntityKind.INGREDIENT to 11L), existenceChecks)
+        assertEquals(ReusableEntityKind.INGREDIENT.storageValue, dao.inserted.single().reusableEntityKind)
+        assertEquals(11L, dao.inserted.single().reusableEntityId)
     }
 }
 
@@ -135,6 +219,7 @@ private class FakeIngestionEventDaoForRepository(
     }
     override fun observeRecordCount(): Flow<Int> = emptyFlow()
     override suspend fun getById(id: Long): IngestionEventEntity? = getByIdResult
+    override fun observeById(id: Long): Flow<IngestionEventEntity?> = emptyFlow()
     override suspend fun update(entity: IngestionEventEntity): Int {
         updated += entity
         return 1

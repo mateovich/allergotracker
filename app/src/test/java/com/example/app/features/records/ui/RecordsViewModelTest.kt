@@ -103,9 +103,58 @@ class RecordsViewModelTest {
         viewModel.onIntent(RecordsUiIntent.OpenRecord("ingestion-7"))
 
         assertEquals(
-            RecordsUiEffect.NavigateToEditForm(AppRoutes.editIngestion(7L)),
+            RecordsUiEffect.NavigateToRecordDetail(
+                AppRoutes.recordDetail(
+                    eventType = RecordEventType.INGESTION,
+                    recordId = 7L
+                )
+            ),
             effect.await()
         )
+    }
+
+    @Test
+    fun opening_record_keeps_active_filters_intact_for_return_to_records() = runBlocking {
+        val includedDate = LocalDate.of(2026, 3, 20)
+        val repository = repositoryWithRecords(
+            records = listOf(
+                record(
+                    id = "ingestion-7",
+                    typeLabel = "Ingestion",
+                    title = "Tea",
+                    detailLabel = "2 Light snack",
+                    occurredAtEpochMs = includedDate.atStartOfDay(ZoneId.systemDefault()).plusHours(9).toInstant().toEpochMilli(),
+                    sourceId = 7L,
+                    eventType = RecordEventType.INGESTION,
+                    ingestionQuantityLevel = 2
+                )
+            )
+        )
+        val viewModel = RecordsViewModel(
+            currentTimeProvider(),
+            ObserveRecordCountUseCase(repository),
+            ObserveRecordsUseCase(repository)
+        )
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.onIntent(RecordsUiIntent.OpenFilterDialog)
+        viewModel.onIntent(RecordsUiIntent.UpdateFilterStartDate(includedDate.toString()))
+        viewModel.onIntent(RecordsUiIntent.UpdateFilterEndDate(includedDate.toString()))
+        viewModel.onIntent(RecordsUiIntent.ToggleFilterEventType(RecordEventType.INGESTION))
+        viewModel.onIntent(RecordsUiIntent.ApplyFilters)
+        viewModel.onIntent(RecordsUiIntent.OpenRecord("ingestion-7"))
+
+        assertEquals(
+            RecordsUiEffect.NavigateToRecordDetail(
+                AppRoutes.recordDetail(RecordEventType.INGESTION, 7L)
+            ),
+            effect.await()
+        )
+        assertEquals(
+            listOf("2026-03-20 to 2026-03-20", "Types: Ingestion"),
+            viewModel.state.value.activeFilters.summaryLabels
+        )
+        assertEquals(listOf("ingestion-7"), viewModel.state.value.records.map { it.id })
     }
 
     @Test

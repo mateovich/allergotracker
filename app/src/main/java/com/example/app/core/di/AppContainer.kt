@@ -8,6 +8,18 @@ import com.example.app.core.database.migrations.Migration_1_2
 import com.example.app.core.database.migrations.Migration_2_3
 import com.example.app.core.database.migrations.Migration_3_4
 import com.example.app.core.database.migrations.Migration_4_5
+import com.example.app.core.database.migrations.Migration_5_6
+import com.example.app.core.database.migrations.Migration_6_7
+import com.example.app.core.database.migrations.Migration_7_8
+import com.example.app.core.database.migrations.Migration_8_9
+import com.example.app.core.database.migrations.Migration_9_10
+import com.example.app.features.compounds.data.RoomReusableCompoundRepository
+import com.example.app.features.compounds.domain.CreateReusableCompoundUseCase
+import com.example.app.features.compounds.domain.ObserveReusableCompoundsUseCase
+import com.example.app.features.compounds.ui.CreateCompoundViewModelFactory
+import com.example.app.features.eventcatalog.data.RoomReusableEventCatalogRepository
+import com.example.app.features.eventcatalog.domain.ObserveReusableEventCatalogUseCase
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
 import com.example.app.features.exposure.data.RoomExposureRepository
 import com.example.app.features.exposure.domain.CreateExposureDefaultsUseCase
 import com.example.app.features.exposure.domain.CreateExposureEventUseCase
@@ -16,12 +28,17 @@ import com.example.app.features.exposure.domain.GetExposureEventUseCase
 import com.example.app.features.exposure.domain.UpdateExposureEventUseCase
 import com.example.app.features.exposure.ui.CreateExposureViewModelFactory
 import com.example.app.features.exposure.ui.EditExposureViewModelFactory
+import com.example.app.features.ingredients.data.RoomReusableIngredientRepository
+import com.example.app.features.ingredients.domain.CreateReusableIngredientUseCase
+import com.example.app.features.ingredients.domain.ObserveReusableIngredientsUseCase
+import com.example.app.features.ingredients.ui.CreateIngredientViewModelFactory
 import com.example.app.features.ingestion.data.RoomIngestionRepository
 import com.example.app.features.ingestion.domain.CreateIngestionDefaultsUseCase
 import com.example.app.features.ingestion.domain.CreateIngestionEventUseCase
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
 import com.example.app.features.ingestion.domain.DeleteIngestionEventUseCase
 import com.example.app.features.ingestion.domain.GetIngestionEventUseCase
+import com.example.app.features.ingestion.domain.ReusableEntityKind
 import com.example.app.features.ingestion.domain.UpdateIngestionEventUseCase
 import com.example.app.features.ingestion.ui.CreateIngestionViewModelFactory
 import com.example.app.features.ingestion.ui.EditIngestionViewModelFactory
@@ -38,8 +55,11 @@ import com.example.app.features.outbreak.ui.CreateOutbreakViewModelFactory
 import com.example.app.features.outbreak.ui.EditOutbreakViewModelFactory
 import com.example.app.features.records.data.RoomRecordsRepository
 import com.example.app.features.records.domain.ObserveRecordCountUseCase
+import com.example.app.features.records.domain.ObserveRecordDetailUseCase
 import com.example.app.features.records.domain.ObserveRecordsUseCase
 import com.example.app.features.records.domain.RecordsRepository
+import com.example.app.features.records.domain.RecordEventType
+import com.example.app.features.records.ui.RecordDetailViewModelFactory
 import com.example.app.features.records.ui.RecordsViewModelFactory
 import kotlinx.coroutines.runBlocking
 
@@ -52,53 +72,134 @@ class AppContainer(appContext: Context) {
         appContext,
         AppDatabase::class.java,
         "app_database"
-    ).addMigrations(Migration_1_2, Migration_2_3, Migration_3_4, Migration_4_5).build()
+    ).addMigrations(Migration_1_2, Migration_2_3, Migration_3_4, Migration_4_5, Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10).build()
 
     private val homeDao: HomeDao = appDatabase.homeDao()
     private val ingestionEventDao = appDatabase.ingestionEventDao()
     private val exposureEventDao = appDatabase.exposureEventDao()
     private val outbreakEventDao = appDatabase.outbreakEventDao()
+    private val reusableEventCatalogDao = appDatabase.reusableEventCatalogDao()
+    private val reusableIngredientDao = appDatabase.reusableIngredientDao()
+    private val reusableCompoundDao = appDatabase.reusableCompoundDao()
     private val homeRepository: HomeRepository = HomeRepositoryImpl(homeDao)
     private val getHomeMessageUseCase = GetHomeMessageUseCase(homeRepository)
     private val recordsRepository: RecordsRepository = RoomRecordsRepository(ingestionEventDao, exposureEventDao, outbreakEventDao)
-    private val ingestionRepository = RoomIngestionRepository(ingestionEventDao, systemCurrentTimeProvider)
-    private val exposureRepository = RoomExposureRepository(exposureEventDao, systemCurrentTimeProvider)
-    private val outbreakRepository = RoomOutbreakRepository(outbreakEventDao, systemCurrentTimeProvider)
+    private val reusableEventCatalogRepository = RoomReusableEventCatalogRepository(reusableEventCatalogDao, systemCurrentTimeProvider::nowEpochMillis)
+    private val ingestionRepository = RoomIngestionRepository(
+        ingestionEventDao = ingestionEventDao,
+        currentTimeProvider = systemCurrentTimeProvider,
+        reusableEntityExists = { kind, id ->
+            when (kind) {
+                ReusableEntityKind.INGREDIENT -> reusableIngredientDao.existsById(id)
+                ReusableEntityKind.COMPOUND -> reusableCompoundDao.existsById(id)
+            }
+        }
+    )
+    private val exposureRepository = RoomExposureRepository(exposureEventDao, systemCurrentTimeProvider, reusableEventCatalogRepository)
+    private val outbreakRepository = RoomOutbreakRepository(outbreakEventDao, systemCurrentTimeProvider, reusableEventCatalogRepository)
+    private val reusableIngredientRepository = RoomReusableIngredientRepository(reusableIngredientDao, systemCurrentTimeProvider::nowEpochMillis)
+    private val reusableCompoundRepository = RoomReusableCompoundRepository(reusableCompoundDao, systemCurrentTimeProvider::nowEpochMillis)
     private val createIngestionDefaultsUseCase = CreateIngestionDefaultsUseCase(systemCurrentTimeProvider)
     private val createIngestionEventUseCase = CreateIngestionEventUseCase(
         repository = ingestionRepository,
-        currentTimeProvider = systemCurrentTimeProvider
+        currentTimeProvider = systemCurrentTimeProvider,
+        reusableEntityExists = { kind, id ->
+            when (kind) {
+                ReusableEntityKind.INGREDIENT -> reusableIngredientDao.existsById(id)
+                ReusableEntityKind.COMPOUND -> reusableCompoundDao.existsById(id)
+            }
+        }
     )
     private val getIngestionEventUseCase = GetIngestionEventUseCase(ingestionRepository)
     private val deleteIngestionEventUseCase = DeleteIngestionEventUseCase(ingestionRepository)
-    private val updateIngestionEventUseCase = UpdateIngestionEventUseCase(ingestionRepository, systemCurrentTimeProvider)
+    private val updateIngestionEventUseCase = UpdateIngestionEventUseCase(
+        ingestionRepository,
+        systemCurrentTimeProvider,
+        reusableEntityExists = { kind, id ->
+            when (kind) {
+                ReusableEntityKind.INGREDIENT -> reusableIngredientDao.existsById(id)
+                ReusableEntityKind.COMPOUND -> reusableCompoundDao.existsById(id)
+            }
+        }
+    )
     private val createExposureDefaultsUseCase = CreateExposureDefaultsUseCase(systemCurrentTimeProvider)
     private val createExposureEventUseCase = CreateExposureEventUseCase(
         repository = exposureRepository,
-        currentTimeProvider = systemCurrentTimeProvider
+        currentTimeProvider = systemCurrentTimeProvider,
+        exposureCatalogExists = { catalogId ->
+            reusableEventCatalogRepository.existsCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, catalogId)
+        }
     )
     private val getExposureEventUseCase = GetExposureEventUseCase(exposureRepository)
     private val deleteExposureEventUseCase = DeleteExposureEventUseCase(exposureRepository)
-    private val updateExposureEventUseCase = UpdateExposureEventUseCase(exposureRepository, systemCurrentTimeProvider)
+    private val updateExposureEventUseCase = UpdateExposureEventUseCase(
+        exposureRepository,
+        systemCurrentTimeProvider,
+        exposureCatalogExists = { catalogId ->
+            reusableEventCatalogRepository.existsCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, catalogId)
+        }
+    )
     private val createOutbreakDefaultsUseCase = CreateOutbreakDefaultsUseCase(systemCurrentTimeProvider)
     private val createOutbreakEventUseCase = CreateOutbreakEventUseCase(
         repository = outbreakRepository,
-        currentTimeProvider = systemCurrentTimeProvider
+        currentTimeProvider = systemCurrentTimeProvider,
+        outbreakDescriptorCatalogExists = { catalogId ->
+            reusableEventCatalogRepository.existsCatalogEntry(ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR, catalogId)
+        },
+        bodyLocationCatalogExists = { catalogId ->
+            reusableEventCatalogRepository.existsCatalogEntry(ReusableEventCatalogKind.BODY_LOCATION, catalogId)
+        }
     )
     private val getOutbreakEventUseCase = GetOutbreakEventUseCase(outbreakRepository)
     private val deleteOutbreakEventUseCase = DeleteOutbreakEventUseCase(outbreakRepository)
-    private val updateOutbreakEventUseCase = UpdateOutbreakEventUseCase(outbreakRepository, systemCurrentTimeProvider)
+    private val updateOutbreakEventUseCase = UpdateOutbreakEventUseCase(
+        outbreakRepository,
+        systemCurrentTimeProvider,
+        outbreakDescriptorCatalogExists = { catalogId ->
+            reusableEventCatalogRepository.existsCatalogEntry(ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR, catalogId)
+        },
+        bodyLocationCatalogExists = { catalogId ->
+            reusableEventCatalogRepository.existsCatalogEntry(ReusableEventCatalogKind.BODY_LOCATION, catalogId)
+        }
+    )
+    private val createReusableIngredientUseCase = CreateReusableIngredientUseCase(reusableIngredientRepository)
+    private val createReusableCompoundUseCase = CreateReusableCompoundUseCase(reusableCompoundRepository)
+    private val observeReusableIngredientsUseCase = ObserveReusableIngredientsUseCase(reusableIngredientRepository)
+    private val observeReusableCompoundsUseCase = ObserveReusableCompoundsUseCase(reusableCompoundRepository)
+    private val observeReusableEventCatalogUseCase = ObserveReusableEventCatalogUseCase(reusableEventCatalogRepository)
     private val observeRecordCountUseCase = ObserveRecordCountUseCase(recordsRepository)
     private val observeRecordsUseCase = ObserveRecordsUseCase(recordsRepository)
+    private val observeRecordDetailUseCase = ObserveRecordDetailUseCase(recordsRepository)
 
     val recordsViewModelFactory: RecordsViewModelFactory =
         RecordsViewModelFactory(systemCurrentTimeProvider, observeRecordCountUseCase, observeRecordsUseCase)
     val createIngestionViewModelFactory: CreateIngestionViewModelFactory =
-        CreateIngestionViewModelFactory(createIngestionDefaultsUseCase, createIngestionEventUseCase)
+        CreateIngestionViewModelFactory(
+            createIngestionDefaultsUseCase,
+            createIngestionEventUseCase,
+            observeReusableIngredientsUseCase,
+            observeReusableCompoundsUseCase
+        )
     val createExposureViewModelFactory: CreateExposureViewModelFactory =
-        CreateExposureViewModelFactory(createExposureDefaultsUseCase, createExposureEventUseCase)
+        CreateExposureViewModelFactory(
+            createExposureDefaultsUseCase,
+            createExposureEventUseCase,
+            observeReusableEventCatalogUseCase
+        )
     val createOutbreakViewModelFactory: CreateOutbreakViewModelFactory =
-        CreateOutbreakViewModelFactory(createOutbreakDefaultsUseCase, createOutbreakEventUseCase)
+        CreateOutbreakViewModelFactory(
+            createOutbreakDefaultsUseCase,
+            createOutbreakEventUseCase,
+            observeReusableEventCatalogUseCase
+        )
+    val createIngredientViewModelFactory: CreateIngredientViewModelFactory =
+        CreateIngredientViewModelFactory(createReusableIngredientUseCase)
+    val createCompoundViewModelFactory: CreateCompoundViewModelFactory =
+        CreateCompoundViewModelFactory(createReusableCompoundUseCase)
+
+    fun createRecordDetailViewModelFactory(recordId: Long, eventType: RecordEventType): RecordDetailViewModelFactory {
+        return RecordDetailViewModelFactory(recordId, eventType, observeRecordDetailUseCase)
+    }
 
     fun createEditIngestionViewModelFactory(recordId: Long): EditIngestionViewModelFactory {
         return EditIngestionViewModelFactory(
@@ -116,7 +217,8 @@ class AppContainer(appContext: Context) {
             getExposureEventUseCase,
             deleteExposureEventUseCase,
             updateExposureEventUseCase,
-            systemCurrentTimeProvider
+            systemCurrentTimeProvider,
+            observeReusableEventCatalogUseCase
         )
     }
 
@@ -126,7 +228,8 @@ class AppContainer(appContext: Context) {
             getOutbreakEventUseCase,
             deleteOutbreakEventUseCase,
             updateOutbreakEventUseCase,
-            systemCurrentTimeProvider
+            systemCurrentTimeProvider,
+            observeReusableEventCatalogUseCase
         )
     }
 

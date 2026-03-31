@@ -20,6 +20,9 @@ class MainActivity : ComponentActivity() {
                     createIngestionViewModelFactory = appContainer.createIngestionViewModelFactory,
                     createExposureViewModelFactory = appContainer.createExposureViewModelFactory,
                     createOutbreakViewModelFactory = appContainer.createOutbreakViewModelFactory,
+                    createIngredientViewModelFactory = appContainer.createIngredientViewModelFactory,
+                    createCompoundViewModelFactory = appContainer.createCompoundViewModelFactory,
+                    recordDetailViewModelFactoryProvider = appContainer::createRecordDetailViewModelFactory,
                     editIngestionViewModelFactoryProvider = appContainer::createEditIngestionViewModelFactory,
                     editExposureViewModelFactoryProvider = appContainer::createEditExposureViewModelFactory,
                     editOutbreakViewModelFactoryProvider = appContainer::createEditOutbreakViewModelFactory

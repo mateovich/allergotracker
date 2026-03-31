@@ -6,7 +6,9 @@ import com.example.app.features.ingestion.domain.CurrentTimeProvider
 
 class CreateOutbreakEventUseCase(
     private val repository: OutbreakRepository,
-    private val currentTimeProvider: CurrentTimeProvider
+    private val currentTimeProvider: CurrentTimeProvider,
+    private val outbreakDescriptorCatalogExists: suspend (Long) -> Boolean = { false },
+    private val bodyLocationCatalogExists: suspend (Long) -> Boolean = { false }
 ) {
     suspend operator fun invoke(command: CreateOutbreakEventCommand): AppResult<OutbreakEvent> {
         val sanitizedCommand = command.copy(
@@ -25,6 +27,14 @@ class CreateOutbreakEventUseCase(
                 put("occurredAtEpochMs", "Choose a valid time.")
             } else if (sanitizedCommand.occurredAtEpochMs > currentTimeProvider.nowEpochMillis()) {
                 put("occurredAtEpochMs", "Time cannot be in the future.")
+            }
+            val outbreakDescriptorCatalogId = sanitizedCommand.outbreakDescriptorCatalogId
+            if (outbreakDescriptorCatalogId != null && !outbreakDescriptorCatalogExists(outbreakDescriptorCatalogId)) {
+                put("outbreakDescriptor", "Choose a saved outbreak descriptor that still exists.")
+            }
+            val bodyLocationCatalogId = sanitizedCommand.bodyLocationCatalogId
+            if (bodyLocationCatalogId != null && !bodyLocationCatalogExists(bodyLocationCatalogId)) {
+                put("bodyLocation", "Choose a saved body location that still exists.")
             }
         }
 

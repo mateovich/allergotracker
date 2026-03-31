@@ -3,11 +3,15 @@ package com.example.app.features.exposure.data
 import android.database.sqlite.SQLiteConstraintException
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalog
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogRepository
 import com.example.app.features.exposure.domain.CreateExposureEventCommand
 import com.example.app.features.exposure.domain.UpdateExposureEventCommand
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -18,9 +22,11 @@ class RoomExposureRepositoryTest {
     @Test
     fun create_persists_exposure_locally_through_room_dao() = runBlocking {
         val dao = FakeExposureEventDaoForRepository(getByIdResult = null)
+        val catalogRepository = FakeExposureCatalogRepository()
         val repository = RoomExposureRepository(
             exposureEventDao = dao,
-            currentTimeProvider = CurrentTimeProvider { 1_700_000_123_000L }
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_123_000L },
+            eventCatalogRepository = catalogRepository
         )
 
         val result = repository.createExposure(
@@ -35,6 +41,8 @@ class RoomExposureRepositoryTest {
         assertTrue(result is AppResult.Success)
         assertEquals("Pollen", savedEntity.exposureType)
         assertEquals(1_700_000_123_000L, savedEntity.createdAtEpochMs)
+        assertEquals(1L, savedEntity.exposureTypeCatalogId)
+        assertEquals(listOf("Pollen"), catalogRepository.ensureRequests)
     }
 
     @Test
@@ -118,6 +126,39 @@ class RoomExposureRepositoryTest {
     }
 }
 
+private class FakeExposureCatalogRepository : ReusableEventCatalogRepository {
+    val ensureRequests = mutableListOf<String>()
+
+    override fun observeCatalog(kind: ReusableEventCatalogKind): Flow<List<ReusableEventCatalog>> = flowOf(emptyList())
+
+    override suspend fun getCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? {
+        return ReusableEventCatalog(
+            id = id,
+            kind = kind,
+            name = "Existing",
+            usageCount = 1,
+            createdAtEpochMs = 1L,
+            updatedAtEpochMs = 1L,
+            lastUsedAtEpochMs = 1L
+        )
+    }
+
+    override suspend fun existsCatalogEntry(kind: ReusableEventCatalogKind, id: Long): Boolean = true
+
+    override suspend fun ensureCatalogEntry(kind: ReusableEventCatalogKind, name: String): ReusableEventCatalog {
+        ensureRequests += name
+        return ReusableEventCatalog(
+            id = ensureRequests.size.toLong(),
+            kind = kind,
+            name = name,
+            usageCount = 1,
+            createdAtEpochMs = 1L,
+            updatedAtEpochMs = 1L,
+            lastUsedAtEpochMs = 1L
+        )
+    }
+}
+
 private class FakeExposureEventDaoForRepository(
     private val getByIdResult: ExposureEventEntity?,
     private val deleteCount: Int = 1,
@@ -132,6 +173,7 @@ private class FakeExposureEventDaoForRepository(
     }
     override fun observeRecordCount(): Flow<Int> = emptyFlow()
     override suspend fun getById(id: Long): ExposureEventEntity? = getByIdResult
+    override fun observeById(id: Long): Flow<ExposureEventEntity?> = emptyFlow()
     override suspend fun update(entity: ExposureEventEntity): Int {
         updated += entity
         return 1

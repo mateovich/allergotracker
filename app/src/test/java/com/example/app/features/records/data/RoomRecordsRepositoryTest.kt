@@ -19,9 +19,10 @@ import com.example.app.features.outbreak.domain.CreateOutbreakEventCommand
 import com.example.app.features.outbreak.domain.UpdateOutbreakEventCommand
 import com.example.app.features.records.domain.RecordEventType
 import com.example.app.features.records.domain.RecordsFilter
+import com.example.app.core.common.result.AppResult
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
@@ -46,6 +47,8 @@ class RoomRecordsRepositoryTest {
                         quantityLevel = 3,
                         occurredAtEpochMs = matchingEpoch,
                         notes = null,
+                        reusableEntityKind = null,
+                        reusableEntityId = null,
                         createdAtEpochMs = matchingEpoch
                     ),
                     IngestionEventEntity(
@@ -54,6 +57,8 @@ class RoomRecordsRepositoryTest {
                         quantityLevel = 2,
                         occurredAtEpochMs = matchingEpoch,
                         notes = null,
+                        reusableEntityKind = null,
+                        reusableEntityId = null,
                         createdAtEpochMs = matchingEpoch
                     )
                 )
@@ -98,6 +103,8 @@ class RoomRecordsRepositoryTest {
                         quantityLevel = 2,
                         occurredAtEpochMs = timestamp,
                         notes = null,
+                        reusableEntityKind = null,
+                        reusableEntityId = null,
                         createdAtEpochMs = timestamp
                     )
                 )
@@ -193,6 +200,8 @@ class RoomRecordsRepositoryTest {
                     quantityLevel = 2,
                     occurredAtEpochMs = 1_700_000_000_000L,
                     notes = "with honey",
+                    reusableEntityKind = null,
+                    reusableEntityId = null,
                     createdAtEpochMs = 1_700_000_000_000L
                 )
             )
@@ -234,6 +243,8 @@ class RoomRecordsRepositoryTest {
                     quantityLevel = 2,
                     occurredAtEpochMs = 1_700_000_200_000L,
                     notes = null,
+                    reusableEntityKind = null,
+                    reusableEntityId = null,
                     createdAtEpochMs = 1_700_000_200_000L
                 )
             )
@@ -282,6 +293,8 @@ class RoomRecordsRepositoryTest {
                     quantityLevel = 2,
                     occurredAtEpochMs = 1_700_000_200_000L,
                     notes = null,
+                    reusableEntityKind = null,
+                    reusableEntityId = null,
                     createdAtEpochMs = 1_700_000_200_000L
                 )
             )
@@ -333,6 +346,8 @@ class RoomRecordsRepositoryTest {
                         quantityLevel = 2,
                         occurredAtEpochMs = sharedTimestamp,
                         notes = null,
+                        reusableEntityKind = null,
+                        reusableEntityId = null,
                         createdAtEpochMs = sharedTimestamp
                     )
                 )
@@ -379,6 +394,8 @@ class RoomRecordsRepositoryTest {
                         quantityLevel = 2,
                         occurredAtEpochMs = sharedOccurredAt,
                         notes = null,
+                        reusableEntityKind = null,
+                        reusableEntityId = null,
                         createdAtEpochMs = 100L
                     )
                 )
@@ -463,6 +480,98 @@ class RoomRecordsRepositoryTest {
         assertEquals("Dust", records.first().title)
         assertEquals("Green tea", records.last().title)
     }
+
+    @Test
+    fun observe_record_detail_maps_ingestion_exposure_and_outbreak_fields_by_type() = runBlocking {
+        val repository = RoomRecordsRepository(
+            ingestionEventDao = FakeIngestionEventDao(
+                events = listOf(
+                    IngestionEventEntity(
+                        id = 7L,
+                        itemName = "Tea",
+                        quantityLevel = 2,
+                        occurredAtEpochMs = 1_700_000_000_000L,
+                        notes = "with honey",
+                        reusableEntityKind = null,
+                        reusableEntityId = null,
+                        createdAtEpochMs = 1_700_000_000_000L
+                    )
+                )
+            ),
+            exposureEventDao = FakeExposureEventDao(
+                events = listOf(
+                    ExposureEventEntity(
+                        id = 5L,
+                        exposureType = "Pollen",
+                        occurredAtEpochMs = 1_700_000_100_000L,
+                        notes = "outside",
+                        createdAtEpochMs = 1_700_000_100_000L
+                    )
+                )
+            ),
+            outbreakEventDao = FakeOutbreakEventDao(
+                events = listOf(
+                    OutbreakEventEntity(
+                        id = 3L,
+                        outbreakDescriptor = "Skin flare",
+                        bodyLocation = "Arm",
+                        occurredAtEpochMs = 1_700_000_200_000L,
+                        notes = "after workout",
+                        createdAtEpochMs = 1_700_000_200_000L
+                    )
+                )
+            )
+        )
+
+        val ingestion = repository.observeRecordDetail(7L, RecordEventType.INGESTION).first()
+        val exposure = repository.observeRecordDetail(5L, RecordEventType.EXPOSURE).first()
+        val outbreak = repository.observeRecordDetail(3L, RecordEventType.OUTBREAK).first()
+
+        val ingestionValue = (ingestion as AppResult.Success<*>).value as com.example.app.features.records.domain.RecordDetail.Ingestion
+        val exposureValue = (exposure as AppResult.Success<*>).value as com.example.app.features.records.domain.RecordDetail.Exposure
+        val outbreakValue = (outbreak as AppResult.Success<*>).value as com.example.app.features.records.domain.RecordDetail.Outbreak
+
+        assertEquals("Tea", ingestionValue.itemName)
+        assertEquals("2 Light snack", ingestionValue.quantityLabel)
+        assertEquals("with honey", ingestionValue.notes)
+        assertEquals("Pollen", exposureValue.exposureType)
+        assertEquals("outside", exposureValue.notes)
+        assertEquals("Skin flare", outbreakValue.outbreakDescriptor)
+        assertEquals("Arm", outbreakValue.bodyLocation)
+        assertEquals("after workout", outbreakValue.notes)
+    }
+
+    @Test
+    fun observe_record_detail_emits_unavailable_when_record_is_deleted() = runBlocking {
+        val ingestionEventDao = FakeIngestionEventDao(
+            events = listOf(
+                IngestionEventEntity(
+                    id = 7L,
+                    itemName = "Tea",
+                    quantityLevel = 2,
+                    occurredAtEpochMs = 1_700_000_000_000L,
+                    notes = null,
+                    reusableEntityKind = null,
+                    reusableEntityId = null,
+                    createdAtEpochMs = 1_700_000_000_000L
+                )
+            )
+        )
+        val repository = RoomRecordsRepository(
+            ingestionEventDao = ingestionEventDao,
+            exposureEventDao = FakeExposureEventDao(),
+            outbreakEventDao = FakeOutbreakEventDao()
+        )
+
+        ingestionEventDao.deleteById(7L)
+
+        val result = repository.observeRecordDetail(7L, RecordEventType.INGESTION).first()
+
+        assertEquals(
+            "This record is no longer available.",
+            (result as AppResult.Error).error.message
+        )
+    }
 }
 
 private class FakeIngestionEventDao(
@@ -477,6 +586,8 @@ private class FakeIngestionEventDao(
     }
 
     override suspend fun getById(id: Long): IngestionEventEntity? = state.value.firstOrNull { it.id == id }
+
+    override fun observeById(id: Long): Flow<IngestionEventEntity?> = state.map { values -> values.firstOrNull { it.id == id } }
 
     override suspend fun update(entity: IngestionEventEntity): Int {
         val index = state.value.indexOfFirst { it.id == entity.id }
@@ -510,6 +621,8 @@ private class FakeExposureEventDao(
 
     override suspend fun getById(id: Long): ExposureEventEntity? = state.value.firstOrNull { it.id == id }
 
+    override fun observeById(id: Long): Flow<ExposureEventEntity?> = state.map { values -> values.firstOrNull { it.id == id } }
+
     override suspend fun update(entity: ExposureEventEntity): Int {
         val index = state.value.indexOfFirst { it.id == entity.id }
         if (index == -1) return 0
@@ -541,6 +654,8 @@ private class FakeOutbreakEventDao(
     }
 
     override suspend fun getById(id: Long): OutbreakEventEntity? = state.value.firstOrNull { it.id == id }
+
+    override fun observeById(id: Long): Flow<OutbreakEventEntity?> = state.map { values -> values.firstOrNull { it.id == id } }
 
     override suspend fun update(entity: OutbreakEventEntity): Int {
         val index = state.value.indexOfFirst { it.id == entity.id }

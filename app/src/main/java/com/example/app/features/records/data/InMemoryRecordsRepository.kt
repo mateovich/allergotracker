@@ -1,5 +1,9 @@
 package com.example.app.features.records.data
 
+import com.example.app.core.common.error.DomainError
+import com.example.app.core.common.result.AppResult
+import com.example.app.features.ingestion.domain.IngestionQuantityOption
+import com.example.app.features.records.domain.RecordDetail
 import com.example.app.features.records.domain.RecordsFilter
 import com.example.app.features.records.domain.RecordsRepository
 import com.example.app.features.records.domain.RecordSummary
@@ -10,6 +14,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 
 class InMemoryRecordsRepository(
     initialRecords: List<RecordSummary> = emptyList()
@@ -23,6 +29,46 @@ class InMemoryRecordsRepository(
         val zoneId = ZoneId.systemDefault()
         return combine(records.asStateFlow(), filters) { values, activeFilters ->
             values.filter { record -> record.matches(activeFilters, zoneId) }
+        }
+    }
+
+    override fun observeRecordDetail(recordId: Long, eventType: RecordEventType): Flow<AppResult<RecordDetail>> {
+        return records.asStateFlow().map { values ->
+            val record = values.firstOrNull { it.sourceId == recordId && it.eventType == eventType }
+            if (record == null) {
+                AppResult.Error(DomainError.PersistenceError("This record is no longer available."))
+            } else {
+                AppResult.Success(
+                    when (eventType) {
+                        RecordEventType.INGESTION -> RecordDetail.Ingestion(
+                            recordId = record.sourceId,
+                            occurredAtEpochMs = record.occurredAtEpochMs,
+                            itemName = record.title,
+                            quantityLabel = record.detailLabel.ifBlank {
+                                IngestionQuantityOption.fromLevel(record.ingestionQuantityLevel ?: 0)?.label.orEmpty()
+                            },
+                            reusableEntityKind = null,
+                            reusableEntityId = null,
+                            notes = null
+                        )
+
+                        RecordEventType.EXPOSURE -> RecordDetail.Exposure(
+                            recordId = record.sourceId,
+                            occurredAtEpochMs = record.occurredAtEpochMs,
+                            exposureType = record.title,
+                            notes = record.detailLabel.takeIf { it.isNotBlank() && it != "Exposure recorded" }
+                        )
+
+                        RecordEventType.OUTBREAK -> RecordDetail.Outbreak(
+                            recordId = record.sourceId,
+                            occurredAtEpochMs = record.occurredAtEpochMs,
+                            outbreakDescriptor = record.title,
+                            bodyLocation = record.detailLabel.substringBefore(" - ").ifBlank { "Unknown" },
+                            notes = record.detailLabel.substringAfter(" - ", "").ifBlank { null }
+                        )
+                    }
+                )
+            }
         }
     }
 }

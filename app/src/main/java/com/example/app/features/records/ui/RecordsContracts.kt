@@ -12,9 +12,9 @@ data class RecordSummaryUiModel(
     val title: String,
     val detailLabel: String,
     val occurredAtLabel: String,
-    val editRoute: String
+    val detailRoute: String
 ) {
-    val isEditable: Boolean = editRoute.isNotBlank()
+    val isEditable: Boolean = detailRoute.isNotBlank()
 }
 
 data class RecordsFilterDraftUiState(
@@ -74,7 +74,7 @@ sealed interface RecordsUiIntent {
 
 sealed interface RecordsUiEffect {
     data class NavigateToCreateForm(val route: String) : RecordsUiEffect
-    data class NavigateToEditForm(val route: String) : RecordsUiEffect
+    data class NavigateToRecordDetail(val route: String) : RecordsUiEffect
 }
 
 internal fun RecordsFilter.toDraftUiState(): RecordsFilterDraftUiState {

@@ -3,6 +3,8 @@ package com.example.app.features.outbreak.data
 import android.database.sqlite.SQLiteConstraintException
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogRepository
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
 import com.example.app.features.outbreak.domain.CreateOutbreakEventCommand
 import com.example.app.features.outbreak.domain.OutbreakEvent
@@ -12,16 +14,29 @@ import com.example.app.features.outbreak.domain.UpdateOutbreakEventCommand
 /** Local source of truth for outbreak events backed by Room only. */
 class RoomOutbreakRepository(
     private val outbreakEventDao: OutbreakEventDao,
-    private val currentTimeProvider: CurrentTimeProvider
+    private val currentTimeProvider: CurrentTimeProvider,
+    private val eventCatalogRepository: ReusableEventCatalogRepository? = null
 ) : OutbreakRepository {
     override suspend fun createOutbreak(command: CreateOutbreakEventCommand): AppResult<OutbreakEvent> {
         return try {
+            val outbreakDescriptorCatalogId = resolveCatalogId(
+                kind = ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR,
+                selectedCatalogId = command.outbreakDescriptorCatalogId,
+                name = command.outbreakDescriptor
+            )
+            val bodyLocationCatalogId = resolveCatalogId(
+                kind = ReusableEventCatalogKind.BODY_LOCATION,
+                selectedCatalogId = command.bodyLocationCatalogId,
+                name = command.bodyLocation
+            )
             val entity = OutbreakEventEntity(
                 outbreakDescriptor = command.outbreakDescriptor,
                 bodyLocation = command.bodyLocation,
                 occurredAtEpochMs = command.occurredAtEpochMs,
                 notes = command.notes,
-                createdAtEpochMs = currentTimeProvider.nowEpochMillis()
+                createdAtEpochMs = currentTimeProvider.nowEpochMillis(),
+                outbreakDescriptorCatalogId = outbreakDescriptorCatalogId,
+                bodyLocationCatalogId = bodyLocationCatalogId
             )
             val id = outbreakEventDao.insert(entity)
             AppResult.Success(
@@ -30,7 +45,9 @@ class RoomOutbreakRepository(
                     outbreakDescriptor = entity.outbreakDescriptor,
                     bodyLocation = entity.bodyLocation,
                     occurredAtEpochMs = entity.occurredAtEpochMs,
-                    notes = entity.notes
+                    notes = entity.notes,
+                    outbreakDescriptorCatalogId = entity.outbreakDescriptorCatalogId,
+                    bodyLocationCatalogId = entity.bodyLocationCatalogId
                 )
             )
         } catch (_: Exception) {
@@ -58,7 +75,17 @@ class RoomOutbreakRepository(
                 outbreakDescriptor = command.outbreakDescriptor,
                 bodyLocation = command.bodyLocation,
                 occurredAtEpochMs = command.occurredAtEpochMs,
-                notes = command.notes
+                notes = command.notes,
+                outbreakDescriptorCatalogId = resolveCatalogId(
+                    kind = ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR,
+                    selectedCatalogId = command.outbreakDescriptorCatalogId,
+                    name = command.outbreakDescriptor
+                ),
+                bodyLocationCatalogId = resolveCatalogId(
+                    kind = ReusableEventCatalogKind.BODY_LOCATION,
+                    selectedCatalogId = command.bodyLocationCatalogId,
+                    name = command.bodyLocation
+                )
             )
             val updatedCount = outbreakEventDao.update(updatedEntity)
             if (updatedCount == 0) {
@@ -92,7 +119,22 @@ class RoomOutbreakRepository(
             outbreakDescriptor = outbreakDescriptor,
             bodyLocation = bodyLocation,
             occurredAtEpochMs = occurredAtEpochMs,
-            notes = notes
+            notes = notes,
+            outbreakDescriptorCatalogId = outbreakDescriptorCatalogId,
+            bodyLocationCatalogId = bodyLocationCatalogId
         )
+    }
+
+    private suspend fun resolveCatalogId(
+        kind: ReusableEventCatalogKind,
+        selectedCatalogId: Long?,
+        name: String
+    ): Long? {
+        if (name.isBlank()) return null
+        val repository = eventCatalogRepository ?: return selectedCatalogId
+        if (selectedCatalogId != null) {
+            return repository.getCatalogEntry(kind, selectedCatalogId)?.id
+        }
+        return repository.ensureCatalogEntry(kind, name).id
     }
 }

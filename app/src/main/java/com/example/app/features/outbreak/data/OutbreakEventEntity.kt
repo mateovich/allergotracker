@@ -17,5 +17,9 @@ data class OutbreakEventEntity(
     @ColumnInfo(name = "notes")
     val notes: String?,
     @ColumnInfo(name = "created_at_epoch_ms")
-    val createdAtEpochMs: Long
+    val createdAtEpochMs: Long,
+    @ColumnInfo(name = "outbreak_descriptor_catalog_id")
+    val outbreakDescriptorCatalogId: Long? = null,
+    @ColumnInfo(name = "body_location_catalog_id")
+    val bodyLocationCatalogId: Long? = null
 )

@@ -98,6 +98,81 @@ class CreateIngestionEventUseCaseTest {
         assertEquals(3, success.value.quantityLevel)
         assertEquals(1, repository.savedCommands.size)
     }
+
+    @Test
+    fun rejects_inconsistent_reusable_identity_before_hitting_repository() = runBlocking {
+        val repository = FakeIngestionRepository()
+        val useCase = CreateIngestionEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow)
+        )
+
+        val result = useCase(
+            CreateIngestionEventCommand(
+                itemName = "Oatmeal",
+                quantityLevel = 3,
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.INGREDIENT,
+                reusableEntityId = null
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Choose a valid reusable item or clear the selection.", error.fieldErrors["itemName"])
+        assertTrue(repository.savedCommands.isEmpty())
+    }
+
+    @Test
+    fun passes_valid_reusable_identity_through_to_repository() = runBlocking {
+        val repository = FakeIngestionRepository()
+        val useCase = CreateIngestionEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow)
+        )
+
+        val result = useCase(
+            CreateIngestionEventCommand(
+                itemName = "Oat milk",
+                quantityLevel = 2,
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.INGREDIENT,
+                reusableEntityId = 11L
+            )
+        )
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(ReusableEntityKind.INGREDIENT, repository.savedCommands.single().reusableEntityKind)
+        assertEquals(11L, repository.savedCommands.single().reusableEntityId)
+    }
+
+    @Test
+    fun rejects_missing_reusable_reference_before_hitting_repository() = runBlocking {
+        val repository = FakeIngestionRepository()
+        val useCase = CreateIngestionEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow),
+            reusableEntityExists = { _, _ -> false }
+        )
+
+        val result = useCase(
+            CreateIngestionEventCommand(
+                itemName = "Oat milk",
+                quantityLevel = 2,
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.INGREDIENT,
+                reusableEntityId = 11L
+            )
+        )
+
+        assertEquals(
+            DomainError.IntegrityError("Selected reusable item is no longer available."),
+            (result as AppResult.Error).error
+        )
+        assertTrue(repository.savedCommands.isEmpty())
+    }
 }
 
 private class FakeIngestionRepository : IngestionRepository {

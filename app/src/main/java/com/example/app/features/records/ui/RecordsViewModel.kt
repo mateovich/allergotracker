@@ -73,11 +73,7 @@ class RecordsViewModel(
                             title = record.title,
                             detailLabel = record.detailLabel,
                             occurredAtLabel = formatOccurredAt(record.occurredAtEpochMs),
-                            editRoute = when (record.eventType) {
-                                RecordEventType.INGESTION -> AppRoutes.editIngestion(record.sourceId)
-                                RecordEventType.EXPOSURE -> AppRoutes.editExposure(record.sourceId)
-                                RecordEventType.OUTBREAK -> AppRoutes.editOutbreak(record.sourceId)
-                            }
+                            detailRoute = AppRoutes.recordDetail(record.eventType, record.sourceId)
                         )
                     }
                 )
@@ -141,10 +137,10 @@ class RecordsViewModel(
             is RecordsUiIntent.OpenRecord -> {
                 val route = mutableState.value.records
                     .firstOrNull { it.id == intent.recordId }
-                    ?.editRoute
+                    ?.detailRoute
                     .orEmpty()
                 if (route.isNotBlank()) {
-                    effectChannel.trySend(RecordsUiEffect.NavigateToEditForm(route))
+                    effectChannel.trySend(RecordsUiEffect.NavigateToRecordDetail(route))
                 }
             }
         }

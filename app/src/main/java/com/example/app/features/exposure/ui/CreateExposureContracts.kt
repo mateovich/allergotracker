@@ -1,5 +1,7 @@
 package com.example.app.features.exposure.ui
 
+import com.example.app.features.eventcatalog.ui.ReusableEventCatalogOptionUiModel
+
 data class ExposureTimeOptionUiModel(
     val key: String,
     val label: String,
@@ -25,6 +27,11 @@ data class CreateExposureUiState(
     val isOccurredAtManuallyEdited: Boolean = false,
     val selectedTimePreset: ExposureTimePreset = ExposureTimePreset.NOW,
     val timeOptions: List<ExposureTimeOptionUiModel> = emptyList(),
+    val selectedExposureTypeCatalogId: Long? = null,
+    val selectedExposureTypeSummary: String? = null,
+    val availableExposureTypes: List<ReusableEventCatalogOptionUiModel> = emptyList(),
+    val filteredExposureTypes: List<ReusableEventCatalogOptionUiModel> = emptyList(),
+    val showCreateExposureTypeOption: Boolean = false,
     val exposureTypeError: String? = null,
     val occurredAtError: String? = null,
     val formMessage: String = "",
@@ -34,6 +41,9 @@ data class CreateExposureUiState(
 
 sealed interface CreateExposureUiIntent {
     data class UpdateExposureType(val value: String) : CreateExposureUiIntent
+    data class SelectExposureCatalogOption(val id: Long, val name: String) : CreateExposureUiIntent
+    data object UseTypedExposureType : CreateExposureUiIntent
+    data object ClearExposureCatalogSelection : CreateExposureUiIntent
     data class UpdateNotes(val value: String) : CreateExposureUiIntent
     data class UpdateOccurredAtInput(val value: String) : CreateExposureUiIntent
     data class SelectTimePreset(val preset: ExposureTimePreset) : CreateExposureUiIntent

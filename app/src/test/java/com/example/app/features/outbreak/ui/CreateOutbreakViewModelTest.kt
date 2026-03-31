@@ -2,6 +2,10 @@ package com.example.app.features.outbreak.ui
 
 import com.example.app.MainDispatcherRule
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.eventcatalog.domain.ObserveReusableEventCatalogUseCase
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalog
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogRepository
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
 import com.example.app.features.outbreak.domain.CreateOutbreakDefaultsUseCase
 import com.example.app.features.outbreak.domain.CreateOutbreakEventCommand
@@ -12,7 +16,9 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -105,7 +111,42 @@ class CreateOutbreakViewModelTest {
         assertEquals(expectedTimeLabel, viewModel.state.value.occurredAtLabel)
     }
 
-    private fun buildViewModel(): CreateOutbreakViewModel {
+    @Test
+    fun selecting_saved_catalog_values_keeps_both_references_ready_for_save() {
+        val viewModel = buildViewModel(
+            availableCatalog = listOf(
+                ReusableEventCatalog(
+                    id = 11L,
+                    kind = ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR,
+                    name = "Skin flare",
+                    usageCount = 4,
+                    createdAtEpochMs = fixedNow - 1000L,
+                    updatedAtEpochMs = fixedNow - 500L,
+                    lastUsedAtEpochMs = fixedNow - 500L
+                ),
+                ReusableEventCatalog(
+                    id = 12L,
+                    kind = ReusableEventCatalogKind.BODY_LOCATION,
+                    name = "Left arm",
+                    usageCount = 4,
+                    createdAtEpochMs = fixedNow - 1000L,
+                    updatedAtEpochMs = fixedNow - 500L,
+                    lastUsedAtEpochMs = fixedNow - 500L
+                )
+            )
+        )
+
+        viewModel.onIntent(CreateOutbreakUiIntent.SelectOutbreakDescriptorCatalogOption(11L, "Skin flare"))
+        viewModel.onIntent(CreateOutbreakUiIntent.SelectBodyLocationCatalogOption(12L, "Left arm"))
+
+        assertEquals(11L, viewModel.state.value.selectedOutbreakDescriptorCatalogId)
+        assertEquals(12L, viewModel.state.value.selectedBodyLocationCatalogId)
+        assertTrue(viewModel.state.value.canSave)
+    }
+
+    private fun buildViewModel(
+        availableCatalog: List<ReusableEventCatalog> = emptyList()
+    ): CreateOutbreakViewModel {
         val timeProvider = object : CurrentTimeProvider {
             override fun nowEpochMillis(): Long = fixedNow
         }
@@ -138,7 +179,30 @@ class CreateOutbreakViewModelTest {
                     }
                 },
                 currentTimeProvider = timeProvider
+            ),
+            observeReusableEventCatalogUseCase = ObserveReusableEventCatalogUseCase(
+                FakeOutbreakReusableEventCatalogRepository(availableCatalog)
             )
         )
+    }
+}
+
+private class FakeOutbreakReusableEventCatalogRepository(
+    private val entries: List<ReusableEventCatalog>
+) : ReusableEventCatalogRepository {
+    override fun observeCatalog(kind: ReusableEventCatalogKind): Flow<List<ReusableEventCatalog>> {
+        return flowOf(entries.filter { it.kind == kind })
+    }
+
+    override suspend fun getCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? {
+        return entries.firstOrNull { it.kind == kind && it.id == id }
+    }
+
+    override suspend fun existsCatalogEntry(kind: ReusableEventCatalogKind, id: Long): Boolean {
+        return entries.any { it.kind == kind && it.id == id }
+    }
+
+    override suspend fun ensureCatalogEntry(kind: ReusableEventCatalogKind, name: String): ReusableEventCatalog {
+        return entries.first { it.kind == kind && it.name == name }
     }
 }

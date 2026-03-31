@@ -1,5 +1,27 @@
 package com.example.app.features.ingestion.ui
 
+import com.example.app.features.ingestion.domain.ReusableEntityKind
+
+data class IngestionReusableSelectionResult(
+    val id: Long,
+    val name: String,
+    val kind: ReusableEntityKind
+)
+
+data class ReusableEntityOptionUiModel(
+    val id: Long,
+    val name: String,
+    val updatedAtEpochMs: Long
+)
+
+data class ReusableEntityPickerOptionUiModel(
+    val id: Long,
+    val name: String,
+    val kind: ReusableEntityKind,
+    val supportingLabel: String,
+    val updatedAtEpochMs: Long
+)
+
 data class QuantityOptionUiModel(
     val level: Int,
     val label: String
@@ -23,6 +45,13 @@ data class CreateIngestionUiState(
     val selectedTimePreset: IngestionTimePreset = IngestionTimePreset.NOW,
     val quantityOptions: List<QuantityOptionUiModel> = emptyList(),
     val selectedQuantityLevel: Int? = null,
+    val selectedReusableEntitySummary: String? = null,
+    val selectedReusableEntityId: Long? = null,
+    val selectedReusableEntityKind: ReusableEntityKind? = null,
+    val reusableSearchQuery: String = "",
+    val filteredReusableEntities: List<ReusableEntityPickerOptionUiModel> = emptyList(),
+    val availableIngredients: List<ReusableEntityOptionUiModel> = emptyList(),
+    val availableCompounds: List<ReusableEntityOptionUiModel> = emptyList(),
     val itemNameError: String? = null,
     val quantityError: String? = null,
     val occurredAtError: String? = null,
@@ -32,13 +61,20 @@ data class CreateIngestionUiState(
 )
 
 sealed interface CreateIngestionUiIntent {
+    data class UpdateReusableSearchQuery(val value: String) : CreateIngestionUiIntent
     data class UpdateItemName(val value: String) : CreateIngestionUiIntent
     data class UpdateNotes(val value: String) : CreateIngestionUiIntent
     data class SelectQuantityLevel(val level: Int) : CreateIngestionUiIntent
     data class SelectTimePreset(val preset: IngestionTimePreset) : CreateIngestionUiIntent
+    data class ApplyReusableSelection(val result: IngestionReusableSelectionResult) : CreateIngestionUiIntent
+    data class SelectReusableEntity(val result: IngestionReusableSelectionResult) : CreateIngestionUiIntent
+    data object CreateNewIngredient : CreateIngestionUiIntent
+    data object CreateNewCompound : CreateIngestionUiIntent
     data object Save : CreateIngestionUiIntent
 }
 
 sealed interface CreateIngestionUiEffect {
     data object NavigateToRecords : CreateIngestionUiEffect
+    data object NavigateToCreateIngredient : CreateIngestionUiEffect
+    data object NavigateToCreateCompound : CreateIngestionUiEffect
 }

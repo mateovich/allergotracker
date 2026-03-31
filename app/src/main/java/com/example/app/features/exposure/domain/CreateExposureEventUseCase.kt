@@ -6,7 +6,8 @@ import com.example.app.features.ingestion.domain.CurrentTimeProvider
 
 class CreateExposureEventUseCase(
     private val repository: ExposureRepository,
-    private val currentTimeProvider: CurrentTimeProvider
+    private val currentTimeProvider: CurrentTimeProvider,
+    private val exposureCatalogExists: suspend (Long) -> Boolean = { false }
 ) {
     suspend operator fun invoke(command: CreateExposureEventCommand): AppResult<ExposureEvent> {
         val sanitizedCommand = command.copy(
@@ -21,6 +22,10 @@ class CreateExposureEventUseCase(
                 put("occurredAtEpochMs", "Choose a valid time.")
             } else if (sanitizedCommand.occurredAtEpochMs > currentTimeProvider.nowEpochMillis()) {
                 put("occurredAtEpochMs", "Time cannot be in the future.")
+            }
+            val catalogId = sanitizedCommand.exposureTypeCatalogId
+            if (catalogId != null && !exposureCatalogExists(catalogId)) {
+                put("exposureType", "Choose a saved exposure type that still exists.")
             }
         }
 

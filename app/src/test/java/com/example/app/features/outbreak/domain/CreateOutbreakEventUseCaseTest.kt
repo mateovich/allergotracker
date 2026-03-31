@@ -99,6 +99,33 @@ class CreateOutbreakEventUseCaseTest {
         assertEquals("Left arm", repository.savedCommands.single().bodyLocation)
         assertEquals("after workout", repository.savedCommands.single().notes)
     }
+
+    @Test
+    fun rejects_missing_saved_catalog_references_before_repository_write() = runBlocking {
+        val repository = FakeOutbreakRepository()
+        val useCase = CreateOutbreakEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow),
+            outbreakDescriptorCatalogExists = { false },
+            bodyLocationCatalogExists = { false }
+        )
+
+        val result = useCase(
+            CreateOutbreakEventCommand(
+                outbreakDescriptor = "Rash flare",
+                bodyLocation = "Left arm",
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                outbreakDescriptorCatalogId = 7L,
+                bodyLocationCatalogId = 8L
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Choose a saved outbreak descriptor that still exists.", error.fieldErrors["outbreakDescriptor"])
+        assertEquals("Choose a saved body location that still exists.", error.fieldErrors["bodyLocation"])
+        assertTrue(repository.savedCommands.isEmpty())
+    }
 }
 
 private class FakeOutbreakRepository : OutbreakRepository {

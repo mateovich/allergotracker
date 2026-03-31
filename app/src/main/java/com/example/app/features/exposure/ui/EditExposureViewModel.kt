@@ -4,6 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.eventcatalog.domain.ObserveReusableEventCatalogUseCase
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.domain.emptyObserveReusableEventCatalogUseCase
+import com.example.app.features.eventcatalog.ui.ReusableEventCatalogOptionUiModel
+import com.example.app.features.eventcatalog.ui.filterForQuery
+import com.example.app.features.eventcatalog.ui.hasExactName
 import com.example.app.features.exposure.domain.DeleteExposureEventUseCase
 import com.example.app.features.exposure.domain.GetExposureEventUseCase
 import com.example.app.features.exposure.domain.UpdateExposureEventCommand
@@ -26,7 +32,8 @@ class EditExposureViewModel(
     private val getExposureEventUseCase: GetExposureEventUseCase,
     private val deleteExposureEventUseCase: DeleteExposureEventUseCase,
     private val updateExposureEventUseCase: UpdateExposureEventUseCase,
-    private val currentTimeProvider: CurrentTimeProvider
+    private val currentTimeProvider: CurrentTimeProvider,
+    private val observeReusableEventCatalogUseCase: ObserveReusableEventCatalogUseCase = emptyObserveReusableEventCatalogUseCase()
 ) : ViewModel() {
     private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
     private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
@@ -40,16 +47,67 @@ class EditExposureViewModel(
     private val effectChannel = Channel<EditExposureUiEffect>(capacity = Channel.BUFFERED)
     val effects = effectChannel.receiveAsFlow()
 
+    init {
+        viewModelScope.launch {
+            observeReusableEventCatalogUseCase(ReusableEventCatalogKind.EXPOSURE_TYPE).collect { entries ->
+                updateState {
+                    it.copy(
+                        availableExposureTypes = entries.map { entry ->
+                            ReusableEventCatalogOptionUiModel(
+                                id = entry.id,
+                                name = entry.name,
+                                kind = entry.kind,
+                                usageCount = entry.usageCount,
+                                lastUsedAtEpochMs = entry.lastUsedAtEpochMs,
+                                updatedAtEpochMs = entry.updatedAtEpochMs
+                            )
+                        }
+                    ).withFilteredExposureTypes()
+                }
+            }
+        }
+    }
+
     fun onIntent(intent: EditExposureUiIntent) {
         when (intent) {
             EditExposureUiIntent.Load -> loadIfNeeded()
             is EditExposureUiIntent.UpdateExposureType -> updateState {
                 it.copy(
                     exposureType = intent.value,
+                    selectedExposureTypeCatalogId = null,
+                    selectedExposureTypeSummary = null,
                     exposureTypeError = null,
                     formMessage = "",
                     canSave = intent.value.isNotBlank()
-                )
+                ).withFilteredExposureTypes()
+            }
+            is EditExposureUiIntent.SelectExposureCatalogOption -> updateState {
+                it.copy(
+                    exposureType = intent.name,
+                    selectedExposureTypeCatalogId = intent.id,
+                    selectedExposureTypeSummary = "Saved exposure type selected: ${intent.name}",
+                    exposureTypeError = null,
+                    formMessage = "",
+                    canSave = intent.name.isNotBlank()
+                ).withFilteredExposureTypes()
+            }
+            EditExposureUiIntent.UseTypedExposureType -> updateState {
+                it.copy(
+                    selectedExposureTypeCatalogId = null,
+                    selectedExposureTypeSummary = "New exposure type will be saved locally.",
+                    exposureTypeError = null,
+                    formMessage = "",
+                    canSave = it.exposureType.isNotBlank()
+                ).withFilteredExposureTypes()
+            }
+            EditExposureUiIntent.ClearExposureCatalogSelection -> updateState {
+                it.copy(
+                    selectedExposureTypeCatalogId = null,
+                    selectedExposureTypeSummary = null,
+                    exposureTypeError = null,
+                    formMessage = "",
+                    canSave = it.exposureType.isNotBlank()
+                ).withFilteredExposureTypes()
             }
             is EditExposureUiIntent.UpdateNotes -> updateState { it.copy(notes = intent.value) }
             is EditExposureUiIntent.UpdateOccurredAtInput -> {
@@ -100,10 +158,14 @@ class EditExposureViewModel(
                             occurredAtEpochMs = event.occurredAtEpochMs,
                             occurredAtInput = formatDateTimeInput(event.occurredAtEpochMs),
                             occurredAtLabel = formatTime(event.occurredAtEpochMs),
+                            selectedExposureTypeCatalogId = event.exposureTypeCatalogId,
+                            selectedExposureTypeSummary = event.exposureTypeCatalogId?.let { _ ->
+                                "Saved exposure type selected: ${event.exposureType}"
+                            },
                             isLoading = false,
                             canSave = event.exposureType.isNotBlank(),
                             canDelete = event.exposureType.isNotBlank()
-                        )
+                        ).withFilteredExposureTypes()
                     }
                 }
                 is AppResult.Error -> updateState { it.copy(isLoading = false, formMessage = result.error.message) }
@@ -133,7 +195,8 @@ class EditExposureViewModel(
                         id = recordId,
                         exposureType = currentState.exposureType,
                         occurredAtEpochMs = parsedOccurredAt,
-                        notes = currentState.notes
+                        notes = currentState.notes,
+                        exposureTypeCatalogId = currentState.selectedExposureTypeCatalogId
                     )
                 )
             ) {
@@ -159,12 +222,7 @@ class EditExposureViewModel(
 
     private fun delete() {
         val currentState = mutableState.value
-        if (
-            !currentState.isDeleteConfirmationVisible ||
-            currentState.isDeleting ||
-            currentState.isSaving ||
-            currentState.isLoading
-        ) return
+        if (!currentState.isDeleteConfirmationVisible || currentState.isDeleting || currentState.isSaving || currentState.isLoading) return
         updateState {
             it.copy(
                 isDeleting = true,
@@ -220,5 +278,13 @@ class EditExposureViewModel(
             is DomainError.ValidationError -> fieldErrors[key]
             else -> null
         }
+    }
+
+    private fun EditExposureUiState.withFilteredExposureTypes(): EditExposureUiState {
+        val filteredOptions = availableExposureTypes.filterForQuery(exposureType)
+        return copy(
+            filteredExposureTypes = filteredOptions,
+            showCreateExposureTypeOption = exposureType.trim().isNotBlank() && !availableExposureTypes.hasExactName(exposureType)
+        )
     }
 }
