@@ -5,7 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -17,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
@@ -33,6 +37,7 @@ fun CreateExposureScreen(
     viewModel: CreateExposureViewModel = viewModel(factory = viewModelFactory)
 ) {
     val state by viewModel.state.collectAsState()
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collectLatest { effect ->
@@ -46,6 +51,8 @@ fun CreateExposureScreen(
         Column(
             modifier = contentModifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
                 .padding(16.dp)
                 .testTag("create-exposure-form-screen"),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -166,7 +173,10 @@ fun CreateExposureScreen(
             }
 
             Button(
-                onClick = { viewModel.onIntent(CreateExposureUiIntent.Save) },
+                onClick = {
+                    focusManager.clearFocus(force = true)
+                    viewModel.onIntent(CreateExposureUiIntent.Save)
+                },
                 enabled = !state.isSaving,
                 modifier = Modifier
                     .fillMaxWidth()

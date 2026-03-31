@@ -60,6 +60,21 @@ class RoomReusableEventCatalogRepository(
         val id = eventCatalogDao.insert(entity)
         return entity.copy(id = id).toDomain()
     }
+
+    override suspend fun touchCatalogEntry(
+        kind: ReusableEventCatalogKind,
+        id: Long
+    ): ReusableEventCatalog? {
+        val existing = eventCatalogDao.findById(kind.storageValue, id) ?: return null
+        val now = nowEpochMillis()
+        val updated = existing.copy(
+            usageCount = existing.usageCount + 1,
+            updatedAtEpochMs = now,
+            lastUsedAtEpochMs = now
+        )
+        eventCatalogDao.update(updated)
+        return updated.toDomain()
+    }
 }
 
 private fun ReusableEventCatalogEntity.toDomain(): ReusableEventCatalog {

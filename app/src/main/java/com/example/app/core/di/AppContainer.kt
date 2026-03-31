@@ -14,6 +14,7 @@ import com.example.app.core.database.migrations.Migration_7_8
 import com.example.app.core.database.migrations.Migration_8_9
 import com.example.app.core.database.migrations.Migration_9_10
 import com.example.app.core.database.migrations.Migration_10_11
+import com.example.app.core.database.migrations.Migration_11_12
 import com.example.app.features.compounds.data.RoomReusableCompoundRepository
 import com.example.app.features.compounds.domain.CreateReusableCompoundUseCase
 import com.example.app.features.compounds.domain.ObserveReusableCompoundsUseCase
@@ -73,7 +74,7 @@ class AppContainer(appContext: Context) {
         appContext,
         AppDatabase::class.java,
         "app_database"
-    ).addMigrations(Migration_1_2, Migration_2_3, Migration_3_4, Migration_4_5, Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11).build()
+    ).addMigrations(Migration_1_2, Migration_2_3, Migration_3_4, Migration_4_5, Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12).build()
 
     private val homeDao: HomeDao = appDatabase.homeDao()
     private val ingestionEventDao = appDatabase.ingestionEventDao()

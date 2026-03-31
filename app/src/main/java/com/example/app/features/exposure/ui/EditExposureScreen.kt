@@ -5,7 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -21,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
@@ -37,6 +41,7 @@ fun EditExposureScreen(
     viewModel: EditExposureViewModel = viewModel(factory = viewModelFactory)
 ) {
     val state by viewModel.state.collectAsState()
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(viewModel) {
         viewModel.onIntent(EditExposureUiIntent.Load)
@@ -75,7 +80,12 @@ fun EditExposureScreen(
         }
 
         Column(
-            modifier = contentModifier.fillMaxSize().padding(16.dp).testTag("edit-exposure-form-screen"),
+            modifier = contentModifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
+                .padding(16.dp)
+                .testTag("edit-exposure-form-screen"),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (state.isDeleteConfirmationVisible) {
@@ -199,14 +209,20 @@ fun EditExposureScreen(
                 Text(text = state.formMessage, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("edit-exposure-form-message"))
             }
             Button(
-                onClick = { viewModel.onIntent(EditExposureUiIntent.Save) },
+                onClick = {
+                    focusManager.clearFocus(force = true)
+                    viewModel.onIntent(EditExposureUiIntent.Save)
+                },
                 enabled = state.canSave && !state.isSaving && !state.isDeleting,
                 modifier = Modifier.fillMaxWidth().testTag("edit-exposure-save")
             ) {
                 Text(if (state.isSaving) "Saving..." else "Save changes")
             }
             OutlinedButton(
-                onClick = { viewModel.onIntent(EditExposureUiIntent.ShowDeleteConfirmation) },
+                onClick = {
+                    focusManager.clearFocus(force = true)
+                    viewModel.onIntent(EditExposureUiIntent.ShowDeleteConfirmation)
+                },
                 enabled = state.canDelete && !state.isSaving && !state.isDeleting,
                 modifier = Modifier.fillMaxWidth().testTag("edit-exposure-delete")
             ) {

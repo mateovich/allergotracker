@@ -367,4 +367,8 @@ private class FakeEditExposureReusableEventCatalogRepository(
     override suspend fun ensureCatalogEntry(kind: ReusableEventCatalogKind, name: String): ReusableEventCatalog {
         return entries.first { it.kind == kind && it.name == name }
     }
+
+    override suspend fun touchCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? {
+        return entries.firstOrNull { it.kind == kind && it.id == id }
+    }
 }

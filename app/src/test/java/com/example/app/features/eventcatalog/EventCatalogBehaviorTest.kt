@@ -82,6 +82,29 @@ class EventCatalogBehaviorTest {
         assertEquals("left arm", dao.inserted.single().normalizedName)
     }
 
+    @Test
+    fun touch_catalog_entry_updates_usage_and_last_used() = runBlocking {
+        val existing = ReusableEventCatalogEntity(
+            id = 8L,
+            kind = ReusableEventCatalogKind.EXPOSURE_TYPE.storageValue,
+            name = "Pollen",
+            normalizedName = "pollen",
+            usageCount = 2,
+            createdAtEpochMs = 10L,
+            updatedAtEpochMs = 10L,
+            lastUsedAtEpochMs = 10L
+        )
+        val dao = FakeReusableEventCatalogDao(existingById = existing)
+        val repository = RoomReusableEventCatalogRepository(dao) { 99L }
+
+        val result = repository.touchCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, 8L)
+
+        assertEquals(8L, result?.id)
+        assertEquals(3, result?.usageCount)
+        assertEquals(1, dao.updated.size)
+        assertEquals(99L, dao.updated.single().lastUsedAtEpochMs)
+    }
+
     private fun option(
         id: Long,
         name: String,
@@ -102,6 +125,7 @@ class EventCatalogBehaviorTest {
 
 private class FakeReusableEventCatalogDao(
     private val existingByNormalizedName: ReusableEventCatalogEntity? = null,
+    private val existingById: ReusableEventCatalogEntity? = null,
     private val insertResult: Long = 1L
 ) : ReusableEventCatalogDao {
     val inserted = mutableListOf<ReusableEventCatalogEntity>()
@@ -125,7 +149,9 @@ private class FakeReusableEventCatalogDao(
         }
     }
 
-    override suspend fun findById(kind: String, id: Long): ReusableEventCatalogEntity? = null
+    override suspend fun findById(kind: String, id: Long): ReusableEventCatalogEntity? {
+        return existingById?.takeIf { it.kind == kind && it.id == id }
+    }
 
     override suspend fun existsById(kind: String, id: Long): Boolean = false
 }

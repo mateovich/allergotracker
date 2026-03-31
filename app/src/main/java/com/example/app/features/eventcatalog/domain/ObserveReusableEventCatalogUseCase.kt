@@ -25,4 +25,6 @@ private object EmptyReusableEventCatalogRepository : ReusableEventCatalogReposit
     override suspend fun ensureCatalogEntry(kind: ReusableEventCatalogKind, name: String): ReusableEventCatalog {
         error("unused")
     }
+
+    override suspend fun touchCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? = null
 }

@@ -72,6 +72,31 @@ class RoomOutbreakRepositoryTest {
     }
 
     @Test
+    fun update_selected_catalog_references_refresh_usage_metrics() = runBlocking {
+        val existing = OutbreakEventEntity(9L, "Skin flare", "Arm", 1_700_000_000_000L, null, 1_700_000_100_000L, 11L, 12L)
+        val catalogRepository = FakeOutbreakCatalogRepository()
+        val repository = RoomOutbreakRepository(
+            outbreakEventDao = FakeOutbreakEventDaoForRepository(getByIdResult = existing),
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_123_000L },
+            eventCatalogRepository = catalogRepository
+        )
+
+        repository.updateOutbreak(
+            UpdateOutbreakEventCommand(
+                id = 9L,
+                outbreakDescriptor = "Skin flare",
+                bodyLocation = "Arm",
+                occurredAtEpochMs = 1_700_000_200_000L,
+                notes = "settling",
+                outbreakDescriptorCatalogId = 11L,
+                bodyLocationCatalogId = 12L
+            )
+        )
+
+        assertEquals(listOf(11L, 12L), catalogRepository.touchedIds)
+    }
+
+    @Test
     fun update_missing_selected_catalog_reference_returns_integrity_error() = runBlocking {
         val existing = OutbreakEventEntity(9L, "Skin flare", "Arm", 1_700_000_000_000L, null, 1_700_000_100_000L, 11L, 12L)
         val repository = RoomOutbreakRepository(
@@ -157,6 +182,8 @@ class RoomOutbreakRepositoryTest {
 }
 
 private class FakeOutbreakCatalogRepository : ReusableEventCatalogRepository {
+    val touchedIds = mutableListOf<Long>()
+
     override fun observeCatalog(kind: ReusableEventCatalogKind): Flow<List<ReusableEventCatalog>> = flowOf(emptyList())
 
     override suspend fun getCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? {
@@ -189,6 +216,11 @@ private class FakeOutbreakCatalogRepository : ReusableEventCatalogRepository {
             lastUsedAtEpochMs = 1L
         )
     }
+
+    override suspend fun touchCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? {
+        touchedIds += id
+        return getCatalogEntry(kind, id)
+    }
 }
 
 private class MissingOutbreakCatalogRepository : ReusableEventCatalogRepository {
@@ -198,6 +230,8 @@ private class MissingOutbreakCatalogRepository : ReusableEventCatalogRepository 
     override suspend fun ensureCatalogEntry(kind: ReusableEventCatalogKind, name: String): ReusableEventCatalog {
         error("unused")
     }
+
+    override suspend fun touchCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? = null
 }
 
 private class FakeOutbreakEventDaoForRepository(

@@ -19,4 +19,9 @@ interface ReusableEventCatalogRepository {
         kind: ReusableEventCatalogKind,
         name: String
     ): ReusableEventCatalog
+
+    suspend fun touchCatalogEntry(
+        kind: ReusableEventCatalogKind,
+        id: Long
+    ): ReusableEventCatalog?
 }

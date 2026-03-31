@@ -108,7 +108,7 @@ class RoomExposureRepository(
         if (name.isBlank()) return null
         val repository = eventCatalogRepository ?: return selectedCatalogId
         if (selectedCatalogId != null) {
-            return repository.getCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, selectedCatalogId)?.id
+            return repository.touchCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, selectedCatalogId)?.id
                 ?: throw MissingReusableCatalogReferenceException("Saved exposure type no longer exists.")
         }
         return repository.ensureCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, name).id

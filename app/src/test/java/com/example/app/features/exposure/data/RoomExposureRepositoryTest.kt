@@ -69,6 +69,29 @@ class RoomExposureRepositoryTest {
     }
 
     @Test
+    fun update_selected_catalog_reference_refreshes_usage_metrics() = runBlocking {
+        val existing = ExposureEventEntity(5L, "Pollen", 1_700_000_000_000L, null, 1_700_000_100_000L, 9L)
+        val catalogRepository = FakeExposureCatalogRepository()
+        val repository = RoomExposureRepository(
+            exposureEventDao = FakeExposureEventDaoForRepository(getByIdResult = existing),
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_123_000L },
+            eventCatalogRepository = catalogRepository
+        )
+
+        repository.updateExposure(
+            UpdateExposureEventCommand(
+                id = 5L,
+                exposureType = "Pollen",
+                occurredAtEpochMs = 1_700_000_200_000L,
+                notes = "indoors",
+                exposureTypeCatalogId = 9L
+            )
+        )
+
+        assertEquals(listOf(9L), catalogRepository.touchedIds)
+    }
+
+    @Test
     fun update_missing_selected_catalog_reference_returns_integrity_error() = runBlocking {
         val existing = ExposureEventEntity(5L, "Pollen", 1_700_000_000_000L, null, 1_700_000_100_000L, 9L)
         val repository = RoomExposureRepository(
@@ -153,6 +176,7 @@ class RoomExposureRepositoryTest {
 
 private class FakeExposureCatalogRepository : ReusableEventCatalogRepository {
     val ensureRequests = mutableListOf<String>()
+    val touchedIds = mutableListOf<Long>()
 
     override fun observeCatalog(kind: ReusableEventCatalogKind): Flow<List<ReusableEventCatalog>> = flowOf(emptyList())
 
@@ -182,6 +206,11 @@ private class FakeExposureCatalogRepository : ReusableEventCatalogRepository {
             lastUsedAtEpochMs = 1L
         )
     }
+
+    override suspend fun touchCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? {
+        touchedIds += id
+        return getCatalogEntry(kind, id)
+    }
 }
 
 private class MissingExposureCatalogRepository : ReusableEventCatalogRepository {
@@ -191,6 +220,8 @@ private class MissingExposureCatalogRepository : ReusableEventCatalogRepository 
     override suspend fun ensureCatalogEntry(kind: ReusableEventCatalogKind, name: String): ReusableEventCatalog {
         error("unused")
     }
+
+    override suspend fun touchCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? = null
 }
 
 private class FakeExposureEventDaoForRepository(

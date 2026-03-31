@@ -137,7 +137,7 @@ class RoomOutbreakRepository(
         if (name.isBlank()) return null
         val repository = eventCatalogRepository ?: return selectedCatalogId
         if (selectedCatalogId != null) {
-            return repository.getCatalogEntry(kind, selectedCatalogId)?.id
+            return repository.touchCatalogEntry(kind, selectedCatalogId)?.id
                 ?: throw MissingReusableCatalogReferenceException(
                     when (kind) {
                         ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR -> "Saved outbreak descriptor no longer exists."
