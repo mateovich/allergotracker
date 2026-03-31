@@ -823,7 +823,7 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
-    fun migration_9_10_merges_case_only_duplicates_before_creating_reusable_event_catalog_rows() {
+    fun migration_9_10_merges_case_and_spacing_duplicates_before_creating_reusable_event_catalog_rows() {
         val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
         val dbName = "migration-9-10-duplicates-test"
         val dbFile = appContext.getDatabasePath(dbName)
@@ -907,6 +907,8 @@ class AppDatabaseMigrationTest {
             database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_reusable_compounds_normalized_name ON reusable_compounds(normalized_name)")
             database.execSQL("INSERT INTO exposure_events(id, exposure_type, occurred_at_epoch_ms, notes, created_at_epoch_ms) VALUES (1, 'Pollen', 1000, NULL, 1000)")
             database.execSQL("INSERT INTO exposure_events(id, exposure_type, occurred_at_epoch_ms, notes, created_at_epoch_ms) VALUES (2, '  pollen  ', 2000, NULL, 2000)")
+            database.execSQL("INSERT INTO exposure_events(id, exposure_type, occurred_at_epoch_ms, notes, created_at_epoch_ms) VALUES (3, 'Pollen   dust', 3000, NULL, 3000)")
+            database.execSQL("INSERT INTO exposure_events(id, exposure_type, occurred_at_epoch_ms, notes, created_at_epoch_ms) VALUES (4, 'Pollen dust', 4000, NULL, 4000)")
             database.version = 9
         }
 
@@ -918,13 +920,21 @@ class AppDatabaseMigrationTest {
             .use { migratedDb ->
                 migratedDb.query("SELECT COUNT(*) FROM reusable_event_catalog WHERE kind = 'exposure_type'").use { cursor ->
                     assertTrue(cursor.moveToFirst())
-                    assertEquals(1, cursor.getInt(0))
+                    assertEquals(2, cursor.getInt(0))
                 }
-                migratedDb.query("SELECT usage_count FROM reusable_event_catalog WHERE kind = 'exposure_type'").use { cursor ->
+                migratedDb.query("SELECT usage_count FROM reusable_event_catalog WHERE kind = 'exposure_type' AND normalized_name = 'pollen'").use { cursor ->
                     assertTrue(cursor.moveToFirst())
                     assertEquals(2, cursor.getInt(0))
                 }
-                migratedDb.query("SELECT COUNT(DISTINCT exposure_type_catalog_id) FROM exposure_events").use { cursor ->
+                migratedDb.query("SELECT usage_count FROM reusable_event_catalog WHERE kind = 'exposure_type' AND normalized_name = 'pollen dust'").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(2, cursor.getInt(0))
+                }
+                migratedDb.query("SELECT COUNT(DISTINCT exposure_type_catalog_id) FROM exposure_events WHERE id IN (1, 2)").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(1, cursor.getInt(0))
+                }
+                migratedDb.query("SELECT COUNT(DISTINCT exposure_type_catalog_id) FROM exposure_events WHERE id IN (3, 4)").use { cursor ->
                     assertTrue(cursor.moveToFirst())
                     assertEquals(1, cursor.getInt(0))
                 }

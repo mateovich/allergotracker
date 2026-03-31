@@ -2,6 +2,8 @@ package com.example.app.core.database.migrations
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.app.features.eventcatalog.domain.canonicalizeReusableEventCatalogName
+import com.example.app.features.eventcatalog.domain.normalizeReusableEventCatalogName
 
 val Migration_9_10 = object : Migration(9, 10) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -55,27 +57,58 @@ private fun backfillCatalogForColumn(
     targetColumn: String,
     kind: String
 ) {
+    val aggregatedEntries = linkedMapOf<String, AggregatedCatalogBackfill>()
     db.query(
-        "SELECT LOWER(TRIM($nameColumn)) AS normalized_name, MIN(TRIM($nameColumn)) AS canonical_name, COUNT(*) AS usage_count, MAX(occurred_at_epoch_ms) AS last_used_at_epoch_ms FROM $sourceTable WHERE TRIM($nameColumn) != '' GROUP BY LOWER(TRIM($nameColumn))"
+        "SELECT $nameColumn, occurred_at_epoch_ms FROM $sourceTable WHERE TRIM($nameColumn) != '' ORDER BY id ASC"
     ).use { cursor ->
-        val canonicalNameIndex = cursor.getColumnIndexOrThrow("canonical_name")
-        val normalizedNameIndex = cursor.getColumnIndexOrThrow("normalized_name")
-        val usageCountIndex = cursor.getColumnIndexOrThrow("usage_count")
-        val lastUsedAtIndex = cursor.getColumnIndexOrThrow("last_used_at_epoch_ms")
+        val nameIndex = cursor.getColumnIndexOrThrow(nameColumn)
+        val occurredAtIndex = cursor.getColumnIndexOrThrow("occurred_at_epoch_ms")
         while (cursor.moveToNext()) {
-            val canonicalName = cursor.getString(canonicalNameIndex)
-            val normalizedName = cursor.getString(normalizedNameIndex)
-            val usageCount = cursor.getInt(usageCountIndex)
-            val lastUsedAt = cursor.getLong(lastUsedAtIndex)
-            db.execSQL(
-                "INSERT INTO reusable_event_catalog(kind, name, normalized_name, usage_count, created_at_epoch_ms, updated_at_epoch_ms, last_used_at_epoch_ms) VALUES(?, ?, ?, ?, ?, ?, ?)",
-                arrayOf(kind, canonicalName, normalizedName, usageCount, lastUsedAt, lastUsedAt, lastUsedAt)
-            )
+            val rawName = cursor.getString(nameIndex)
+            val canonicalName = canonicalizeReusableEventCatalogName(rawName)
+            val normalizedName = normalizeReusableEventCatalogName(rawName)
+            val occurredAt = cursor.getLong(occurredAtIndex)
+            val current = aggregatedEntries[normalizedName]
+            if (current == null) {
+                aggregatedEntries[normalizedName] = AggregatedCatalogBackfill(
+                    canonicalName = canonicalName,
+                    usageCount = 1,
+                    lastUsedAtEpochMs = occurredAt
+                )
+            } else {
+                aggregatedEntries[normalizedName] = current.copy(
+                    usageCount = current.usageCount + 1,
+                    lastUsedAtEpochMs = maxOf(current.lastUsedAtEpochMs, occurredAt)
+                )
+            }
         }
     }
 
-    db.execSQL(
-        "UPDATE $sourceTable SET $targetColumn = (SELECT catalog.id FROM reusable_event_catalog AS catalog WHERE catalog.kind = ? AND catalog.normalized_name = LOWER(TRIM($nameColumn))) WHERE TRIM($nameColumn) != ''",
-        arrayOf(kind)
-    )
+    aggregatedEntries.forEach { (normalizedName, entry) ->
+        db.execSQL(
+            "INSERT INTO reusable_event_catalog(kind, name, normalized_name, usage_count, created_at_epoch_ms, updated_at_epoch_ms, last_used_at_epoch_ms) VALUES(?, ?, ?, ?, ?, ?, ?)",
+            arrayOf<Any>(kind, entry.canonicalName, normalizedName, entry.usageCount, entry.lastUsedAtEpochMs, entry.lastUsedAtEpochMs, entry.lastUsedAtEpochMs)
+        )
+    }
+
+    db.query(
+        "SELECT id, $nameColumn FROM $sourceTable WHERE TRIM($nameColumn) != ''"
+    ).use { cursor ->
+        val idIndex = cursor.getColumnIndexOrThrow("id")
+        val nameIndex = cursor.getColumnIndexOrThrow(nameColumn)
+        while (cursor.moveToNext()) {
+            val rowId = cursor.getLong(idIndex)
+            val normalizedName = normalizeReusableEventCatalogName(cursor.getString(nameIndex))
+            db.execSQL(
+                "UPDATE $sourceTable SET $targetColumn = (SELECT catalog.id FROM reusable_event_catalog AS catalog WHERE catalog.kind = ? AND catalog.normalized_name = ?) WHERE id = ?",
+                arrayOf<Any>(kind, normalizedName, rowId)
+            )
+        }
+    }
 }
+
+private data class AggregatedCatalogBackfill(
+    val canonicalName: String,
+    val usageCount: Int,
+    val lastUsedAtEpochMs: Long
+)

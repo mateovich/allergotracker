@@ -3,6 +3,8 @@ package com.example.app.features.eventcatalog.data
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalog
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalogRepository
+import com.example.app.features.eventcatalog.domain.canonicalizeReusableEventCatalogName
+import com.example.app.features.eventcatalog.domain.normalizeReusableEventCatalogName
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -34,12 +36,13 @@ class RoomReusableEventCatalogRepository(
         kind: ReusableEventCatalogKind,
         name: String
     ): ReusableEventCatalog {
-        val trimmedName = name.trim()
-        val normalizedName = trimmedName.normalizedKey()
+        val canonicalName = canonicalizeReusableEventCatalogName(name)
+        val normalizedName = normalizeReusableEventCatalogName(name)
         val now = nowEpochMillis()
         val existing = eventCatalogDao.findByNormalizedName(kind.storageValue, normalizedName)
         if (existing != null) {
             val updated = existing.copy(
+                name = canonicalName,
                 usageCount = existing.usageCount + 1,
                 updatedAtEpochMs = now,
                 lastUsedAtEpochMs = now
@@ -50,7 +53,7 @@ class RoomReusableEventCatalogRepository(
 
         val entity = ReusableEventCatalogEntity(
             kind = kind.storageValue,
-            name = trimmedName,
+            name = canonicalName,
             normalizedName = normalizedName,
             usageCount = 1,
             createdAtEpochMs = now,
@@ -89,5 +92,3 @@ private fun ReusableEventCatalogEntity.toDomain(): ReusableEventCatalog {
         lastUsedAtEpochMs = lastUsedAtEpochMs
     )
 }
-
-private fun String.normalizedKey(): String = trim().lowercase()

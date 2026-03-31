@@ -2,6 +2,8 @@ package com.example.app.features.outbreak.domain
 
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalog
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -124,6 +126,45 @@ class CreateOutbreakEventUseCaseTest {
         val error = (result as AppResult.Error).error as DomainError.ValidationError
         assertEquals("Choose a saved outbreak descriptor that still exists.", error.fieldErrors["outbreakDescriptor"])
         assertEquals("Choose a saved body location that still exists.", error.fieldErrors["bodyLocation"])
+        assertTrue(repository.savedCommands.isEmpty())
+    }
+
+    @Test
+    fun rejects_mismatched_saved_catalog_labels_before_repository_write() = runBlocking {
+        val repository = FakeOutbreakRepository()
+        val useCase = CreateOutbreakEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow),
+            outbreakDescriptorCatalogExists = { true },
+            bodyLocationCatalogExists = { true },
+            getOutbreakDescriptorCatalogEntry = {
+                ReusableEventCatalog(it, ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR, "Skin flare", 1, 1L, 1L, 1L)
+            },
+            getBodyLocationCatalogEntry = {
+                ReusableEventCatalog(it, ReusableEventCatalogKind.BODY_LOCATION, "Left arm", 1, 1L, 1L, 1L)
+            }
+        )
+
+        val result = useCase(
+            CreateOutbreakEventCommand(
+                outbreakDescriptor = "Heat rash",
+                bodyLocation = "Right arm",
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                outbreakDescriptorCatalogId = 7L,
+                bodyLocationCatalogId = 8L
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals(
+            "Use the saved outbreak descriptor exactly as selected, or clear it before editing.",
+            error.fieldErrors["outbreakDescriptor"]
+        )
+        assertEquals(
+            "Use the saved body location exactly as selected, or clear it before editing.",
+            error.fieldErrors["bodyLocation"]
+        )
         assertTrue(repository.savedCommands.isEmpty())
     }
 }

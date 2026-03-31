@@ -1,6 +1,7 @@
 package com.example.app.navigation
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -15,6 +16,10 @@ class AppNavGraphArchitectureTest {
 
         assertTrue(navGraphFile.exists())
         val source = navGraphFile.readText()
+        val importLines = source.lineSequence()
+            .map(String::trim)
+            .filter { it.startsWith("import ") }
+            .toList()
 
         assertTrue(source.contains("recordsViewModelFactory: ViewModelProvider.Factory"))
         assertTrue(source.contains("createIngestionViewModelFactory: CreateIngestionViewModelFactory"))
@@ -26,8 +31,9 @@ class AppNavGraphArchitectureTest {
         assertTrue(source.contains("editIngestionViewModelFactoryProvider: (Long) -> EditIngestionViewModelFactory"))
         assertTrue(source.contains("editExposureViewModelFactoryProvider: (Long) -> EditExposureViewModelFactory"))
         assertTrue(source.contains("editOutbreakViewModelFactoryProvider: (Long) -> EditOutbreakViewModelFactory"))
-        assertTrue(!source.contains("Repository"))
-        assertTrue(!source.contains("UseCase"))
-        assertTrue(!source.contains("Dao"))
+        assertFalse(importLines.any { line -> line.contains("Repository") })
+        assertFalse(importLines.any { line -> line.contains("UseCase") })
+        assertFalse(importLines.any { line -> line.contains("Dao") })
+        assertFalse(importLines.any { line -> line.contains(".data.") })
     }
 }

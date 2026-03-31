@@ -6,6 +6,7 @@ import com.example.app.features.eventcatalog.data.RoomReusableEventCatalogReposi
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
 import com.example.app.features.eventcatalog.ui.ReusableEventCatalogOptionUiModel
 import com.example.app.features.eventcatalog.ui.filterForQuery
+import com.example.app.features.eventcatalog.ui.hasExactName
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
@@ -74,12 +75,22 @@ class EventCatalogBehaviorTest {
         val dao = FakeReusableEventCatalogDao(insertResult = 15L)
         val repository = RoomReusableEventCatalogRepository(dao) { 99L }
 
-        val result = repository.ensureCatalogEntry(ReusableEventCatalogKind.BODY_LOCATION, "  Left arm  ")
+        val result = repository.ensureCatalogEntry(ReusableEventCatalogKind.BODY_LOCATION, "  Left   arm  ")
 
         assertEquals(15L, result.id)
         assertEquals(1, dao.inserted.size)
         assertEquals("Left arm", dao.inserted.single().name)
         assertEquals("left arm", dao.inserted.single().normalizedName)
+    }
+
+    @Test
+    fun exact_name_and_filtering_use_same_whitespace_normalization_as_persistence() {
+        val options = listOf(
+            option(id = 1L, name = "Left arm")
+        )
+
+        assertTrue(options.hasExactName(" Left   arm "))
+        assertEquals(listOf(1L), options.filterForQuery("left   arm").map { it.id })
     }
 
     @Test

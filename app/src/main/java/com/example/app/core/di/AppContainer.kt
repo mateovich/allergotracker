@@ -130,6 +130,9 @@ class AppContainer(appContext: Context) {
         currentTimeProvider = systemCurrentTimeProvider,
         exposureCatalogExists = { catalogId ->
             reusableEventCatalogRepository.existsCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, catalogId)
+        },
+        getExposureCatalogEntry = { catalogId ->
+            reusableEventCatalogRepository.getCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, catalogId)
         }
     )
     private val getExposureEventUseCase = GetExposureEventUseCase(exposureRepository)
@@ -139,6 +142,9 @@ class AppContainer(appContext: Context) {
         systemCurrentTimeProvider,
         exposureCatalogExists = { catalogId ->
             reusableEventCatalogRepository.existsCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, catalogId)
+        },
+        getExposureCatalogEntry = { catalogId ->
+            reusableEventCatalogRepository.getCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, catalogId)
         }
     )
     private val createOutbreakDefaultsUseCase = CreateOutbreakDefaultsUseCase(systemCurrentTimeProvider)
@@ -150,6 +156,12 @@ class AppContainer(appContext: Context) {
         },
         bodyLocationCatalogExists = { catalogId ->
             reusableEventCatalogRepository.existsCatalogEntry(ReusableEventCatalogKind.BODY_LOCATION, catalogId)
+        },
+        getOutbreakDescriptorCatalogEntry = { catalogId ->
+            reusableEventCatalogRepository.getCatalogEntry(ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR, catalogId)
+        },
+        getBodyLocationCatalogEntry = { catalogId ->
+            reusableEventCatalogRepository.getCatalogEntry(ReusableEventCatalogKind.BODY_LOCATION, catalogId)
         }
     )
     private val getOutbreakEventUseCase = GetOutbreakEventUseCase(outbreakRepository)
@@ -162,6 +174,12 @@ class AppContainer(appContext: Context) {
         },
         bodyLocationCatalogExists = { catalogId ->
             reusableEventCatalogRepository.existsCatalogEntry(ReusableEventCatalogKind.BODY_LOCATION, catalogId)
+        },
+        getOutbreakDescriptorCatalogEntry = { catalogId ->
+            reusableEventCatalogRepository.getCatalogEntry(ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR, catalogId)
+        },
+        getBodyLocationCatalogEntry = { catalogId ->
+            reusableEventCatalogRepository.getCatalogEntry(ReusableEventCatalogKind.BODY_LOCATION, catalogId)
         }
     )
     private val createReusableIngredientUseCase = CreateReusableIngredientUseCase(reusableIngredientRepository)

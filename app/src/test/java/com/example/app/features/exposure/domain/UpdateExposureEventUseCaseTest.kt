@@ -2,6 +2,8 @@ package com.example.app.features.exposure.domain
 
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalog
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -50,6 +52,28 @@ class UpdateExposureEventUseCaseTest {
 
         val error = (result as AppResult.Error).error as DomainError.ValidationError
         assertEquals("Choose a saved exposure type that still exists.", error.fieldErrors["exposureType"])
+        assertTrue(repository.updatedCommands.isEmpty())
+    }
+
+    @Test
+    fun rejects_mismatched_saved_catalog_reference_without_updating_repository() = runBlocking {
+        val repository = FakeEditableExposureRepository()
+        val useCase = UpdateExposureEventUseCase(
+            repository,
+            FakeExposureCurrentTimeProvider(fixedNow),
+            exposureCatalogExists = { true },
+            getExposureCatalogEntry = {
+                ReusableEventCatalog(it, ReusableEventCatalogKind.EXPOSURE_TYPE, "Pollen", 1, 1L, 1L, 1L)
+            }
+        )
+
+        val result = useCase(UpdateExposureEventCommand(5L, "Dust", fixedNow, null, exposureTypeCatalogId = 77L))
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals(
+            "Use the saved exposure type exactly as selected, or clear it before editing.",
+            error.fieldErrors["exposureType"]
+        )
         assertTrue(repository.updatedCommands.isEmpty())
     }
 }

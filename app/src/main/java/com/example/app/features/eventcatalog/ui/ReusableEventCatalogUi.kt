@@ -1,6 +1,7 @@
 package com.example.app.features.eventcatalog.ui
 
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.domain.normalizeReusableEventCatalogName
 
 data class ReusableEventCatalogOptionUiModel(
     val id: Long,
@@ -12,9 +13,11 @@ data class ReusableEventCatalogOptionUiModel(
 )
 
 internal fun List<ReusableEventCatalogOptionUiModel>.filterForQuery(query: String): List<ReusableEventCatalogOptionUiModel> {
-    val normalizedQuery = query.trim().lowercase()
+    val normalizedQuery = normalizeReusableEventCatalogName(query)
     return asSequence()
-        .filter { option -> normalizedQuery.isBlank() || option.name.lowercase().contains(normalizedQuery) }
+        .filter { option ->
+            normalizedQuery.isBlank() || normalizeReusableEventCatalogName(option.name).contains(normalizedQuery)
+        }
         .sortedWith(
             compareBy<ReusableEventCatalogOptionUiModel> { option ->
                 option.relevanceBucket(normalizedQuery)
@@ -31,13 +34,13 @@ internal fun List<ReusableEventCatalogOptionUiModel>.filterForQuery(query: Strin
 }
 
 internal fun List<ReusableEventCatalogOptionUiModel>.hasExactName(query: String): Boolean {
-    val normalizedQuery = query.trim().lowercase()
+    val normalizedQuery = normalizeReusableEventCatalogName(query)
     if (normalizedQuery.isBlank()) return false
-    return any { option -> option.name.lowercase() == normalizedQuery }
+    return any { option -> normalizeReusableEventCatalogName(option.name) == normalizedQuery }
 }
 
 private fun ReusableEventCatalogOptionUiModel.relevanceBucket(normalizedQuery: String): Int {
-    val normalizedName = name.lowercase()
+    val normalizedName = normalizeReusableEventCatalogName(name)
     return when {
         normalizedQuery.isBlank() -> 0
         normalizedName == normalizedQuery -> 0
