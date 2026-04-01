@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -13,6 +14,12 @@ interface ReusableIngredientDao {
 
     @Query("SELECT * FROM reusable_ingredients WHERE normalized_name = :normalizedName LIMIT 1")
     suspend fun findByNormalizedName(normalizedName: String): ReusableIngredientEntity?
+
+    @Query("SELECT * FROM reusable_ingredients WHERE id = :id LIMIT 1")
+    suspend fun findById(id: Long): ReusableIngredientEntity?
+
+    @Update
+    suspend fun update(entity: ReusableIngredientEntity): Int
 
     @Query("SELECT EXISTS(SELECT 1 FROM reusable_ingredients WHERE id = :id)")
     suspend fun existsById(id: Long): Boolean

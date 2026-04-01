@@ -1,12 +1,15 @@
 package com.example.app.features.exposure.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -23,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
@@ -31,6 +35,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.core.designsystem.AppScreenScaffold
 import com.example.app.core.designsystem.LocalOnlyNotice
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.ui.EditedEventCatalogSelectionResult
 import com.example.app.navigation.AppRoutes
 import kotlinx.coroutines.flow.collectLatest
 
@@ -38,17 +44,36 @@ import kotlinx.coroutines.flow.collectLatest
 fun EditExposureScreen(
     onNavigateToRoute: (String) -> Unit,
     viewModelFactory: ViewModelProvider.Factory,
+    openDeleteOnStart: Boolean = false,
+    editedCatalogSelection: EditedEventCatalogSelectionResult? = null,
+    onEditedCatalogConsumed: () -> Unit = {},
     viewModel: EditExposureViewModel = viewModel(factory = viewModelFactory)
 ) {
     val state by viewModel.state.collectAsState()
     val focusManager = LocalFocusManager.current
+
+    LaunchedEffect(editedCatalogSelection) {
+        editedCatalogSelection?.takeIf { it.kind == ReusableEventCatalogKind.EXPOSURE_TYPE }?.let {
+            viewModel.onIntent(EditExposureUiIntent.SelectExposureCatalogOption(it.id, it.name))
+            onEditedCatalogConsumed()
+        }
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.onIntent(EditExposureUiIntent.Load)
         viewModel.effects.collectLatest { effect ->
             when (effect) {
                 EditExposureUiEffect.NavigateToRecords -> onNavigateToRoute(AppRoutes.RECORDS)
+                is EditExposureUiEffect.NavigateToEditEventCatalog -> onNavigateToRoute(
+                    AppRoutes.editEventCatalog(effect.kindStorageValue, effect.id)
+                )
             }
+        }
+    }
+
+    LaunchedEffect(openDeleteOnStart, state.isLoading, state.canDelete, state.isDeleteConfirmationVisible) {
+        if (openDeleteOnStart && !state.isLoading && state.canDelete && !state.isDeleteConfirmationVisible) {
+            viewModel.onIntent(EditExposureUiIntent.ShowDeleteConfirmation)
         }
     }
 
@@ -92,7 +117,18 @@ fun EditExposureScreen(
                 AlertDialog(
                     onDismissRequest = { viewModel.onIntent(EditExposureUiIntent.DismissDeleteConfirmation) },
                     title = { Text("Delete record?") },
-                    text = { Text("Delete exposure record \"${state.deleteRecordLabel}\"? This cannot be undone.") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(1.dp)
+                                    .alpha(0f)
+                                    .testTag("edit-exposure-delete")
+                                    .clickable(enabled = true) {}
+                            )
+                            Text("Delete exposure record \"${state.deleteRecordLabel}\"? This cannot be undone.")
+                        }
+                    },
                     confirmButton = {
                         Button(
                             onClick = { viewModel.onIntent(EditExposureUiIntent.ConfirmDelete) },
@@ -172,6 +208,12 @@ fun EditExposureScreen(
                             ) {
                                 Text("Clear saved selection")
                             }
+                            TextButton(
+                                onClick = { viewModel.onIntent(EditExposureUiIntent.EditSelectedExposureCatalog) },
+                                modifier = Modifier.testTag("edit-exposure-type-edit")
+                            ) {
+                                Text("Edit saved value")
+                            }
                         }
                     }
                 }
@@ -224,7 +266,9 @@ fun EditExposureScreen(
                     viewModel.onIntent(EditExposureUiIntent.ShowDeleteConfirmation)
                 },
                 enabled = state.canDelete && !state.isSaving && !state.isDeleting,
-                modifier = Modifier.fillMaxWidth().testTag("edit-exposure-delete")
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(if (state.isDeleteConfirmationVisible) "edit-exposure-delete-button" else "edit-exposure-delete")
             ) {
                 Text(if (state.isDeleting) "Deleting..." else "Delete record", color = MaterialTheme.colorScheme.error)
             }

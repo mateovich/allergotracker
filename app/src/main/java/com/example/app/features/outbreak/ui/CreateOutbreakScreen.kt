@@ -27,6 +27,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.core.designsystem.AppScreenScaffold
 import com.example.app.core.designsystem.LocalOnlyNotice
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.ui.EditedEventCatalogSelectionResult
 import com.example.app.navigation.AppRoutes
 import kotlinx.coroutines.flow.collectLatest
 
@@ -34,15 +36,36 @@ import kotlinx.coroutines.flow.collectLatest
 fun CreateOutbreakScreen(
     onNavigateToRoute: (String) -> Unit,
     viewModelFactory: ViewModelProvider.Factory,
+    editedCatalogSelection: EditedEventCatalogSelectionResult? = null,
+    onEditedCatalogConsumed: () -> Unit = {},
     viewModel: CreateOutbreakViewModel = viewModel(factory = viewModelFactory)
 ) {
     val state by viewModel.state.collectAsState()
     val focusManager = LocalFocusManager.current
 
+    LaunchedEffect(editedCatalogSelection) {
+        when (editedCatalogSelection?.kind) {
+            ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR -> {
+                viewModel.onIntent(CreateOutbreakUiIntent.SelectOutbreakDescriptorCatalogOption(editedCatalogSelection.id, editedCatalogSelection.name))
+                onEditedCatalogConsumed()
+            }
+
+            ReusableEventCatalogKind.BODY_LOCATION -> {
+                viewModel.onIntent(CreateOutbreakUiIntent.SelectBodyLocationCatalogOption(editedCatalogSelection.id, editedCatalogSelection.name))
+                onEditedCatalogConsumed()
+            }
+
+            else -> Unit
+        }
+    }
+
     LaunchedEffect(viewModel) {
         viewModel.effects.collectLatest { effect ->
             when (effect) {
                 CreateOutbreakUiEffect.NavigateToRecords -> onNavigateToRoute(AppRoutes.RECORDS)
+                is CreateOutbreakUiEffect.NavigateToEditEventCatalog -> onNavigateToRoute(
+                    AppRoutes.editEventCatalog(effect.kindStorageValue, effect.id)
+                )
             }
         }
     }
@@ -77,7 +100,8 @@ fun CreateOutbreakScreen(
                 onSelectOption = { id, name ->
                     viewModel.onIntent(CreateOutbreakUiIntent.SelectOutbreakDescriptorCatalogOption(id, name))
                 },
-                onClearSelection = { viewModel.onIntent(CreateOutbreakUiIntent.ClearOutbreakDescriptorCatalogSelection) }
+                onClearSelection = { viewModel.onIntent(CreateOutbreakUiIntent.ClearOutbreakDescriptorCatalogSelection) },
+                onEditSelection = { viewModel.onIntent(CreateOutbreakUiIntent.EditSelectedOutbreakDescriptorCatalog) }
             )
 
             OutbreakCatalogField(
@@ -98,7 +122,8 @@ fun CreateOutbreakScreen(
                 onSelectOption = { id, name ->
                     viewModel.onIntent(CreateOutbreakUiIntent.SelectBodyLocationCatalogOption(id, name))
                 },
-                onClearSelection = { viewModel.onIntent(CreateOutbreakUiIntent.ClearBodyLocationCatalogSelection) }
+                onClearSelection = { viewModel.onIntent(CreateOutbreakUiIntent.ClearBodyLocationCatalogSelection) },
+                onEditSelection = { viewModel.onIntent(CreateOutbreakUiIntent.EditSelectedBodyLocationCatalog) }
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -185,7 +210,8 @@ internal fun OutbreakCatalogField(
     onValueChange: (String) -> Unit,
     onCreateTyped: () -> Unit,
     onSelectOption: (Long, String) -> Unit,
-    onClearSelection: () -> Unit
+    onClearSelection: () -> Unit,
+    onEditSelection: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(text = title, style = MaterialTheme.typography.titleSmall)
@@ -234,6 +260,9 @@ internal fun OutbreakCatalogField(
                         modifier = Modifier.testTag(clearSelectionTag)
                     ) {
                         Text("Clear saved selection")
+                    }
+                    TextButton(onClick = onEditSelection, modifier = Modifier.testTag("$clearSelectionTag-edit")) {
+                        Text("Edit saved value")
                     }
                 }
             }

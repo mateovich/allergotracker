@@ -3,18 +3,28 @@ package com.example.app.navigation
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.NavType
+import androidx.navigation.NavHostController
 import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.lifecycle.SavedStateHandle
 import androidx.navigation.compose.rememberNavController
 import com.example.app.features.compounds.ui.CreateCompoundScreen
 import com.example.app.features.compounds.ui.CreateCompoundViewModelFactory
+import com.example.app.features.compounds.ui.EditCompoundScreen
+import com.example.app.features.compounds.ui.EditCompoundViewModelFactory
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.ui.EditReusableEventCatalogScreen
+import com.example.app.features.eventcatalog.ui.EditReusableEventCatalogViewModelFactory
+import com.example.app.features.eventcatalog.ui.EditedEventCatalogSelectionResult
 import com.example.app.features.exposure.ui.CreateExposureScreen
 import com.example.app.features.exposure.ui.CreateExposureViewModelFactory
 import com.example.app.features.exposure.ui.EditExposureScreen
 import com.example.app.features.exposure.ui.EditExposureViewModelFactory
 import com.example.app.features.ingredients.ui.CreateIngredientScreen
 import com.example.app.features.ingredients.ui.CreateIngredientViewModelFactory
+import com.example.app.features.ingredients.ui.EditIngredientScreen
+import com.example.app.features.ingredients.ui.EditIngredientViewModelFactory
 import com.example.app.features.ingestion.ui.CreateIngestionScreen
 import com.example.app.features.ingestion.ui.IngestionReusableSelectionResult
 import com.example.app.features.ingestion.ui.CreateIngestionViewModelFactory
@@ -38,6 +48,9 @@ fun AppNavGraph(
     createOutbreakViewModelFactory: CreateOutbreakViewModelFactory,
     createIngredientViewModelFactory: CreateIngredientViewModelFactory,
     createCompoundViewModelFactory: CreateCompoundViewModelFactory,
+    editIngredientViewModelFactoryProvider: (Long) -> EditIngredientViewModelFactory,
+    editCompoundViewModelFactoryProvider: (Long) -> EditCompoundViewModelFactory,
+    editReusableEventCatalogViewModelFactoryProvider: (ReusableEventCatalogKind, Long) -> EditReusableEventCatalogViewModelFactory,
     recordDetailViewModelFactoryProvider: (Long, RecordEventType) -> RecordDetailViewModelFactory,
     editIngestionViewModelFactoryProvider: (Long) -> EditIngestionViewModelFactory,
     editExposureViewModelFactoryProvider: (Long) -> EditExposureViewModelFactory,
@@ -76,22 +89,8 @@ fun AppNavGraph(
             val savedStateHandle = it.savedStateHandle
             CreateIngestionScreen(
                 viewModelFactory = createIngestionViewModelFactory,
-                onNavigateToRoute = { route ->
-                    if (route == AppRoutes.RECORDS) {
-                        navController.popBackStack(route, inclusive = false)
-                    } else {
-                        navController.navigate(route)
-                    }
-                },
-                selectedReusableEntity = savedStateHandle.get<String>(AppRoutes.REUSABLE_ENTITY_NAME_RESULT)?.let { name ->
-                    IngestionReusableSelectionResult(
-                        id = savedStateHandle.get<Long>(AppRoutes.REUSABLE_ENTITY_ID_RESULT) ?: 0L,
-                        name = name,
-                        kind = ReusableEntityKind.fromStorageValue(
-                            savedStateHandle.get<String>(AppRoutes.REUSABLE_ENTITY_KIND_RESULT)
-                        ) ?: ReusableEntityKind.INGREDIENT
-                    )
-                },
+                onNavigateToRoute = { route -> navigateToRouteOrReturnToRecords(navController, route) },
+                selectedReusableEntity = savedStateHandle.toIngestionReusableSelectionResult(),
                 onReusableEntityConsumed = {
                     savedStateHandle.remove<Long>(AppRoutes.REUSABLE_ENTITY_ID_RESULT)
                     savedStateHandle.remove<String>(AppRoutes.REUSABLE_ENTITY_NAME_RESULT)
@@ -100,19 +99,29 @@ fun AppNavGraph(
             )
         }
         composable(route = AppRoutes.CREATE_EXPOSURE) {
+            val savedStateHandle = it.savedStateHandle
             CreateExposureScreen(
                 viewModelFactory = createExposureViewModelFactory,
-                onNavigateToRoute = { route ->
-                    navController.popBackStack(route, inclusive = false)
-                }
+                editedCatalogSelection = savedStateHandle.toEditedEventCatalogSelectionResult(),
+                onEditedCatalogConsumed = {
+                    savedStateHandle.remove<Long>(AppRoutes.EVENT_CATALOG_ID_RESULT)
+                    savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_NAME_RESULT)
+                    savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_KIND_RESULT)
+                },
+                onNavigateToRoute = { route -> navigateToRouteOrReturnToRecords(navController, route) }
             )
         }
         composable(route = AppRoutes.CREATE_OUTBREAK) {
+            val savedStateHandle = it.savedStateHandle
             CreateOutbreakScreen(
                 viewModelFactory = createOutbreakViewModelFactory,
-                onNavigateToRoute = { route ->
-                    navController.popBackStack(route, inclusive = false)
-                }
+                editedCatalogSelection = savedStateHandle.toEditedEventCatalogSelectionResult(),
+                onEditedCatalogConsumed = {
+                    savedStateHandle.remove<Long>(AppRoutes.EVENT_CATALOG_ID_RESULT)
+                    savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_NAME_RESULT)
+                    savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_KIND_RESULT)
+                },
+                onNavigateToRoute = { route -> navigateToRouteOrReturnToRecords(navController, route) }
             )
         }
         composable(route = AppRoutes.CREATE_INGREDIENT) {
@@ -138,23 +147,96 @@ fun AppNavGraph(
             )
         }
         composable(
+            route = AppRoutes.EDIT_INGREDIENT,
+            arguments = listOf(navArgument(AppRoutes.REUSABLE_ID_ARG) { type = NavType.LongType })
+        ) { backStackEntry ->
+            val reusableId = backStackEntry.arguments?.getLong(AppRoutes.REUSABLE_ID_ARG) ?: return@composable
+            EditIngredientScreen(
+                viewModelFactory = editIngredientViewModelFactoryProvider(reusableId),
+                onNavigateBackWithSelection = { result ->
+                    navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_ID_RESULT, result.id)
+                    navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_NAME_RESULT, result.name)
+                    navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_KIND_RESULT, result.kind.storageValue)
+                    navController.popBackStack()
+                }
+            )
+        }
+        composable(
+            route = AppRoutes.EDIT_COMPOUND,
+            arguments = listOf(navArgument(AppRoutes.REUSABLE_ID_ARG) { type = NavType.LongType })
+        ) { backStackEntry ->
+            val reusableId = backStackEntry.arguments?.getLong(AppRoutes.REUSABLE_ID_ARG) ?: return@composable
+            EditCompoundScreen(
+                viewModelFactory = editCompoundViewModelFactoryProvider(reusableId),
+                onNavigateBackWithSelection = { result ->
+                    navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_ID_RESULT, result.id)
+                    navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_NAME_RESULT, result.name)
+                    navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_KIND_RESULT, result.kind.storageValue)
+                    navController.popBackStack()
+                }
+            )
+        }
+        composable(
+            route = AppRoutes.EDIT_EVENT_CATALOG,
+            arguments = listOf(
+                navArgument(AppRoutes.CATALOG_KIND_ARG) { type = NavType.StringType },
+                navArgument(AppRoutes.REUSABLE_ID_ARG) { type = NavType.LongType }
+            )
+        ) { backStackEntry ->
+            val reusableId = backStackEntry.arguments?.getLong(AppRoutes.REUSABLE_ID_ARG) ?: return@composable
+            val kind = backStackEntry.arguments?.getString(AppRoutes.CATALOG_KIND_ARG)
+                ?.let(ReusableEventCatalogKind::fromStorageValue)
+                ?: return@composable
+            EditReusableEventCatalogScreen(
+                viewModelFactory = editReusableEventCatalogViewModelFactoryProvider(kind, reusableId),
+                onNavigateBackWithSelection = { result ->
+                    navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.EVENT_CATALOG_ID_RESULT, result.id)
+                    navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.EVENT_CATALOG_NAME_RESULT, result.name)
+                    navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.EVENT_CATALOG_KIND_RESULT, result.kind.storageValue)
+                    navController.popBackStack()
+                }
+            )
+        }
+        composable(
             route = AppRoutes.EDIT_INGESTION,
             arguments = listOf(navArgument(AppRoutes.RECORD_ID_ARG) { type = NavType.LongType })
         ) { backStackEntry ->
             val recordId = backStackEntry.arguments?.getLong(AppRoutes.RECORD_ID_ARG) ?: return@composable
+            val savedStateHandle = backStackEntry.savedStateHandle
             EditIngestionScreen(
                 viewModelFactory = editIngestionViewModelFactoryProvider(recordId),
-                onNavigateToRoute = { route -> navController.popBackStack(route, inclusive = false) }
+                selectedReusableEntity = savedStateHandle.toIngestionReusableSelectionResult(),
+                onReusableEntityConsumed = {
+                    savedStateHandle.remove<Long>(AppRoutes.REUSABLE_ENTITY_ID_RESULT)
+                    savedStateHandle.remove<String>(AppRoutes.REUSABLE_ENTITY_NAME_RESULT)
+                    savedStateHandle.remove<String>(AppRoutes.REUSABLE_ENTITY_KIND_RESULT)
+                },
+                onNavigateToRoute = { route -> navigateToRouteOrReturnToRecords(navController, route) }
             )
         }
         composable(
             route = AppRoutes.EDIT_EXPOSURE,
-            arguments = listOf(navArgument(AppRoutes.RECORD_ID_ARG) { type = NavType.LongType })
+            arguments = listOf(
+                navArgument(AppRoutes.RECORD_ID_ARG) { type = NavType.LongType },
+                navArgument(AppRoutes.OPEN_DELETE_ARG) {
+                    type = NavType.BoolType
+                    defaultValue = false
+                }
+            )
         ) { backStackEntry ->
             val recordId = backStackEntry.arguments?.getLong(AppRoutes.RECORD_ID_ARG) ?: return@composable
+            val openDeleteOnStart = backStackEntry.arguments?.getBoolean(AppRoutes.OPEN_DELETE_ARG) == true
+            val savedStateHandle = backStackEntry.savedStateHandle
             EditExposureScreen(
                 viewModelFactory = editExposureViewModelFactoryProvider(recordId),
-                onNavigateToRoute = { route -> navController.popBackStack(route, inclusive = false) }
+                openDeleteOnStart = openDeleteOnStart,
+                editedCatalogSelection = savedStateHandle.toEditedEventCatalogSelectionResult(),
+                onEditedCatalogConsumed = {
+                    savedStateHandle.remove<Long>(AppRoutes.EVENT_CATALOG_ID_RESULT)
+                    savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_NAME_RESULT)
+                    savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_KIND_RESULT)
+                },
+                onNavigateToRoute = { route -> navigateToRouteOrReturnToRecords(navController, route) }
             )
         }
         composable(
@@ -169,11 +251,44 @@ fun AppNavGraph(
         ) { backStackEntry ->
             val recordId = backStackEntry.arguments?.getLong(AppRoutes.RECORD_ID_ARG) ?: return@composable
             val openDeleteOnStart = backStackEntry.arguments?.getBoolean(AppRoutes.OPEN_DELETE_ARG) == true
+            val savedStateHandle = backStackEntry.savedStateHandle
             EditOutbreakScreen(
                 viewModelFactory = editOutbreakViewModelFactoryProvider(recordId),
                 openDeleteOnStart = openDeleteOnStart,
-                onNavigateToRoute = { route -> navController.popBackStack(route, inclusive = false) }
+                editedCatalogSelection = savedStateHandle.toEditedEventCatalogSelectionResult(),
+                onEditedCatalogConsumed = {
+                    savedStateHandle.remove<Long>(AppRoutes.EVENT_CATALOG_ID_RESULT)
+                    savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_NAME_RESULT)
+                    savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_KIND_RESULT)
+                },
+                onNavigateToRoute = { route -> navigateToRouteOrReturnToRecords(navController, route) }
             )
         }
     }
+}
+
+private fun navigateToRouteOrReturnToRecords(navController: NavHostController, route: String) {
+    if (route == AppRoutes.RECORDS) {
+        navController.popBackStack(AppRoutes.RECORDS, inclusive = false)
+    } else {
+        navController.navigate(route)
+    }
+}
+
+internal fun SavedStateHandle.toIngestionReusableSelectionResult(): IngestionReusableSelectionResult? {
+    val id = get<Long>(AppRoutes.REUSABLE_ENTITY_ID_RESULT) ?: return null
+    val name = get<String>(AppRoutes.REUSABLE_ENTITY_NAME_RESULT) ?: return null
+    val kindRaw = get<String>(AppRoutes.REUSABLE_ENTITY_KIND_RESULT) ?: return null
+    val kind = ReusableEntityKind.fromStorageValue(kindRaw) ?: return null
+    if (id <= 0L || name.isBlank()) return null
+    return IngestionReusableSelectionResult(id = id, name = name, kind = kind)
+}
+
+internal fun SavedStateHandle.toEditedEventCatalogSelectionResult(): EditedEventCatalogSelectionResult? {
+    val id = get<Long>(AppRoutes.EVENT_CATALOG_ID_RESULT) ?: return null
+    val name = get<String>(AppRoutes.EVENT_CATALOG_NAME_RESULT) ?: return null
+    val kindRaw = get<String>(AppRoutes.EVENT_CATALOG_KIND_RESULT) ?: return null
+    val kind = ReusableEventCatalogKind.fromStorageValue(kindRaw) ?: return null
+    if (id <= 0L || name.isBlank()) return null
+    return EditedEventCatalogSelectionResult(id = id, kind = kind, name = name)
 }

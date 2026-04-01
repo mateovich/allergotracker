@@ -70,6 +70,7 @@ sealed interface CreateIngestionUiIntent {
     data class SelectReusableEntity(val result: IngestionReusableSelectionResult) : CreateIngestionUiIntent
     data object CreateNewIngredient : CreateIngestionUiIntent
     data object CreateNewCompound : CreateIngestionUiIntent
+    data object EditSelectedReusableEntity : CreateIngestionUiIntent
     data object Save : CreateIngestionUiIntent
 }
 
@@ -77,4 +78,5 @@ sealed interface CreateIngestionUiEffect {
     data object NavigateToRecords : CreateIngestionUiEffect
     data object NavigateToCreateIngredient : CreateIngestionUiEffect
     data object NavigateToCreateCompound : CreateIngestionUiEffect
+    data class NavigateToEditReusableEntity(val kind: ReusableEntityKind, val id: Long) : CreateIngestionUiEffect
 }

@@ -8,6 +8,9 @@ import com.example.app.features.compounds.domain.CreateReusableCompoundCommand
 import com.example.app.features.compounds.domain.ReusableCompound
 import com.example.app.features.compounds.domain.ReusableCompoundComponent
 import com.example.app.features.compounds.domain.ReusableCompoundRepository
+import com.example.app.features.compounds.domain.UpdateReusableCompoundCommand
+import com.example.app.features.compounds.domain.normalizeReusableName
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -17,7 +20,8 @@ class RoomReusableCompoundRepository(
 ) : ReusableCompoundRepository {
     override suspend fun createCompound(command: CreateReusableCompoundCommand): AppResult<ReusableCompound> {
         return try {
-            val normalizedName = command.name.normalizedKey()
+            val canonicalName = command.name.normalizeReusableName()
+            val normalizedName = canonicalName.normalizedKey()
             compoundDao.findByNormalizedName(normalizedName)?.let { existing ->
                 return AppResult.Success(
                     ReusableCompound(
@@ -33,7 +37,7 @@ class RoomReusableCompoundRepository(
             }
             val now = nowEpochMillis()
             val entity = ReusableCompoundEntity(
-                name = command.name,
+                name = canonicalName,
                 normalizedName = normalizedName,
                 notes = command.notes,
                 compositionStatus = CompoundCompositionStatus.DRAFT.storageValue,
@@ -52,8 +56,65 @@ class RoomReusableCompoundRepository(
                     updatedAtEpochMs = entity.updatedAtEpochMs
                 )
             )
+        } catch (cancellation: CancellationException) {
+            throw cancellation
         } catch (_: Exception) {
             AppResult.Error(DomainError.PersistenceError("Couldn't save compound locally. Try again."))
+        }
+    }
+
+    override suspend fun getCompound(id: Long): AppResult<ReusableCompound> {
+        return try {
+            val compound = compoundDao.findCompoundWithComponentsById(id)
+                ?: return AppResult.Error(DomainError.IntegrityError("Saved compound is no longer available."))
+            AppResult.Success(compound.toDomain())
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+            AppResult.Error(DomainError.PersistenceError("Couldn't load compound locally. Try again."))
+        }
+    }
+
+    override suspend fun updateCompound(command: UpdateReusableCompoundCommand): AppResult<ReusableCompound> {
+        return try {
+            val current = compoundDao.findById(command.id)
+                ?: return AppResult.Error(DomainError.IntegrityError("Saved compound is no longer available."))
+            val canonicalName = command.name.normalizeReusableName()
+            val normalizedName = canonicalName.normalizedKey()
+            compoundDao.findByNormalizedName(normalizedName)?.let { existing ->
+                if (existing.id != command.id) {
+                    return AppResult.Error(
+                        DomainError.ValidationError(
+                            message = "Please fix the highlighted fields.",
+                            fieldErrors = mapOf("name" to "A compound with this name already exists.")
+                        )
+                    )
+                }
+            }
+            val updated = current.copy(
+                name = canonicalName,
+                normalizedName = normalizedName,
+                notes = command.notes,
+                updatedAtEpochMs = nowEpochMillis()
+            )
+            if (compoundDao.updateCompound(updated) == 0) {
+                return AppResult.Error(DomainError.IntegrityError("Saved compound is no longer available."))
+            }
+            AppResult.Success(
+                ReusableCompound(
+                    id = updated.id,
+                    name = updated.name,
+                    notes = updated.notes,
+                    compositionStatus = CompoundCompositionStatus.fromStorageValue(updated.compositionStatus),
+                    components = emptyList(),
+                    createdAtEpochMs = updated.createdAtEpochMs,
+                    updatedAtEpochMs = updated.updatedAtEpochMs
+                )
+            )
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+            AppResult.Error(DomainError.PersistenceError("Couldn't update compound locally. Try again."))
         }
     }
 
@@ -83,4 +144,4 @@ private fun ReusableCompoundWithComponents.toDomain(): ReusableCompound {
     )
 }
 
-private fun String.normalizedKey(): String = trim().lowercase()
+private fun String.normalizedKey(): String = normalizeReusableName().lowercase()

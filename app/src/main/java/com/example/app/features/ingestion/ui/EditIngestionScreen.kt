@@ -5,7 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -16,10 +19,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -34,15 +39,31 @@ import kotlinx.coroutines.flow.collectLatest
 fun EditIngestionScreen(
     onNavigateToRoute: (String) -> Unit,
     viewModelFactory: ViewModelProvider.Factory,
+    selectedReusableEntity: IngestionReusableSelectionResult? = null,
+    onReusableEntityConsumed: () -> Unit = {},
     viewModel: EditIngestionViewModel = viewModel(factory = viewModelFactory)
 ) {
     val state by viewModel.state.collectAsState()
+    val focusManager = LocalFocusManager.current
+
+    LaunchedEffect(selectedReusableEntity) {
+        selectedReusableEntity?.let {
+            viewModel.onIntent(EditIngestionUiIntent.ApplyReusableSelection(it))
+            onReusableEntityConsumed()
+        }
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.onIntent(EditIngestionUiIntent.Load)
         viewModel.effects.collectLatest { effect ->
             when (effect) {
                 EditIngestionUiEffect.NavigateToRecords -> onNavigateToRoute(AppRoutes.RECORDS)
+                is EditIngestionUiEffect.NavigateToEditReusableEntity -> onNavigateToRoute(
+                    when (effect.kind) {
+                        com.example.app.features.ingestion.domain.ReusableEntityKind.INGREDIENT -> AppRoutes.editIngredient(effect.id)
+                        com.example.app.features.ingestion.domain.ReusableEntityKind.COMPOUND -> AppRoutes.editCompound(effect.id)
+                    }
+                )
             }
         }
     }
@@ -80,6 +101,8 @@ fun EditIngestionScreen(
         Column(
             modifier = contentModifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
                 .padding(16.dp)
                 .testTag("edit-ingestion-form-screen"),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -112,6 +135,17 @@ fun EditIngestionScreen(
                 )
             }
             LocalOnlyNotice()
+            state.selectedReusableEntitySummary?.let { summary ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(text = summary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("edit-ingestion-reusable-summary"))
+                    TextButton(
+                        onClick = { viewModel.onIntent(EditIngestionUiIntent.EditSelectedReusableEntity) },
+                        modifier = Modifier.testTag("edit-ingestion-reusable-edit")
+                    ) {
+                        Text("Edit saved reusable item")
+                    }
+                }
+            }
             OutlinedTextField(
                 value = state.itemName,
                 onValueChange = { viewModel.onIntent(EditIngestionUiIntent.UpdateItemName(it)) },
@@ -164,7 +198,10 @@ fun EditIngestionScreen(
                 )
             }
             Button(
-                onClick = { viewModel.onIntent(EditIngestionUiIntent.Save) },
+                onClick = {
+                    focusManager.clearFocus(force = true)
+                    viewModel.onIntent(EditIngestionUiIntent.Save)
+                },
                 enabled = state.canSave && !state.isSaving && !state.isDeleting,
                 modifier = Modifier.fillMaxWidth().testTag("edit-ingestion-save")
             ) {

@@ -603,6 +603,10 @@ private class FakeIngestionEventDao(
         return 1
     }
 
+    override suspend fun updateReusableEntityName(kind: String, reusableId: Long, name: String): Int = 0
+
+    override suspend fun countReusableEntityReferences(kind: String, reusableId: Long): Int = 0
+
     override fun observeRecordCount(): Flow<Int> = state.map { it.size }
 
     override fun observeIngestionEvents(): Flow<List<IngestionEventEntity>> = state
@@ -637,6 +641,10 @@ private class FakeExposureEventDao(
         return 1
     }
 
+    override suspend fun updateCatalogName(catalogId: Long, name: String): Int = 0
+
+    override suspend fun countCatalogReferences(catalogId: Long): Int = 0
+
     override fun observeRecordCount(): Flow<Int> = state.map { it.size }
 
     override fun observeExposureEvents(): Flow<List<ExposureEventEntity>> = state
@@ -670,6 +678,14 @@ private class FakeOutbreakEventDao(
         state.value = updated
         return 1
     }
+
+    override suspend fun updateOutbreakDescriptorCatalogName(catalogId: Long, name: String): Int = 0
+
+    override suspend fun countOutbreakDescriptorCatalogReferences(catalogId: Long): Int = 0
+
+    override suspend fun updateBodyLocationCatalogName(catalogId: Long, name: String): Int = 0
+
+    override suspend fun countBodyLocationCatalogReferences(catalogId: Long): Int = 0
 
     override fun observeRecordCount(): Flow<Int> = state.map { it.size }
 

@@ -14,6 +14,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -277,6 +278,46 @@ class EditIngestionViewModelTest {
 
         assertEquals("Tea", viewModel.state.value.itemName)
         assertEquals(2, loadAttempts)
+    }
+
+    @Test
+    fun manual_name_override_clears_reusable_summary() = runBlocking {
+        val repository = object : IngestionRepository {
+            override suspend fun createIngestion(command: com.example.app.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
+
+            override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> {
+                return AppResult.Success(
+                    IngestionEvent(
+                        id = id,
+                        itemName = "Oat milk",
+                        quantityLevel = 2,
+                        occurredAtEpochMs = existingOccurredAt,
+                        notes = "with honey",
+                        reusableEntityKind = com.example.app.features.ingestion.domain.ReusableEntityKind.INGREDIENT,
+                        reusableEntityId = 11L
+                    )
+                )
+            }
+
+            override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> {
+                return AppResult.Success(IngestionEvent(command.id, command.itemName, command.quantityLevel ?: 0, command.occurredAtEpochMs, command.notes))
+            }
+
+            override suspend fun deleteIngestion(id: Long): AppResult<Unit> = AppResult.Success(Unit)
+        }
+        val viewModel = EditIngestionViewModel(
+            recordId = 7L,
+            getIngestionEventUseCase = GetIngestionEventUseCase(repository),
+            deleteIngestionEventUseCase = DeleteIngestionEventUseCase(repository),
+            updateIngestionEventUseCase = UpdateIngestionEventUseCase(repository, com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }
+        )
+
+        viewModel.onIntent(EditIngestionUiIntent.Load)
+        viewModel.onIntent(EditIngestionUiIntent.UpdateItemName("Manual override"))
+
+        assertNull(viewModel.state.value.selectedReusableEntitySummary)
+        assertNull(viewModel.state.value.selectedReusableEntityId)
     }
 
     private fun buildViewModel(): EditIngestionViewModel {

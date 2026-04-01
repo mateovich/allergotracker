@@ -360,6 +360,128 @@ class MainActivityTest {
     }
 
     @Test
+    fun exposure_reusable_edit_flow_updates_runtime_navigation_and_post_save_detail_labels() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Exposure").performClick()
+
+        composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
+        composeRule.onNodeWithTag("exposure-type-create-inline").performClick()
+        composeRule.onNodeWithTag("exposure-save").performClick()
+
+        composeRule.onNodeWithText("Pollen").performClick()
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        composeRule.onNodeWithTag("edit-exposure-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-exposure-type-summary").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-exposure-type-edit").performClick()
+
+        composeRule.onNodeWithTag("edit-event-catalog-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-event-catalog-name").performTextReplacement("Dust")
+        composeRule.onNodeWithTag("edit-event-catalog-save").performClick()
+
+        composeRule.onNodeWithTag("edit-exposure-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-exposure-type").assertTextContains("Dust")
+        composeRule.onNodeWithText("Saved exposure type selected: Dust").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-exposure-save").performClick()
+
+        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        composeRule.onNodeWithText("Dust").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Pollen").assertCountEquals(0)
+
+        composeRule.onNodeWithText("Dust").performClick()
+        composeRule.onNodeWithTag("record-detail-screen").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Dust").assertCountEquals(2)
+    }
+
+    @Test
+    fun ingestion_reusable_ingredient_edit_flow_updates_runtime_navigation_and_saved_labels() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        composeRule.onNodeWithTag("ingestion-create-ingredient").performClick()
+        composeRule.onNodeWithTag("ingredient-name").performTextInput("Oat milk")
+        composeRule.onNodeWithTag("ingredient-save").performClick()
+
+        composeRule.onNodeWithTag("ingestion-reusable-edit").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("edit-ingredient-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-ingredient-name").performTextReplacement("Oat milk plus")
+        composeRule.onNodeWithTag("edit-ingredient-save").performClick()
+
+        composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("ingestion-item-name").assertTextContains("Oat milk plus")
+        composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable ingredient selected: Oat milk plus")
+    }
+
+    @Test
+    fun ingestion_reusable_compound_edit_flow_updates_runtime_navigation_and_saved_labels() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
+        composeRule.onNodeWithTag("compound-name").performTextInput("Breakfast mix")
+        composeRule.onNodeWithTag("compound-save").performClick()
+
+        composeRule.onNodeWithTag("ingestion-reusable-edit").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("edit-compound-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-compound-name").performTextReplacement("Breakfast mix plus")
+        composeRule.onNodeWithTag("edit-compound-save").performClick()
+
+        composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("ingestion-item-name").assertTextContains("Breakfast mix plus")
+        composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable compound selected: Breakfast mix plus")
+    }
+
+    @Test
+    fun reusable_edit_flows_keep_talkback_visible_labels_and_inline_errors() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+        composeRule.onNodeWithTag("ingestion-create-ingredient").performClick()
+        composeRule.onNodeWithTag("ingredient-name").performTextInput("Oat milk")
+        composeRule.onNodeWithTag("ingredient-save").performClick()
+        composeRule.onNodeWithTag("ingestion-reusable-edit").performClick()
+
+        composeRule.onNodeWithText("Edit Ingredient").assertIsDisplayed()
+        composeRule.onNodeWithText("Ingredient name").assertIsDisplayed()
+        composeRule.onNodeWithText("Notes (optional)").assertIsDisplayed()
+        composeRule.onNodeWithText("Save changes").assertIsDisplayed()
+        composeRule.onNodeWithText("Works offline. Saved only on this device.").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("edit-ingredient-name").performTextReplacement("   ")
+        composeRule.onNodeWithText("Enter an ingredient name.").assertIsDisplayed()
+
+        pressBack()
+        pressBack()
+        composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("ingestion-reusable-clear").performClick()
+        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
+        composeRule.onNodeWithTag("compound-name").performTextInput("Breakfast mix")
+        composeRule.onNodeWithTag("compound-save").performClick()
+        composeRule.onNodeWithTag("ingestion-reusable-edit").performClick()
+
+        composeRule.onNodeWithText("Edit Compound").assertIsDisplayed()
+        composeRule.onNodeWithText("Compound name").assertIsDisplayed()
+        composeRule.onNodeWithText("Save changes").assertIsDisplayed()
+        composeRule.onNodeWithText("Works offline. Saved only on this device.").assertIsDisplayed()
+
+        pressBack()
+        composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
+        pressBack()
+        composeRule.onNodeWithText("Records").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Exposure").performClick()
+        composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
+        composeRule.onNodeWithTag("exposure-type-create-inline").performClick()
+        composeRule.onNodeWithTag("exposure-save").performClick()
+        composeRule.onNodeWithText("Pollen").performClick()
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        composeRule.onNodeWithTag("edit-exposure-type-edit").performClick()
+
+        composeRule.onNodeWithText("Edit Exposure Type").assertIsDisplayed()
+        composeRule.onNodeWithText("Exposure type").assertIsDisplayed()
+        composeRule.onNodeWithText("Save changes").assertIsDisplayed()
+        composeRule.onNodeWithText("Works offline. Saved only on this device.").assertIsDisplayed()
+    }
+
+    @Test
     fun outbreak_record_can_be_edited_and_deleted_offline_end_to_end() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Outbreak").performClick()

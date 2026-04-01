@@ -27,6 +27,12 @@ interface IngestionEventDao {
     @Query("DELETE FROM ingestion_events WHERE id = :id")
     suspend fun deleteById(id: Long): Int
 
+    @Query("UPDATE ingestion_events SET item_name = :name WHERE reusable_entity_kind = :kind AND reusable_entity_id = :reusableId")
+    suspend fun updateReusableEntityName(kind: String, reusableId: Long, name: String): Int
+
+    @Query("SELECT COUNT(*) FROM ingestion_events WHERE reusable_entity_kind = :kind AND reusable_entity_id = :reusableId")
+    suspend fun countReusableEntityReferences(kind: String, reusableId: Long): Int
+
     @Query("SELECT * FROM ingestion_events ORDER BY occurred_at_epoch_ms DESC, id DESC")
     fun observeIngestionEvents(): Flow<List<IngestionEventEntity>>
 }

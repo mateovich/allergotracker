@@ -257,5 +257,9 @@ private class FakeOutbreakEventDaoForRepository(
         deleteException?.let { throw it }
         return deleteCount
     }
+    override suspend fun updateOutbreakDescriptorCatalogName(catalogId: Long, name: String): Int = 0
+    override suspend fun countOutbreakDescriptorCatalogReferences(catalogId: Long): Int = 0
+    override suspend fun updateBodyLocationCatalogName(catalogId: Long, name: String): Int = 0
+    override suspend fun countBodyLocationCatalogReferences(catalogId: Long): Int = 0
     override fun observeOutbreakEvents(): Flow<List<OutbreakEventEntity>> = emptyFlow()
 }

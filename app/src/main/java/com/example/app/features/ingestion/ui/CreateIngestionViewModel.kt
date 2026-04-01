@@ -125,6 +125,12 @@ class CreateIngestionViewModel(
                 effectChannel.trySend(CreateIngestionUiEffect.NavigateToCreateCompound)
             }
 
+            CreateIngestionUiIntent.EditSelectedReusableEntity -> {
+                val selectedKind = mutableState.value.selectedReusableEntityKind ?: return
+                val selectedId = mutableState.value.selectedReusableEntityId ?: return
+                effectChannel.trySend(CreateIngestionUiEffect.NavigateToEditReusableEntity(selectedKind, selectedId))
+            }
+
             CreateIngestionUiIntent.Save -> save()
         }
     }

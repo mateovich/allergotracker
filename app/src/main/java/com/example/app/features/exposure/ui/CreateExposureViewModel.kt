@@ -103,6 +103,16 @@ class CreateExposureViewModel(
                 ).withFilteredExposureTypes()
             }
 
+            CreateExposureUiIntent.EditSelectedExposureCatalog -> {
+                val selectedId = mutableState.value.selectedExposureTypeCatalogId ?: return
+                effectChannel.trySend(
+                    CreateExposureUiEffect.NavigateToEditEventCatalog(
+                        ReusableEventCatalogKind.EXPOSURE_TYPE.storageValue,
+                        selectedId
+                    )
+                )
+            }
+
             is CreateExposureUiIntent.UpdateNotes -> updateState {
                 it.copy(notes = intent.value)
             }

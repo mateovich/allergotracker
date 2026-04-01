@@ -58,6 +58,12 @@ fun CreateIngestionScreen(
                 CreateIngestionUiEffect.NavigateToRecords -> onNavigateToRoute(AppRoutes.RECORDS)
                 CreateIngestionUiEffect.NavigateToCreateIngredient -> onNavigateToRoute(AppRoutes.CREATE_INGREDIENT)
                 CreateIngestionUiEffect.NavigateToCreateCompound -> onNavigateToRoute(AppRoutes.CREATE_COMPOUND)
+                is CreateIngestionUiEffect.NavigateToEditReusableEntity -> onNavigateToRoute(
+                    when (effect.kind) {
+                        com.example.app.features.ingestion.domain.ReusableEntityKind.INGREDIENT -> AppRoutes.editIngredient(effect.id)
+                        com.example.app.features.ingestion.domain.ReusableEntityKind.COMPOUND -> AppRoutes.editCompound(effect.id)
+                    }
+                )
             }
         }
     }
@@ -149,6 +155,12 @@ fun CreateIngestionScreen(
                             modifier = Modifier.testTag("ingestion-reusable-clear")
                         ) {
                             Text("Clear reusable selection")
+                        }
+                        TextButton(
+                            onClick = { viewModel.onIntent(CreateIngestionUiIntent.EditSelectedReusableEntity) },
+                            modifier = Modifier.testTag("ingestion-reusable-edit")
+                        ) {
+                            Text("Edit saved reusable item")
                         }
                     }
                 }

@@ -1,5 +1,6 @@
 package com.example.app.features.eventcatalog.domain
 
+import com.example.app.core.common.result.AppResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
@@ -27,4 +28,12 @@ private object EmptyReusableEventCatalogRepository : ReusableEventCatalogReposit
     }
 
     override suspend fun touchCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? = null
+
+    override suspend fun updateCatalogEntry(
+        kind: ReusableEventCatalogKind,
+        id: Long,
+        name: String
+    ): AppResult<ReusableEventCatalog> {
+        error("unused")
+    }
 }

@@ -2,7 +2,9 @@ package com.example.app.navigation
 
 object AppRoutes {
     const val RECORD_ID_ARG = "recordId"
+    const val REUSABLE_ID_ARG = "reusableId"
     const val RECORD_EVENT_TYPE_ARG = "eventType"
+    const val CATALOG_KIND_ARG = "catalogKind"
     const val OPEN_DELETE_ARG = "openDelete"
     const val RECORDS = "records"
     const val RECORD_DETAIL = "record-detail/{$RECORD_EVENT_TYPE_ARG}/{$RECORD_ID_ARG}"
@@ -11,16 +13,28 @@ object AppRoutes {
     const val CREATE_OUTBREAK = "create/outbreak"
     const val CREATE_INGREDIENT = "create/ingredient"
     const val CREATE_COMPOUND = "create/compound"
+    const val EDIT_INGREDIENT = "edit/ingredient/{$REUSABLE_ID_ARG}"
+    const val EDIT_COMPOUND = "edit/compound/{$REUSABLE_ID_ARG}"
+    const val EDIT_EVENT_CATALOG = "edit/catalog/{$CATALOG_KIND_ARG}/{$REUSABLE_ID_ARG}"
     const val EDIT_INGESTION = "edit/ingestion/{$RECORD_ID_ARG}"
-    const val EDIT_EXPOSURE = "edit/exposure/{$RECORD_ID_ARG}"
+    const val EDIT_EXPOSURE = "edit/exposure/{$RECORD_ID_ARG}?$OPEN_DELETE_ARG={$OPEN_DELETE_ARG}"
     const val EDIT_OUTBREAK = "edit/outbreak/{$RECORD_ID_ARG}?$OPEN_DELETE_ARG={$OPEN_DELETE_ARG}"
     const val REUSABLE_ENTITY_ID_RESULT = "reusableEntityId"
     const val REUSABLE_ENTITY_NAME_RESULT = "reusableEntityName"
     const val REUSABLE_ENTITY_KIND_RESULT = "reusableEntityKind"
+    const val EVENT_CATALOG_ID_RESULT = "eventCatalogId"
+    const val EVENT_CATALOG_NAME_RESULT = "eventCatalogName"
+    const val EVENT_CATALOG_KIND_RESULT = "eventCatalogKind"
+
+    fun editIngredient(reusableId: Long): String = "edit/ingredient/$reusableId"
+
+    fun editCompound(reusableId: Long): String = "edit/compound/$reusableId"
+
+    fun editEventCatalog(kind: String, reusableId: Long): String = "edit/catalog/$kind/$reusableId"
 
     fun editIngestion(recordId: Long): String = "edit/ingestion/$recordId"
 
-    fun editExposure(recordId: Long): String = "edit/exposure/$recordId"
+    fun editExposure(recordId: Long, openDelete: Boolean = false): String = "edit/exposure/$recordId?$OPEN_DELETE_ARG=$openDelete"
 
     fun editOutbreak(recordId: Long, openDelete: Boolean = false): String {
         return "edit/outbreak/$recordId?$OPEN_DELETE_ARG=$openDelete"

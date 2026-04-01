@@ -27,6 +27,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.core.designsystem.AppScreenScaffold
 import com.example.app.core.designsystem.LocalOnlyNotice
+import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.ui.EditedEventCatalogSelectionResult
 import com.example.app.navigation.AppRoutes
 import kotlinx.coroutines.flow.collectLatest
 
@@ -34,15 +36,27 @@ import kotlinx.coroutines.flow.collectLatest
 fun CreateExposureScreen(
     onNavigateToRoute: (String) -> Unit,
     viewModelFactory: ViewModelProvider.Factory,
+    editedCatalogSelection: EditedEventCatalogSelectionResult? = null,
+    onEditedCatalogConsumed: () -> Unit = {},
     viewModel: CreateExposureViewModel = viewModel(factory = viewModelFactory)
 ) {
     val state by viewModel.state.collectAsState()
     val focusManager = LocalFocusManager.current
 
+    LaunchedEffect(editedCatalogSelection) {
+        editedCatalogSelection?.takeIf { it.kind == ReusableEventCatalogKind.EXPOSURE_TYPE }?.let {
+            viewModel.onIntent(CreateExposureUiIntent.SelectExposureCatalogOption(it.id, it.name))
+            onEditedCatalogConsumed()
+        }
+    }
+
     LaunchedEffect(viewModel) {
         viewModel.effects.collectLatest { effect ->
             when (effect) {
                 CreateExposureUiEffect.NavigateToRecords -> onNavigateToRoute(AppRoutes.RECORDS)
+                is CreateExposureUiEffect.NavigateToEditEventCatalog -> onNavigateToRoute(
+                    AppRoutes.editEventCatalog(effect.kindStorageValue, effect.id)
+                )
             }
         }
     }
@@ -118,6 +132,12 @@ fun CreateExposureScreen(
                                 modifier = Modifier.testTag("exposure-type-clear")
                             ) {
                                 Text("Clear saved selection")
+                            }
+                            TextButton(
+                                onClick = { viewModel.onIntent(CreateExposureUiIntent.EditSelectedExposureCatalog) },
+                                modifier = Modifier.testTag("exposure-type-edit")
+                            ) {
+                                Text("Edit saved value")
                             }
                         }
                     }

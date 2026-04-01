@@ -25,6 +25,6 @@ class CreateReusableCompoundUseCase(
     }
 }
 
-private fun String.normalizeReusableName(): String {
+internal fun String.normalizeReusableName(): String {
     return trim().replace(Regex("\\s+"), " ")
 }

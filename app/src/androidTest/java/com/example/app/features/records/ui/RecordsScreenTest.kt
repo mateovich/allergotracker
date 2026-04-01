@@ -916,8 +916,9 @@ private fun ExposureEditJourneyHost(
             viewModelFactory = detailFactoryProvider(5L, RecordEventType.EXPOSURE)
         )
 
-        AppRoutes.editExposure(5L) -> EditExposureScreen(
+        AppRoutes.editExposure(5L), AppRoutes.editExposure(5L, openDelete = true) -> EditExposureScreen(
             onNavigateToRoute = { currentRoute = it },
+            openDeleteOnStart = currentRoute == AppRoutes.editExposure(5L, openDelete = true),
             viewModelFactory = editFactory
         )
 

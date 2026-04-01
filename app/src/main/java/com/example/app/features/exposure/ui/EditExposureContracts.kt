@@ -34,6 +34,7 @@ sealed interface EditExposureUiIntent {
     data class SelectExposureCatalogOption(val id: Long, val name: String) : EditExposureUiIntent
     data object UseTypedExposureType : EditExposureUiIntent
     data object ClearExposureCatalogSelection : EditExposureUiIntent
+    data object EditSelectedExposureCatalog : EditExposureUiIntent
     data class UpdateNotes(val value: String) : EditExposureUiIntent
     data class UpdateOccurredAtInput(val value: String) : EditExposureUiIntent
     data class SelectTimePreset(val preset: ExposureTimePreset) : EditExposureUiIntent
@@ -45,4 +46,5 @@ sealed interface EditExposureUiIntent {
 
 sealed interface EditExposureUiEffect {
     data object NavigateToRecords : EditExposureUiEffect
+    data class NavigateToEditEventCatalog(val kindStorageValue: String, val id: Long) : EditExposureUiEffect
 }

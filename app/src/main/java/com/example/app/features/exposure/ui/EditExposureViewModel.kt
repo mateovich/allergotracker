@@ -114,6 +114,15 @@ class EditExposureViewModel(
                     canSave = it.exposureType.isNotBlank()
                 ).withFilteredExposureTypes()
             }
+            EditExposureUiIntent.EditSelectedExposureCatalog -> {
+                val selectedId = mutableState.value.selectedExposureTypeCatalogId ?: return
+                effectChannel.trySend(
+                    EditExposureUiEffect.NavigateToEditEventCatalog(
+                        ReusableEventCatalogKind.EXPOSURE_TYPE.storageValue,
+                        selectedId
+                    )
+                )
+            }
             is EditExposureUiIntent.UpdateNotes -> updateState { it.copy(notes = intent.value) }
             is EditExposureUiIntent.UpdateOccurredAtInput -> {
                 val parsedOccurredAt = parseOccurredAtInput(intent.value)

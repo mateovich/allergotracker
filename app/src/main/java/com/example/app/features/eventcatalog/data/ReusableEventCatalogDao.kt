@@ -26,4 +26,13 @@ interface ReusableEventCatalogDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM reusable_event_catalog WHERE kind = :kind AND id = :id)")
     suspend fun existsById(kind: String, id: Long): Boolean
+
+    @Query("UPDATE exposure_events SET exposure_type = :name WHERE exposure_type_catalog_id = :catalogId")
+    suspend fun updateExposureReferences(catalogId: Long, name: String): Int
+
+    @Query("UPDATE outbreak_events SET outbreak_descriptor = :name WHERE outbreak_descriptor_catalog_id = :catalogId")
+    suspend fun updateOutbreakDescriptorReferences(catalogId: Long, name: String): Int
+
+    @Query("UPDATE outbreak_events SET body_location = :name WHERE body_location_catalog_id = :catalogId")
+    suspend fun updateBodyLocationReferences(catalogId: Long, name: String): Int
 }

@@ -36,4 +36,20 @@ class AppNavGraphArchitectureTest {
         assertFalse(importLines.any { line -> line.contains("Dao") })
         assertFalse(importLines.any { line -> line.contains(".data.") })
     }
+
+    @Test
+    fun nav_graph_uses_shared_restore_helpers_and_forward_navigation_for_reusable_edit_flows() {
+        val navGraphFile = File(
+            System.getProperty("user.dir"),
+            "src/main/java/com/example/app/navigation/AppNavGraph.kt"
+        )
+
+        assertTrue(navGraphFile.exists())
+        val source = navGraphFile.readText()
+
+        assertTrue(source.contains("selectedReusableEntity = savedStateHandle.toIngestionReusableSelectionResult()"))
+        assertTrue(source.contains("editedCatalogSelection = savedStateHandle.toEditedEventCatalogSelectionResult()"))
+        assertTrue(source.contains("navigateToRouteOrReturnToRecords(navController, route)"))
+        assertTrue(source.contains("navController.navigate(route)"))
+    }
 }

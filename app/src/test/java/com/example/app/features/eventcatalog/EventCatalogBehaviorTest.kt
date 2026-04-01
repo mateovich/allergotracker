@@ -7,11 +7,13 @@ import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
 import com.example.app.features.eventcatalog.ui.ReusableEventCatalogOptionUiModel
 import com.example.app.features.eventcatalog.ui.filterForQuery
 import com.example.app.features.eventcatalog.ui.hasExactName
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class EventCatalogBehaviorTest {
@@ -116,6 +118,52 @@ class EventCatalogBehaviorTest {
         assertEquals(99L, dao.updated.single().lastUsedAtEpochMs)
     }
 
+    @Test
+    fun update_catalog_entry_reuses_whitespace_collapsing_normalization() = runBlocking {
+        val existing = ReusableEventCatalogEntity(
+            id = 8L,
+            kind = ReusableEventCatalogKind.EXPOSURE_TYPE.storageValue,
+            name = "Left arm",
+            normalizedName = "left arm",
+            usageCount = 2,
+            createdAtEpochMs = 10L,
+            updatedAtEpochMs = 10L,
+            lastUsedAtEpochMs = 10L
+        )
+        val dao = FakeReusableEventCatalogDao(existingById = existing)
+        val repository = RoomReusableEventCatalogRepository(dao) { 99L }
+
+        val result = repository.updateCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, 8L, "  Left   arm  ")
+
+        val updated = (result as com.example.app.core.common.result.AppResult.Success).value
+        assertEquals("Left arm", updated.name)
+        assertEquals(1, dao.updated.size)
+        assertEquals("left arm", dao.updated.single().normalizedName)
+    }
+
+    @Test
+    fun update_catalog_entry_rethrows_cancellation_instead_of_mapping_persistence_error() = runBlocking {
+        val existing = ReusableEventCatalogEntity(
+            id = 8L,
+            kind = ReusableEventCatalogKind.EXPOSURE_TYPE.storageValue,
+            name = "Pollen",
+            normalizedName = "pollen",
+            usageCount = 2,
+            createdAtEpochMs = 10L,
+            updatedAtEpochMs = 10L,
+            lastUsedAtEpochMs = 10L
+        )
+        val dao = FakeReusableEventCatalogDao(existingById = existing, updateFailure = CancellationException("cancel"))
+        val repository = RoomReusableEventCatalogRepository(dao) { 99L }
+
+        try {
+            repository.updateCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, 8L, "Dust")
+            fail("Expected CancellationException")
+        } catch (_: CancellationException) {
+            // expected
+        }
+    }
+
     private fun option(
         id: Long,
         name: String,
@@ -137,7 +185,8 @@ class EventCatalogBehaviorTest {
 private class FakeReusableEventCatalogDao(
     private val existingByNormalizedName: ReusableEventCatalogEntity? = null,
     private val existingById: ReusableEventCatalogEntity? = null,
-    private val insertResult: Long = 1L
+    private val insertResult: Long = 1L,
+    private val updateFailure: Exception? = null
 ) : ReusableEventCatalogDao {
     val inserted = mutableListOf<ReusableEventCatalogEntity>()
     val updated = mutableListOf<ReusableEventCatalogEntity>()
@@ -148,6 +197,7 @@ private class FakeReusableEventCatalogDao(
     }
 
     override suspend fun update(entity: ReusableEventCatalogEntity): Int {
+        updateFailure?.let { throw it }
         updated += entity
         return 1
     }
@@ -165,4 +215,10 @@ private class FakeReusableEventCatalogDao(
     }
 
     override suspend fun existsById(kind: String, id: Long): Boolean = false
+
+    override suspend fun updateExposureReferences(catalogId: Long, name: String): Int = 0
+
+    override suspend fun updateOutbreakDescriptorReferences(catalogId: Long, name: String): Int = 0
+
+    override suspend fun updateBodyLocationReferences(catalogId: Long, name: String): Int = 0
 }

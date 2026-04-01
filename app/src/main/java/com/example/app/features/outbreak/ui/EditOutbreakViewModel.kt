@@ -137,6 +137,15 @@ class EditOutbreakViewModel(
                     canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
                 ).withFilteredCatalogs()
             }
+            EditOutbreakUiIntent.EditSelectedOutbreakDescriptorCatalog -> {
+                val selectedId = mutableState.value.selectedOutbreakDescriptorCatalogId ?: return
+                effectChannel.trySend(
+                    EditOutbreakUiEffect.NavigateToEditEventCatalog(
+                        ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR.storageValue,
+                        selectedId
+                    )
+                )
+            }
             is EditOutbreakUiIntent.UpdateBodyLocation -> updateState {
                 it.copy(
                     bodyLocation = intent.value,
@@ -174,6 +183,15 @@ class EditOutbreakViewModel(
                     formMessage = "",
                     canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
                 ).withFilteredCatalogs()
+            }
+            EditOutbreakUiIntent.EditSelectedBodyLocationCatalog -> {
+                val selectedId = mutableState.value.selectedBodyLocationCatalogId ?: return
+                effectChannel.trySend(
+                    EditOutbreakUiEffect.NavigateToEditEventCatalog(
+                        ReusableEventCatalogKind.BODY_LOCATION.storageValue,
+                        selectedId
+                    )
+                )
             }
             is EditOutbreakUiIntent.UpdateNotes -> updateState { it.copy(notes = intent.value) }
             is EditOutbreakUiIntent.UpdateOccurredAtInput -> {

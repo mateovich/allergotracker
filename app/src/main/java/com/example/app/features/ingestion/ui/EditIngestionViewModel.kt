@@ -46,6 +46,7 @@ class EditIngestionViewModel(
                     itemName = intent.value,
                     selectedReusableEntityKind = null,
                     selectedReusableEntityId = null,
+                    selectedReusableEntitySummary = null,
                     itemNameError = null,
                     formMessage = "",
                     canSave = canSave(intent.value, it.selectedQuantityLevel)
@@ -72,6 +73,12 @@ class EditIngestionViewModel(
                     )
                 }
             }
+            is EditIngestionUiIntent.ApplyReusableSelection -> updateState { it.withReusableSelection(intent.result) }
+            EditIngestionUiIntent.EditSelectedReusableEntity -> {
+                val selectedKind = mutableState.value.selectedReusableEntityKind ?: return
+                val selectedId = mutableState.value.selectedReusableEntityId ?: return
+                effectChannel.trySend(EditIngestionUiEffect.NavigateToEditReusableEntity(selectedKind, selectedId))
+            }
             EditIngestionUiIntent.ShowDeleteConfirmation -> showDeleteConfirmation()
             EditIngestionUiIntent.DismissDeleteConfirmation -> updateState { it.copy(isDeleteConfirmationVisible = false) }
             EditIngestionUiIntent.ConfirmDelete -> delete()
@@ -97,6 +104,7 @@ class EditIngestionViewModel(
                             selectedQuantityLevel = event.quantityLevel,
                             selectedReusableEntityKind = event.reusableEntityKind,
                             selectedReusableEntityId = event.reusableEntityId,
+                            selectedReusableEntitySummary = event.reusableEntityKind?.let { kind -> "${kind.label} selected: ${event.itemName}" },
                             isLoading = false,
                             canSave = canSave(event.itemName, event.quantityLevel),
                             canDelete = event.itemName.isNotBlank()
@@ -209,5 +217,17 @@ class EditIngestionViewModel(
             is DomainError.ValidationError -> fieldErrors[key]
             else -> null
         }
+    }
+
+    private fun EditIngestionUiState.withReusableSelection(result: IngestionReusableSelectionResult): EditIngestionUiState {
+        return copy(
+            itemName = result.name,
+            selectedReusableEntityKind = result.kind,
+            selectedReusableEntityId = result.id,
+            selectedReusableEntitySummary = "${result.kind.label} selected: ${result.name}",
+            itemNameError = null,
+            formMessage = "",
+            canSave = canSave(result.name, selectedQuantityLevel)
+        )
     }
 }

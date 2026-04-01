@@ -14,6 +14,7 @@ data class EditIngestionUiState(
     val selectedQuantityLevel: Int? = null,
     val selectedReusableEntityKind: ReusableEntityKind? = null,
     val selectedReusableEntityId: Long? = null,
+    val selectedReusableEntitySummary: String? = null,
     val itemNameError: String? = null,
     val quantityError: String? = null,
     val occurredAtError: String? = null,
@@ -32,6 +33,8 @@ sealed interface EditIngestionUiIntent {
     data class UpdateNotes(val value: String) : EditIngestionUiIntent
     data class SelectQuantityLevel(val level: Int) : EditIngestionUiIntent
     data class SelectTimePreset(val preset: IngestionTimePreset) : EditIngestionUiIntent
+    data class ApplyReusableSelection(val result: IngestionReusableSelectionResult) : EditIngestionUiIntent
+    data object EditSelectedReusableEntity : EditIngestionUiIntent
     data object ShowDeleteConfirmation : EditIngestionUiIntent
     data object DismissDeleteConfirmation : EditIngestionUiIntent
     data object ConfirmDelete : EditIngestionUiIntent
@@ -40,4 +43,5 @@ sealed interface EditIngestionUiIntent {
 
 sealed interface EditIngestionUiEffect {
     data object NavigateToRecords : EditIngestionUiEffect
+    data class NavigateToEditReusableEntity(val kind: ReusableEntityKind, val id: Long) : EditIngestionUiEffect
 }

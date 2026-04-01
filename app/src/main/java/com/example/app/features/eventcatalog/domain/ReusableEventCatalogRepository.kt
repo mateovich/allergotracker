@@ -1,5 +1,6 @@
 package com.example.app.features.eventcatalog.domain
 
+import com.example.app.core.common.result.AppResult
 import kotlinx.coroutines.flow.Flow
 
 interface ReusableEventCatalogRepository {
@@ -24,4 +25,11 @@ interface ReusableEventCatalogRepository {
         kind: ReusableEventCatalogKind,
         id: Long
     ): ReusableEventCatalog?
+
+    suspend fun updateCatalogEntry(
+        kind: ReusableEventCatalogKind,
+        id: Long,
+        name: String
+    ): AppResult<ReusableEventCatalog> =
+        AppResult.Error(com.example.app.core.common.error.DomainError.PersistenceError("Unsupported operation."))
 }

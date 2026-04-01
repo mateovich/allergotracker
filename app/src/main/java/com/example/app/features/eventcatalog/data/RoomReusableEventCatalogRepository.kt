@@ -1,10 +1,13 @@
 package com.example.app.features.eventcatalog.data
 
+import com.example.app.core.common.error.DomainError
+import com.example.app.core.common.result.AppResult
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalog
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalogRepository
 import com.example.app.features.eventcatalog.domain.canonicalizeReusableEventCatalogName
 import com.example.app.features.eventcatalog.domain.normalizeReusableEventCatalogName
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -77,6 +80,50 @@ class RoomReusableEventCatalogRepository(
         )
         eventCatalogDao.update(updated)
         return updated.toDomain()
+    }
+
+    override suspend fun updateCatalogEntry(
+        kind: ReusableEventCatalogKind,
+        id: Long,
+        name: String
+    ): AppResult<ReusableEventCatalog> {
+        return try {
+            val existing = eventCatalogDao.findById(kind.storageValue, id)
+                ?: return AppResult.Error(DomainError.IntegrityError("Saved value is no longer available."))
+            val canonicalName = canonicalizeReusableEventCatalogName(name)
+            val normalizedName = normalizeReusableEventCatalogName(name)
+            eventCatalogDao.findByNormalizedName(kind.storageValue, normalizedName)?.let { conflict ->
+                if (conflict.id != id) {
+                    return AppResult.Error(
+                        DomainError.ValidationError(
+                            message = "Please fix the highlighted fields.",
+                            fieldErrors = mapOf("name" to duplicateNameMessage(kind))
+                        )
+                    )
+                }
+            }
+            val updated = existing.copy(
+                name = canonicalName,
+                normalizedName = normalizedName,
+                updatedAtEpochMs = nowEpochMillis()
+            )
+            if (eventCatalogDao.update(updated) == 0) {
+                return AppResult.Error(DomainError.IntegrityError("Saved value is no longer available."))
+            }
+            AppResult.Success(updated.toDomain())
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+            AppResult.Error(DomainError.PersistenceError("Couldn't update saved value locally. Try again."))
+        }
+    }
+}
+
+private fun duplicateNameMessage(kind: ReusableEventCatalogKind): String {
+    return when (kind) {
+        ReusableEventCatalogKind.EXPOSURE_TYPE -> "A saved exposure type with this name already exists."
+        ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR -> "A saved outbreak descriptor with this name already exists."
+        ReusableEventCatalogKind.BODY_LOCATION -> "A saved body location with this name already exists."
     }
 }
 

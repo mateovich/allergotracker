@@ -247,5 +247,7 @@ private class FakeExposureEventDaoForRepository(
         deleteException?.let { throw it }
         return deleteCount
     }
+    override suspend fun updateCatalogName(catalogId: Long, name: String): Int = 0
+    override suspend fun countCatalogReferences(catalogId: Long): Int = 0
     override fun observeExposureEvents(): Flow<List<ExposureEventEntity>> = emptyFlow()
 }

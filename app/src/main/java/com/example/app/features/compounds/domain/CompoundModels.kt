@@ -5,6 +5,12 @@ data class CreateReusableCompoundCommand(
     val notes: String?
 )
 
+data class UpdateReusableCompoundCommand(
+    val id: Long,
+    val name: String,
+    val notes: String?
+)
+
 enum class CompoundCompositionStatus(val storageValue: String) {
     DRAFT("draft"),
     COMPLETE("complete");

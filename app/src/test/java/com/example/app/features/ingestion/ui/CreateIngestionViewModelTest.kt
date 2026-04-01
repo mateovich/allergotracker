@@ -177,6 +177,28 @@ class CreateIngestionViewModelTest {
     }
 
     @Test
+    fun edit_selected_reusable_entity_emits_navigation_for_current_kind() = runBlocking {
+        val viewModel = buildViewModel()
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.onIntent(
+            CreateIngestionUiIntent.SelectReusableEntity(
+                IngestionReusableSelectionResult(
+                    id = 22L,
+                    name = "Breakfast mix",
+                    kind = ReusableEntityKind.COMPOUND
+                )
+            )
+        )
+        viewModel.onIntent(CreateIngestionUiIntent.EditSelectedReusableEntity)
+
+        assertEquals(
+            CreateIngestionUiEffect.NavigateToEditReusableEntity(ReusableEntityKind.COMPOUND, 22L),
+            effect.await()
+        )
+    }
+
+    @Test
     fun integrity_error_from_save_is_mapped_back_into_form_message() = runBlocking {
         val viewModel = buildViewModel(
             saveResult = AppResult.Error(com.example.app.core.common.error.DomainError.IntegrityError("Selected reusable item is no longer available."))

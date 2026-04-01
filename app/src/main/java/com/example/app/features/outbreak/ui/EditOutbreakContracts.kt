@@ -41,10 +41,12 @@ sealed interface EditOutbreakUiIntent {
     data class SelectOutbreakDescriptorCatalogOption(val id: Long, val name: String) : EditOutbreakUiIntent
     data object UseTypedOutbreakDescriptor : EditOutbreakUiIntent
     data object ClearOutbreakDescriptorCatalogSelection : EditOutbreakUiIntent
+    data object EditSelectedOutbreakDescriptorCatalog : EditOutbreakUiIntent
     data class UpdateBodyLocation(val value: String) : EditOutbreakUiIntent
     data class SelectBodyLocationCatalogOption(val id: Long, val name: String) : EditOutbreakUiIntent
     data object UseTypedBodyLocation : EditOutbreakUiIntent
     data object ClearBodyLocationCatalogSelection : EditOutbreakUiIntent
+    data object EditSelectedBodyLocationCatalog : EditOutbreakUiIntent
     data class UpdateNotes(val value: String) : EditOutbreakUiIntent
     data class UpdateOccurredAtInput(val value: String) : EditOutbreakUiIntent
     data class SelectTimePreset(val preset: OutbreakTimePreset) : EditOutbreakUiIntent
@@ -56,4 +58,5 @@ sealed interface EditOutbreakUiIntent {
 
 sealed interface EditOutbreakUiEffect {
     data object NavigateToRecords : EditOutbreakUiEffect
+    data class NavigateToEditEventCatalog(val kindStorageValue: String, val id: Long) : EditOutbreakUiEffect
 }

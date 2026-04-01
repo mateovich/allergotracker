@@ -5,6 +5,12 @@ data class CreateReusableIngredientCommand(
     val notes: String?
 )
 
+data class UpdateReusableIngredientCommand(
+    val id: Long,
+    val name: String,
+    val notes: String?
+)
+
 data class ReusableIngredient(
     val id: Long,
     val name: String,

@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -14,6 +15,16 @@ interface ReusableCompoundDao {
 
     @Query("SELECT * FROM reusable_compounds WHERE normalized_name = :normalizedName LIMIT 1")
     suspend fun findByNormalizedName(normalizedName: String): ReusableCompoundEntity?
+
+    @Query("SELECT * FROM reusable_compounds WHERE id = :id LIMIT 1")
+    suspend fun findById(id: Long): ReusableCompoundEntity?
+
+    @Transaction
+    @Query("SELECT * FROM reusable_compounds WHERE id = :id LIMIT 1")
+    suspend fun findCompoundWithComponentsById(id: Long): ReusableCompoundWithComponents?
+
+    @Update
+    suspend fun updateCompound(entity: ReusableCompoundEntity): Int
 
     @Query("SELECT EXISTS(SELECT 1 FROM reusable_compounds WHERE id = :id)")
     suspend fun existsById(id: Long): Boolean
