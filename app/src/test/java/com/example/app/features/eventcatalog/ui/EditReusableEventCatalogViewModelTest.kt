@@ -4,9 +4,11 @@ import com.example.app.MainDispatcherRule
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.eventcatalog.domain.GetReusableEventCatalogEntryUseCase
+import com.example.app.features.eventcatalog.domain.GetReusableEventCatalogRetirementImpactUseCase
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalog
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalogRepository
+import com.example.app.features.eventcatalog.domain.RetireReusableEventCatalogUseCase
 import com.example.app.features.eventcatalog.domain.UpdateReusableEventCatalogUseCase
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
@@ -27,12 +29,7 @@ class EditReusableEventCatalogViewModelTest {
     @Test
     fun load_populates_existing_value_and_save_returns_updated_selection() = runBlocking {
         val repository = FakeEditReusableEventCatalogRepository()
-        val viewModel = EditReusableEventCatalogViewModel(
-            catalogId = 7L,
-            kind = ReusableEventCatalogKind.EXPOSURE_TYPE,
-            getReusableEventCatalogEntryUseCase = GetReusableEventCatalogEntryUseCase(repository),
-            updateReusableEventCatalogUseCase = UpdateReusableEventCatalogUseCase(repository)
-        )
+        val viewModel = buildViewModel(repository)
         val effect = async { viewModel.effects.first() }
 
         viewModel.onIntent(EditReusableEventCatalogUiIntent.Load)
@@ -51,12 +48,7 @@ class EditReusableEventCatalogViewModelTest {
         val repository = FakeEditReusableEventCatalogRepository(
             getFailure = DomainError.PersistenceError("Couldn't load saved value locally. Try again.")
         )
-        val viewModel = EditReusableEventCatalogViewModel(
-            catalogId = 7L,
-            kind = ReusableEventCatalogKind.EXPOSURE_TYPE,
-            getReusableEventCatalogEntryUseCase = GetReusableEventCatalogEntryUseCase(repository),
-            updateReusableEventCatalogUseCase = UpdateReusableEventCatalogUseCase(repository)
-        )
+        val viewModel = buildViewModel(repository)
 
         viewModel.onIntent(EditReusableEventCatalogUiIntent.Load)
 
@@ -75,12 +67,7 @@ class EditReusableEventCatalogViewModelTest {
                 )
             )
         )
-        val viewModel = EditReusableEventCatalogViewModel(
-            catalogId = 7L,
-            kind = ReusableEventCatalogKind.EXPOSURE_TYPE,
-            getReusableEventCatalogEntryUseCase = GetReusableEventCatalogEntryUseCase(repository),
-            updateReusableEventCatalogUseCase = UpdateReusableEventCatalogUseCase(repository)
-        )
+        val viewModel = buildViewModel(repository)
 
         viewModel.onIntent(EditReusableEventCatalogUiIntent.Load)
         viewModel.onIntent(EditReusableEventCatalogUiIntent.Save)
@@ -88,11 +75,90 @@ class EditReusableEventCatalogViewModelTest {
         assertEquals("A saved exposure type with this name already exists.", viewModel.state.value.nameError)
         assertTrue(viewModel.state.value.formMessage.isNotBlank())
     }
+
+    @Test
+    fun retirement_preview_shows_blocked_state_for_active_catalog_references() = runBlocking {
+        val repository = FakeEditReusableEventCatalogRepository()
+        val viewModel = buildViewModel(repository, countReferences = { _, _ -> 3 })
+
+        viewModel.onIntent(EditReusableEventCatalogUiIntent.Load)
+        viewModel.onIntent(EditReusableEventCatalogUiIntent.RequestRetirementPreview)
+
+        assertTrue(viewModel.state.value.isRetirementDialogVisible)
+        assertEquals(3, viewModel.state.value.retirementImpact?.activeReferenceCount)
+        assertTrue(viewModel.state.value.retirementImpact?.isBlocked == true)
+    }
+
+    @Test
+    fun confirm_retirement_navigates_back_after_successful_retire() = runBlocking {
+        val repository = FakeEditReusableEventCatalogRepository()
+        val viewModel = buildViewModel(repository)
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.onIntent(EditReusableEventCatalogUiIntent.Load)
+        viewModel.onIntent(EditReusableEventCatalogUiIntent.RequestRetirementPreview)
+        viewModel.onIntent(EditReusableEventCatalogUiIntent.ConfirmRetirement)
+
+        val navigation = effect.await() as EditReusableEventCatalogUiEffect.NavigateBackAfterRetirement
+
+        assertEquals(EditReusableEventCatalogUiEffect.NavigateBackAfterRetirement, navigation)
+        assertFalse(viewModel.state.value.isRetirementDialogVisible)
+    }
+
+    @Test
+    fun blocked_retirement_keeps_dialog_visible_without_navigation() = runBlocking {
+        val repository = FakeEditReusableEventCatalogRepository()
+        val viewModel = buildViewModel(repository, countReferences = { _, _ -> 3 })
+
+        viewModel.onIntent(EditReusableEventCatalogUiIntent.Load)
+        viewModel.onIntent(EditReusableEventCatalogUiIntent.RequestRetirementPreview)
+        viewModel.onIntent(EditReusableEventCatalogUiIntent.ConfirmRetirement)
+
+        assertTrue(viewModel.state.value.isRetirementDialogVisible)
+        assertTrue(viewModel.state.value.retirementImpact?.isBlocked == true)
+    }
+
+    @Test
+    fun confirm_retirement_failure_keeps_dialog_open_and_surfaces_actionable_error() = runBlocking {
+        val repository = FakeEditReusableEventCatalogRepository(
+            deleteResult = AppResult.Error(
+                DomainError.IntegrityError("Replace or clear the linked records before retiring this saved value.")
+            )
+        )
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditReusableEventCatalogUiIntent.Load)
+        viewModel.onIntent(EditReusableEventCatalogUiIntent.RequestRetirementPreview)
+        viewModel.onIntent(EditReusableEventCatalogUiIntent.ConfirmRetirement)
+
+        assertTrue(viewModel.state.value.isRetirementDialogVisible)
+        assertEquals(
+            "Replace or clear the linked records before retiring this saved value.",
+            viewModel.state.value.formMessage
+        )
+        assertFalse(viewModel.state.value.isRetiring)
+    }
+
+    private fun buildViewModel(
+        repository: FakeEditReusableEventCatalogRepository,
+        countReferences: suspend (ReusableEventCatalogKind, Long) -> Int = { _, _ -> 0 }
+    ): EditReusableEventCatalogViewModel {
+        val impactUseCase = GetReusableEventCatalogRetirementImpactUseCase(repository, countReferences)
+        return EditReusableEventCatalogViewModel(
+            catalogId = 7L,
+            kind = ReusableEventCatalogKind.EXPOSURE_TYPE,
+            getReusableEventCatalogEntryUseCase = GetReusableEventCatalogEntryUseCase(repository),
+            updateReusableEventCatalogUseCase = UpdateReusableEventCatalogUseCase(repository),
+            getReusableEventCatalogRetirementImpactUseCase = impactUseCase,
+            retireReusableEventCatalogUseCase = RetireReusableEventCatalogUseCase(repository, impactUseCase)
+        )
+    }
 }
 
 private class FakeEditReusableEventCatalogRepository(
     private val getFailure: DomainError? = null,
-    private val updateResult: AppResult<ReusableEventCatalog>? = null
+    private val updateResult: AppResult<ReusableEventCatalog>? = null,
+    private val deleteResult: AppResult<Unit> = AppResult.Success(Unit)
 ) : ReusableEventCatalogRepository {
     var updatedId: Long? = null
     var updatedName: String? = null
@@ -139,4 +205,6 @@ private class FakeEditReusableEventCatalogRepository(
             )
         )
     }
+
+    override suspend fun deleteCatalogEntry(kind: ReusableEventCatalogKind, id: Long): AppResult<Unit> = deleteResult
 }

@@ -1,5 +1,6 @@
 package com.example.app.features.compounds.data
 
+import android.database.sqlite.SQLiteConstraintException
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.compounds.domain.CompoundComponentKind
@@ -115,6 +116,26 @@ class RoomReusableCompoundRepository(
             throw cancellation
         } catch (_: Exception) {
             AppResult.Error(DomainError.PersistenceError("Couldn't update compound locally. Try again."))
+        }
+    }
+
+    override suspend fun deleteCompound(id: Long): AppResult<Unit> {
+        return try {
+            if (compoundDao.deleteCompoundById(id) == 0) {
+                AppResult.Error(DomainError.IntegrityError("Saved compound is no longer available."))
+            } else {
+                AppResult.Success(Unit)
+            }
+        } catch (_: SQLiteConstraintException) {
+            AppResult.Error(
+                DomainError.IntegrityError(
+                    "This compound is still linked from other records. Replace those references before retiring it."
+                )
+            )
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+            AppResult.Error(DomainError.PersistenceError("Couldn't retire compound locally. Try again."))
         }
     }
 

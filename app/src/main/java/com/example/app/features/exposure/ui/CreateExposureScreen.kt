@@ -37,6 +37,7 @@ fun CreateExposureScreen(
     onNavigateToRoute: (String) -> Unit,
     viewModelFactory: ViewModelProvider.Factory,
     editedCatalogSelection: EditedEventCatalogSelectionResult? = null,
+    retiredCatalogKind: ReusableEventCatalogKind? = null,
     onEditedCatalogConsumed: () -> Unit = {},
     viewModel: CreateExposureViewModel = viewModel(factory = viewModelFactory)
 ) {
@@ -46,6 +47,13 @@ fun CreateExposureScreen(
     LaunchedEffect(editedCatalogSelection) {
         editedCatalogSelection?.takeIf { it.kind == ReusableEventCatalogKind.EXPOSURE_TYPE }?.let {
             viewModel.onIntent(CreateExposureUiIntent.SelectExposureCatalogOption(it.id, it.name))
+            onEditedCatalogConsumed()
+        }
+    }
+
+    LaunchedEffect(retiredCatalogKind) {
+        if (retiredCatalogKind == ReusableEventCatalogKind.EXPOSURE_TYPE) {
+            viewModel.onIntent(CreateExposureUiIntent.ClearRetiredExposureCatalogSelection)
             onEditedCatalogConsumed()
         }
     }

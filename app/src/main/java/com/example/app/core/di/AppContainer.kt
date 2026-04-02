@@ -18,15 +18,19 @@ import com.example.app.core.database.migrations.Migration_10_11
 import com.example.app.core.database.migrations.Migration_11_12
 import com.example.app.features.compounds.data.RoomReusableCompoundRepository
 import com.example.app.features.compounds.domain.CreateReusableCompoundUseCase
+import com.example.app.features.compounds.domain.GetReusableCompoundRetirementImpactUseCase
 import com.example.app.features.compounds.domain.GetReusableCompoundUseCase
 import com.example.app.features.compounds.domain.ObserveReusableCompoundsUseCase
+import com.example.app.features.compounds.domain.RetireReusableCompoundUseCase
 import com.example.app.features.compounds.domain.UpdateReusableCompoundUseCase
 import com.example.app.features.compounds.ui.CreateCompoundViewModelFactory
 import com.example.app.features.compounds.ui.EditCompoundViewModelFactory
 import com.example.app.features.eventcatalog.data.RoomReusableEventCatalogRepository
 import com.example.app.features.eventcatalog.domain.GetReusableEventCatalogEntryUseCase
+import com.example.app.features.eventcatalog.domain.GetReusableEventCatalogRetirementImpactUseCase
 import com.example.app.features.eventcatalog.domain.ObserveReusableEventCatalogUseCase
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.domain.RetireReusableEventCatalogUseCase
 import com.example.app.features.eventcatalog.domain.UpdateReusableEventCatalogUseCase
 import com.example.app.features.eventcatalog.ui.EditReusableEventCatalogViewModelFactory
 import com.example.app.features.exposure.data.RoomExposureRepository
@@ -39,8 +43,10 @@ import com.example.app.features.exposure.ui.CreateExposureViewModelFactory
 import com.example.app.features.exposure.ui.EditExposureViewModelFactory
 import com.example.app.features.ingredients.data.RoomReusableIngredientRepository
 import com.example.app.features.ingredients.domain.CreateReusableIngredientUseCase
+import com.example.app.features.ingredients.domain.GetReusableIngredientRetirementImpactUseCase
 import com.example.app.features.ingredients.domain.GetReusableIngredientUseCase
 import com.example.app.features.ingredients.domain.ObserveReusableIngredientsUseCase
+import com.example.app.features.ingredients.domain.RetireReusableIngredientUseCase
 import com.example.app.features.ingredients.domain.UpdateReusableIngredientUseCase
 import com.example.app.features.ingredients.ui.CreateIngredientViewModelFactory
 import com.example.app.features.ingredients.ui.EditIngredientViewModelFactory
@@ -204,6 +210,34 @@ class AppContainer(appContext: Context) {
     private val getReusableIngredientUseCase = GetReusableIngredientUseCase(reusableIngredientRepository)
     private val getReusableCompoundUseCase = GetReusableCompoundUseCase(reusableCompoundRepository)
     private val getReusableEventCatalogEntryUseCase = GetReusableEventCatalogEntryUseCase(reusableEventCatalogRepository)
+    private val getReusableIngredientRetirementImpactUseCase = GetReusableIngredientRetirementImpactUseCase(
+        repository = reusableIngredientRepository,
+        countIngestionReferences = { ingredientId ->
+            ingestionEventDao.countReusableEntityReferences(ReusableEntityKind.INGREDIENT.storageValue, ingredientId)
+        },
+        countCompoundReferences = { ingredientId ->
+            reusableCompoundDao.countIngredientComponentReferences(ingredientId)
+        }
+    )
+    private val getReusableCompoundRetirementImpactUseCase = GetReusableCompoundRetirementImpactUseCase(
+        repository = reusableCompoundRepository,
+        countIngestionReferences = { compoundId ->
+            ingestionEventDao.countReusableEntityReferences(ReusableEntityKind.COMPOUND.storageValue, compoundId)
+        },
+        countChildCompoundReferences = { compoundId ->
+            reusableCompoundDao.countChildCompoundReferences(compoundId)
+        }
+    )
+    private val getReusableEventCatalogRetirementImpactUseCase = GetReusableEventCatalogRetirementImpactUseCase(
+        repository = reusableEventCatalogRepository,
+        countReferences = { kind, catalogId ->
+            when (kind) {
+                ReusableEventCatalogKind.EXPOSURE_TYPE -> exposureEventDao.countCatalogReferences(catalogId)
+                ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR -> outbreakEventDao.countOutbreakDescriptorCatalogReferences(catalogId)
+                ReusableEventCatalogKind.BODY_LOCATION -> outbreakEventDao.countBodyLocationCatalogReferences(catalogId)
+            }
+        }
+    )
     private val updateReusableIngredientUseCase = UpdateReusableIngredientUseCase(
         repository = reusableIngredientRepository,
         syncReferences = { ingredientId, name ->
@@ -216,6 +250,16 @@ class AppContainer(appContext: Context) {
             appDatabase.withTransaction { block() }
         }
     )
+    private val retireReusableIngredientUseCase = RetireReusableIngredientUseCase(
+        repository = reusableIngredientRepository,
+        getImpact = getReusableIngredientRetirementImpactUseCase,
+        detachIngestionReferences = { ingredientId ->
+            ingestionEventDao.clearReusableEntityReferences(ReusableEntityKind.INGREDIENT.storageValue, ingredientId)
+        },
+        runAtomically = { block ->
+            appDatabase.withTransaction { block() }
+        }
+    )
     private val updateReusableCompoundUseCase = UpdateReusableCompoundUseCase(
         repository = reusableCompoundRepository,
         syncReferences = { compoundId, name ->
@@ -223,6 +267,16 @@ class AppContainer(appContext: Context) {
         },
         countReferences = { compoundId ->
             ingestionEventDao.countReusableEntityReferences(ReusableEntityKind.COMPOUND.storageValue, compoundId)
+        },
+        runAtomically = { block ->
+            appDatabase.withTransaction { block() }
+        }
+    )
+    private val retireReusableCompoundUseCase = RetireReusableCompoundUseCase(
+        repository = reusableCompoundRepository,
+        getImpact = getReusableCompoundRetirementImpactUseCase,
+        detachIngestionReferences = { compoundId ->
+            ingestionEventDao.clearReusableEntityReferences(ReusableEntityKind.COMPOUND.storageValue, compoundId)
         },
         runAtomically = { block ->
             appDatabase.withTransaction { block() }
@@ -244,6 +298,13 @@ class AppContainer(appContext: Context) {
                 ReusableEventCatalogKind.BODY_LOCATION -> outbreakEventDao.countBodyLocationCatalogReferences(catalogId)
             }
         },
+        runAtomically = { block ->
+            appDatabase.withTransaction { block() }
+        }
+    )
+    private val retireReusableEventCatalogUseCase = RetireReusableEventCatalogUseCase(
+        repository = reusableEventCatalogRepository,
+        getImpact = getReusableEventCatalogRetirementImpactUseCase,
         runAtomically = { block ->
             appDatabase.withTransaction { block() }
         }
@@ -282,11 +343,23 @@ class AppContainer(appContext: Context) {
         CreateCompoundViewModelFactory(createReusableCompoundUseCase)
 
     fun createEditIngredientViewModelFactory(reusableId: Long): EditIngredientViewModelFactory {
-        return EditIngredientViewModelFactory(reusableId, getReusableIngredientUseCase, updateReusableIngredientUseCase)
+        return EditIngredientViewModelFactory(
+            reusableId,
+            getReusableIngredientUseCase,
+            updateReusableIngredientUseCase,
+            getReusableIngredientRetirementImpactUseCase,
+            retireReusableIngredientUseCase
+        )
     }
 
     fun createEditCompoundViewModelFactory(reusableId: Long): EditCompoundViewModelFactory {
-        return EditCompoundViewModelFactory(reusableId, getReusableCompoundUseCase, updateReusableCompoundUseCase)
+        return EditCompoundViewModelFactory(
+            reusableId,
+            getReusableCompoundUseCase,
+            updateReusableCompoundUseCase,
+            getReusableCompoundRetirementImpactUseCase,
+            retireReusableCompoundUseCase
+        )
     }
 
     fun createEditReusableEventCatalogViewModelFactory(
@@ -297,7 +370,9 @@ class AppContainer(appContext: Context) {
             reusableId,
             kind,
             getReusableEventCatalogEntryUseCase,
-            updateReusableEventCatalogUseCase
+            updateReusableEventCatalogUseCase,
+            getReusableEventCatalogRetirementImpactUseCase,
+            retireReusableEventCatalogUseCase
         )
     }
 

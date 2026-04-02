@@ -1,5 +1,6 @@
 package com.example.app.features.eventcatalog.data
 
+import android.database.sqlite.SQLiteConstraintException
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalog
@@ -115,6 +116,29 @@ class RoomReusableEventCatalogRepository(
             throw cancellation
         } catch (_: Exception) {
             AppResult.Error(DomainError.PersistenceError("Couldn't update saved value locally. Try again."))
+        }
+    }
+
+    override suspend fun deleteCatalogEntry(
+        kind: ReusableEventCatalogKind,
+        id: Long
+    ): AppResult<Unit> {
+        return try {
+            if (eventCatalogDao.deleteById(kind.storageValue, id) == 0) {
+                AppResult.Error(DomainError.IntegrityError("Saved value is no longer available."))
+            } else {
+                AppResult.Success(Unit)
+            }
+        } catch (_: SQLiteConstraintException) {
+            AppResult.Error(
+                DomainError.IntegrityError(
+                    "This saved value is still linked to other records. Replace or clear those references before retiring it."
+                )
+            )
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+            AppResult.Error(DomainError.PersistenceError("Couldn't retire saved value locally. Try again."))
         }
     }
 }

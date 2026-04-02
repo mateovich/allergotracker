@@ -91,10 +91,12 @@ fun AppNavGraph(
                 viewModelFactory = createIngestionViewModelFactory,
                 onNavigateToRoute = { route -> navigateToRouteOrReturnToRecords(navController, route) },
                 selectedReusableEntity = savedStateHandle.toIngestionReusableSelectionResult(),
+                retiredReusableSelection = savedStateHandle.consumeRetiredReusableSelection(),
                 onReusableEntityConsumed = {
                     savedStateHandle.remove<Long>(AppRoutes.REUSABLE_ENTITY_ID_RESULT)
                     savedStateHandle.remove<String>(AppRoutes.REUSABLE_ENTITY_NAME_RESULT)
                     savedStateHandle.remove<String>(AppRoutes.REUSABLE_ENTITY_KIND_RESULT)
+                    savedStateHandle.remove<Boolean>(AppRoutes.REUSABLE_ENTITY_RETIRED_RESULT)
                 }
             )
         }
@@ -103,10 +105,12 @@ fun AppNavGraph(
             CreateExposureScreen(
                 viewModelFactory = createExposureViewModelFactory,
                 editedCatalogSelection = savedStateHandle.toEditedEventCatalogSelectionResult(),
+                retiredCatalogKind = savedStateHandle.consumeRetiredEventCatalogKind(),
                 onEditedCatalogConsumed = {
                     savedStateHandle.remove<Long>(AppRoutes.EVENT_CATALOG_ID_RESULT)
                     savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_NAME_RESULT)
                     savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_KIND_RESULT)
+                    savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_RETIRED_KIND_RESULT)
                 },
                 onNavigateToRoute = { route -> navigateToRouteOrReturnToRecords(navController, route) }
             )
@@ -116,10 +120,12 @@ fun AppNavGraph(
             CreateOutbreakScreen(
                 viewModelFactory = createOutbreakViewModelFactory,
                 editedCatalogSelection = savedStateHandle.toEditedEventCatalogSelectionResult(),
+                retiredCatalogKind = savedStateHandle.consumeRetiredEventCatalogKind(),
                 onEditedCatalogConsumed = {
                     savedStateHandle.remove<Long>(AppRoutes.EVENT_CATALOG_ID_RESULT)
                     savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_NAME_RESULT)
                     savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_KIND_RESULT)
+                    savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_RETIRED_KIND_RESULT)
                 },
                 onNavigateToRoute = { route -> navigateToRouteOrReturnToRecords(navController, route) }
             )
@@ -158,6 +164,13 @@ fun AppNavGraph(
                     navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_NAME_RESULT, result.name)
                     navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_KIND_RESULT, result.kind.storageValue)
                     navController.popBackStack()
+                },
+                onNavigateBack = {
+                    navController.previousBackStackEntry?.savedStateHandle?.remove<Long>(AppRoutes.REUSABLE_ENTITY_ID_RESULT)
+                    navController.previousBackStackEntry?.savedStateHandle?.remove<String>(AppRoutes.REUSABLE_ENTITY_NAME_RESULT)
+                    navController.previousBackStackEntry?.savedStateHandle?.remove<String>(AppRoutes.REUSABLE_ENTITY_KIND_RESULT)
+                    navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_RETIRED_RESULT, true)
+                    navController.popBackStack()
                 }
             )
         }
@@ -172,6 +185,13 @@ fun AppNavGraph(
                     navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_ID_RESULT, result.id)
                     navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_NAME_RESULT, result.name)
                     navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_KIND_RESULT, result.kind.storageValue)
+                    navController.popBackStack()
+                },
+                onNavigateBack = {
+                    navController.previousBackStackEntry?.savedStateHandle?.remove<Long>(AppRoutes.REUSABLE_ENTITY_ID_RESULT)
+                    navController.previousBackStackEntry?.savedStateHandle?.remove<String>(AppRoutes.REUSABLE_ENTITY_NAME_RESULT)
+                    navController.previousBackStackEntry?.savedStateHandle?.remove<String>(AppRoutes.REUSABLE_ENTITY_KIND_RESULT)
+                    navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_RETIRED_RESULT, true)
                     navController.popBackStack()
                 }
             )
@@ -194,6 +214,16 @@ fun AppNavGraph(
                     navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.EVENT_CATALOG_NAME_RESULT, result.name)
                     navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.EVENT_CATALOG_KIND_RESULT, result.kind.storageValue)
                     navController.popBackStack()
+                },
+                onNavigateBack = {
+                    navController.previousBackStackEntry?.savedStateHandle?.remove<Long>(AppRoutes.EVENT_CATALOG_ID_RESULT)
+                    navController.previousBackStackEntry?.savedStateHandle?.remove<String>(AppRoutes.EVENT_CATALOG_NAME_RESULT)
+                    navController.previousBackStackEntry?.savedStateHandle?.remove<String>(AppRoutes.EVENT_CATALOG_KIND_RESULT)
+                    navController.previousBackStackEntry?.savedStateHandle?.set(
+                        AppRoutes.EVENT_CATALOG_RETIRED_KIND_RESULT,
+                        kind.storageValue
+                    )
+                    navController.popBackStack()
                 }
             )
         }
@@ -206,10 +236,12 @@ fun AppNavGraph(
             EditIngestionScreen(
                 viewModelFactory = editIngestionViewModelFactoryProvider(recordId),
                 selectedReusableEntity = savedStateHandle.toIngestionReusableSelectionResult(),
+                retiredReusableSelection = savedStateHandle.consumeRetiredReusableSelection(),
                 onReusableEntityConsumed = {
                     savedStateHandle.remove<Long>(AppRoutes.REUSABLE_ENTITY_ID_RESULT)
                     savedStateHandle.remove<String>(AppRoutes.REUSABLE_ENTITY_NAME_RESULT)
                     savedStateHandle.remove<String>(AppRoutes.REUSABLE_ENTITY_KIND_RESULT)
+                    savedStateHandle.remove<Boolean>(AppRoutes.REUSABLE_ENTITY_RETIRED_RESULT)
                 },
                 onNavigateToRoute = { route -> navigateToRouteOrReturnToRecords(navController, route) }
             )
@@ -231,10 +263,12 @@ fun AppNavGraph(
                 viewModelFactory = editExposureViewModelFactoryProvider(recordId),
                 openDeleteOnStart = openDeleteOnStart,
                 editedCatalogSelection = savedStateHandle.toEditedEventCatalogSelectionResult(),
+                retiredCatalogKind = savedStateHandle.consumeRetiredEventCatalogKind(),
                 onEditedCatalogConsumed = {
                     savedStateHandle.remove<Long>(AppRoutes.EVENT_CATALOG_ID_RESULT)
                     savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_NAME_RESULT)
                     savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_KIND_RESULT)
+                    savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_RETIRED_KIND_RESULT)
                 },
                 onNavigateToRoute = { route -> navigateToRouteOrReturnToRecords(navController, route) }
             )
@@ -256,10 +290,12 @@ fun AppNavGraph(
                 viewModelFactory = editOutbreakViewModelFactoryProvider(recordId),
                 openDeleteOnStart = openDeleteOnStart,
                 editedCatalogSelection = savedStateHandle.toEditedEventCatalogSelectionResult(),
+                retiredCatalogKind = savedStateHandle.consumeRetiredEventCatalogKind(),
                 onEditedCatalogConsumed = {
                     savedStateHandle.remove<Long>(AppRoutes.EVENT_CATALOG_ID_RESULT)
                     savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_NAME_RESULT)
                     savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_KIND_RESULT)
+                    savedStateHandle.remove<String>(AppRoutes.EVENT_CATALOG_RETIRED_KIND_RESULT)
                 },
                 onNavigateToRoute = { route -> navigateToRouteOrReturnToRecords(navController, route) }
             )
@@ -291,4 +327,13 @@ internal fun SavedStateHandle.toEditedEventCatalogSelectionResult(): EditedEvent
     val kind = ReusableEventCatalogKind.fromStorageValue(kindRaw) ?: return null
     if (id <= 0L || name.isBlank()) return null
     return EditedEventCatalogSelectionResult(id = id, kind = kind, name = name)
+}
+
+internal fun SavedStateHandle.consumeRetiredReusableSelection(): Boolean {
+    return get<Boolean>(AppRoutes.REUSABLE_ENTITY_RETIRED_RESULT) == true
+}
+
+internal fun SavedStateHandle.consumeRetiredEventCatalogKind(): ReusableEventCatalogKind? {
+    val kindRaw = get<String>(AppRoutes.EVENT_CATALOG_RETIRED_KIND_RESULT) ?: return null
+    return ReusableEventCatalogKind.fromStorageValue(kindRaw)
 }

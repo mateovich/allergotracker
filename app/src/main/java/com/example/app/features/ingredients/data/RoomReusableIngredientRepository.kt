@@ -1,5 +1,6 @@
 package com.example.app.features.ingredients.data
 
+import android.database.sqlite.SQLiteConstraintException
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.ingredients.domain.CreateReusableIngredientCommand
@@ -81,6 +82,26 @@ class RoomReusableIngredientRepository(
             throw cancellation
         } catch (_: Exception) {
             AppResult.Error(DomainError.PersistenceError("Couldn't update ingredient locally. Try again."))
+        }
+    }
+
+    override suspend fun deleteIngredient(id: Long): AppResult<Unit> {
+        return try {
+            if (ingredientDao.deleteById(id) == 0) {
+                AppResult.Error(DomainError.IntegrityError("Saved ingredient is no longer available."))
+            } else {
+                AppResult.Success(Unit)
+            }
+        } catch (_: SQLiteConstraintException) {
+            AppResult.Error(
+                DomainError.IntegrityError(
+                    "This ingredient is still linked from compound components. Replace those references before retiring it."
+                )
+            )
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+            AppResult.Error(DomainError.PersistenceError("Couldn't retire ingredient locally. Try again."))
         }
     }
 

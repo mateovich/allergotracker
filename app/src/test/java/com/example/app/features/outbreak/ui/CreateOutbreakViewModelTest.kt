@@ -146,6 +146,23 @@ class CreateOutbreakViewModelTest {
     }
 
     @Test
+    fun clearing_retired_catalog_selection_keeps_text_but_drops_stale_ids() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateOutbreakUiIntent.SelectOutbreakDescriptorCatalogOption(11L, "Skin flare"))
+        viewModel.onIntent(CreateOutbreakUiIntent.SelectBodyLocationCatalogOption(12L, "Left arm"))
+        viewModel.onIntent(CreateOutbreakUiIntent.ClearRetiredOutbreakDescriptorCatalogSelection)
+        viewModel.onIntent(CreateOutbreakUiIntent.ClearRetiredBodyLocationCatalogSelection)
+
+        assertEquals("Skin flare", viewModel.state.value.outbreakDescriptor)
+        assertEquals("Left arm", viewModel.state.value.bodyLocation)
+        assertEquals(null, viewModel.state.value.selectedOutbreakDescriptorCatalogId)
+        assertEquals(null, viewModel.state.value.selectedBodyLocationCatalogId)
+        assertEquals(null, viewModel.state.value.selectedOutbreakDescriptorSummary)
+        assertEquals(null, viewModel.state.value.selectedBodyLocationSummary)
+    }
+
+    @Test
     fun second_save_while_first_is_in_flight_is_ignored() = runBlocking {
         var createCalls = 0
         val saveGate = CompletableDeferred<Unit>()

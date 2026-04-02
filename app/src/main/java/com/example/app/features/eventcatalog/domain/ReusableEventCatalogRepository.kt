@@ -32,4 +32,10 @@ interface ReusableEventCatalogRepository {
         name: String
     ): AppResult<ReusableEventCatalog> =
         AppResult.Error(com.example.app.core.common.error.DomainError.PersistenceError("Unsupported operation."))
+
+    suspend fun deleteCatalogEntry(
+        kind: ReusableEventCatalogKind,
+        id: Long
+    ): AppResult<Unit> =
+        AppResult.Error(com.example.app.core.common.error.DomainError.PersistenceError("Unsupported operation."))
 }

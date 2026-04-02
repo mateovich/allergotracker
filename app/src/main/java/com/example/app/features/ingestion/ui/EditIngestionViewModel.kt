@@ -79,6 +79,15 @@ class EditIngestionViewModel(
                 val selectedId = mutableState.value.selectedReusableEntityId ?: return
                 effectChannel.trySend(EditIngestionUiEffect.NavigateToEditReusableEntity(selectedKind, selectedId))
             }
+            EditIngestionUiIntent.ClearRetiredReusableSelection -> updateState {
+                it.copy(
+                    selectedReusableEntityKind = null,
+                    selectedReusableEntityId = null,
+                    selectedReusableEntitySummary = null,
+                    formMessage = "Saved reusable item was retired. Review the text value before saving.",
+                    canSave = canSave(it.itemName, it.selectedQuantityLevel)
+                )
+            }
             EditIngestionUiIntent.ShowDeleteConfirmation -> showDeleteConfirmation()
             EditIngestionUiIntent.DismissDeleteConfirmation -> updateState { it.copy(isDeleteConfirmationVisible = false) }
             EditIngestionUiIntent.ConfirmDelete -> delete()

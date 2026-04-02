@@ -325,6 +325,20 @@ class EditExposureViewModelTest {
         assertEquals(null, viewModel.state.value.selectedExposureTypeSummary)
     }
 
+    @Test
+    fun clearing_retired_catalog_selection_keeps_text_but_drops_stale_id() = runBlocking {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(EditExposureUiIntent.Load)
+        viewModel.onIntent(EditExposureUiIntent.SelectExposureCatalogOption(5L, "Pollen"))
+        viewModel.onIntent(EditExposureUiIntent.ClearRetiredExposureCatalogSelection)
+
+        assertEquals("Pollen", viewModel.state.value.exposureType)
+        assertEquals(null, viewModel.state.value.selectedExposureTypeCatalogId)
+        assertEquals(null, viewModel.state.value.selectedExposureTypeSummary)
+        assertEquals("Saved exposure type was retired. Review the text value before saving.", viewModel.state.value.formMessage)
+    }
+
     private fun buildViewModel(): EditExposureViewModel {
         val repository = object : ExposureRepository {
             override suspend fun createExposure(command: com.example.app.features.exposure.domain.CreateExposureEventCommand): AppResult<ExposureEvent> = error("unused")

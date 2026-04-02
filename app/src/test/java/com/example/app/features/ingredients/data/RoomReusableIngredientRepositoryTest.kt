@@ -1,5 +1,7 @@
 package com.example.app.features.ingredients.data
 
+import android.database.sqlite.SQLiteConstraintException
+import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.ingredients.domain.ReusableIngredient
 import com.example.app.features.ingredients.domain.CreateReusableIngredientCommand
@@ -86,10 +88,37 @@ class RoomReusableIngredientRepositoryTest {
         assertEquals("oat milk plus", dao.updated.single().normalizedName)
         assertEquals("Updated", dao.updated.single().notes)
     }
+
+    @Test
+    fun delete_maps_fk_constraint_failures_to_integrity_error() = runBlocking {
+        val dao = FakeReusableIngredientDao(
+            existing = ReusableIngredientEntity(
+                id = 9L,
+                name = "Oat milk",
+                normalizedName = "oat milk",
+                notes = null,
+                createdAtEpochMs = 1L,
+                updatedAtEpochMs = 1L
+            ),
+            deleteFailure = SQLiteConstraintException("fk")
+        )
+        val repository = RoomReusableIngredientRepository(dao) { 2_000L }
+
+        val result = repository.deleteIngredient(9L)
+
+        val error = result as AppResult.Error
+        assertEquals(
+            DomainError.IntegrityError(
+                "This ingredient is still linked from compound components. Replace those references before retiring it."
+            ),
+            error.error
+        )
+    }
 }
 
 private class FakeReusableIngredientDao(
-    private val existing: ReusableIngredientEntity? = null
+    private val existing: ReusableIngredientEntity? = null,
+    private val deleteFailure: Exception? = null
 ) : ReusableIngredientDao {
     val inserted = mutableListOf<ReusableIngredientEntity>()
     val updated = mutableListOf<ReusableIngredientEntity>()
@@ -109,6 +138,11 @@ private class FakeReusableIngredientDao(
             return 1
         }
         return 0
+    }
+
+    override suspend fun deleteById(id: Long): Int {
+        deleteFailure?.let { throw it }
+        return if (existing?.id == id) 1 else 0
     }
 
     override suspend fun existsById(id: Long): Boolean = existing?.id == id

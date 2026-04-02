@@ -45,6 +45,7 @@ fun EditOutbreakScreen(
     viewModelFactory: ViewModelProvider.Factory,
     openDeleteOnStart: Boolean = false,
     editedCatalogSelection: EditedEventCatalogSelectionResult? = null,
+    retiredCatalogKind: ReusableEventCatalogKind? = null,
     onEditedCatalogConsumed: () -> Unit = {},
     viewModel: EditOutbreakViewModel = viewModel(factory = viewModelFactory)
 ) {
@@ -64,6 +65,22 @@ fun EditOutbreakScreen(
             }
 
             else -> Unit
+        }
+    }
+
+    LaunchedEffect(retiredCatalogKind) {
+        when (retiredCatalogKind) {
+            ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR -> {
+                viewModel.onIntent(EditOutbreakUiIntent.ClearRetiredOutbreakDescriptorCatalogSelection)
+                onEditedCatalogConsumed()
+            }
+
+            ReusableEventCatalogKind.BODY_LOCATION -> {
+                viewModel.onIntent(EditOutbreakUiIntent.ClearRetiredBodyLocationCatalogSelection)
+                onEditedCatalogConsumed()
+            }
+
+            null, ReusableEventCatalogKind.EXPOSURE_TYPE -> Unit
         }
     }
 

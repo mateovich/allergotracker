@@ -137,6 +137,14 @@ class EditOutbreakViewModel(
                     canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
                 ).withFilteredCatalogs()
             }
+            EditOutbreakUiIntent.ClearRetiredOutbreakDescriptorCatalogSelection -> updateState {
+                it.copy(
+                    selectedOutbreakDescriptorCatalogId = null,
+                    selectedOutbreakDescriptorSummary = null,
+                    formMessage = "Saved outbreak descriptor was retired. Review the text value before saving.",
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                ).withFilteredCatalogs()
+            }
             EditOutbreakUiIntent.EditSelectedOutbreakDescriptorCatalog -> {
                 val selectedId = mutableState.value.selectedOutbreakDescriptorCatalogId ?: return
                 effectChannel.trySend(
@@ -181,6 +189,14 @@ class EditOutbreakViewModel(
                     selectedBodyLocationSummary = null,
                     bodyLocationError = null,
                     formMessage = "",
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                ).withFilteredCatalogs()
+            }
+            EditOutbreakUiIntent.ClearRetiredBodyLocationCatalogSelection -> updateState {
+                it.copy(
+                    selectedBodyLocationCatalogId = null,
+                    selectedBodyLocationSummary = null,
+                    formMessage = "Saved body location was retired. Review the text value before saving.",
                     canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
                 ).withFilteredCatalogs()
             }

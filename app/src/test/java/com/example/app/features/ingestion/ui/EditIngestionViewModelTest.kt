@@ -320,6 +320,49 @@ class EditIngestionViewModelTest {
         assertNull(viewModel.state.value.selectedReusableEntityId)
     }
 
+    @Test
+    fun clearing_retired_reusable_selection_keeps_record_text_but_drops_stale_identity() = runBlocking {
+        val repository = object : IngestionRepository {
+            override suspend fun createIngestion(command: com.example.app.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
+
+            override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> {
+                return AppResult.Success(
+                    IngestionEvent(
+                        id = id,
+                        itemName = "Oat milk",
+                        quantityLevel = 2,
+                        occurredAtEpochMs = existingOccurredAt,
+                        notes = "with honey",
+                        reusableEntityKind = com.example.app.features.ingestion.domain.ReusableEntityKind.INGREDIENT,
+                        reusableEntityId = 11L
+                    )
+                )
+            }
+
+            override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> {
+                return AppResult.Success(IngestionEvent(command.id, command.itemName, command.quantityLevel ?: 0, command.occurredAtEpochMs, command.notes))
+            }
+
+            override suspend fun deleteIngestion(id: Long): AppResult<Unit> = AppResult.Success(Unit)
+        }
+        val viewModel = EditIngestionViewModel(
+            recordId = 7L,
+            getIngestionEventUseCase = GetIngestionEventUseCase(repository),
+            deleteIngestionEventUseCase = DeleteIngestionEventUseCase(repository),
+            updateIngestionEventUseCase = UpdateIngestionEventUseCase(repository, com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = com.example.app.features.ingestion.domain.CurrentTimeProvider { fixedNow }
+        )
+
+        viewModel.onIntent(EditIngestionUiIntent.Load)
+        viewModel.onIntent(EditIngestionUiIntent.ClearRetiredReusableSelection)
+
+        assertEquals("Oat milk", viewModel.state.value.itemName)
+        assertNull(viewModel.state.value.selectedReusableEntityId)
+        assertNull(viewModel.state.value.selectedReusableEntityKind)
+        assertNull(viewModel.state.value.selectedReusableEntitySummary)
+        assertEquals("Saved reusable item was retired. Review the text value before saving.", viewModel.state.value.formMessage)
+    }
+
     private fun buildViewModel(): EditIngestionViewModel {
         val repository = object : IngestionRepository {
             override suspend fun createIngestion(command: com.example.app.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")

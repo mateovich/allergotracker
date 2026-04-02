@@ -22,9 +22,11 @@ object AppRoutes {
     const val REUSABLE_ENTITY_ID_RESULT = "reusableEntityId"
     const val REUSABLE_ENTITY_NAME_RESULT = "reusableEntityName"
     const val REUSABLE_ENTITY_KIND_RESULT = "reusableEntityKind"
+    const val REUSABLE_ENTITY_RETIRED_RESULT = "reusableEntityRetired"
     const val EVENT_CATALOG_ID_RESULT = "eventCatalogId"
     const val EVENT_CATALOG_NAME_RESULT = "eventCatalogName"
     const val EVENT_CATALOG_KIND_RESULT = "eventCatalogKind"
+    const val EVENT_CATALOG_RETIRED_KIND_RESULT = "eventCatalogRetiredKind"
 
     fun editIngredient(reusableId: Long): String = "edit/ingredient/$reusableId"
 

@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.eventcatalog.domain.GetReusableEventCatalogEntryUseCase
+import com.example.app.features.eventcatalog.domain.GetReusableEventCatalogRetirementImpactUseCase
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.domain.RetireReusableEventCatalogUseCase
 import com.example.app.features.eventcatalog.domain.UpdateReusableEventCatalogUseCase
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +20,9 @@ class EditReusableEventCatalogViewModel(
     private val catalogId: Long,
     private val kind: ReusableEventCatalogKind,
     private val getReusableEventCatalogEntryUseCase: GetReusableEventCatalogEntryUseCase,
-    private val updateReusableEventCatalogUseCase: UpdateReusableEventCatalogUseCase
+    private val updateReusableEventCatalogUseCase: UpdateReusableEventCatalogUseCase,
+    private val getReusableEventCatalogRetirementImpactUseCase: GetReusableEventCatalogRetirementImpactUseCase,
+    private val retireReusableEventCatalogUseCase: RetireReusableEventCatalogUseCase
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(
         EditReusableEventCatalogUiState(
@@ -46,6 +50,11 @@ class EditReusableEventCatalogViewModel(
             }
 
             EditReusableEventCatalogUiIntent.Save -> save()
+            EditReusableEventCatalogUiIntent.RequestRetirementPreview -> loadRetirementPreview()
+            EditReusableEventCatalogUiIntent.DismissRetirementDialog -> updateState {
+                it.copy(isRetirementDialogVisible = false, retirementImpact = null, isRetiring = false)
+            }
+            EditReusableEventCatalogUiIntent.ConfirmRetirement -> retire()
         }
     }
 
@@ -92,6 +101,51 @@ class EditReusableEventCatalogViewModel(
                         nameError = result.error.fieldError("name"),
                         formMessage = result.error.message,
                         canSave = it.name.trim().isNotBlank()
+                    )
+                }
+            }
+        }
+    }
+
+    private fun loadRetirementPreview() {
+        val currentState = mutableState.value
+        if (currentState.isLoading || currentState.isSaving || currentState.isRetiring) return
+        updateState { it.copy(formMessage = "") }
+        viewModelScope.launch {
+            when (val result = getReusableEventCatalogRetirementImpactUseCase(kind, catalogId)) {
+                is AppResult.Success -> updateState {
+                    it.copy(retirementImpact = result.value, isRetirementDialogVisible = true, formMessage = "")
+                }
+
+                is AppResult.Error -> updateState { it.copy(formMessage = result.error.message) }
+            }
+        }
+    }
+
+    private fun retire() {
+        val currentState = mutableState.value
+        val impact = currentState.retirementImpact ?: return
+        if (currentState.isLoading || currentState.isSaving || currentState.isRetiring || impact.isBlocked) return
+        updateState { it.copy(isRetiring = true, formMessage = "") }
+        viewModelScope.launch {
+            when (val result = retireReusableEventCatalogUseCase(kind, catalogId)) {
+                is AppResult.Success -> {
+                    updateState {
+                        it.copy(
+                            isRetiring = false,
+                            isRetirementDialogVisible = false,
+                            retirementImpact = result.value,
+                            formMessage = ""
+                        )
+                    }
+                    effectChannel.trySend(EditReusableEventCatalogUiEffect.NavigateBackAfterRetirement)
+                }
+
+                is AppResult.Error -> updateState {
+                    it.copy(
+                        isRetiring = false,
+                        isRetirementDialogVisible = true,
+                        formMessage = result.error.message
                     )
                 }
             }

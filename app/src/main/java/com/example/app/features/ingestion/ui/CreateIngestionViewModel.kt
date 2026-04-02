@@ -131,6 +131,16 @@ class CreateIngestionViewModel(
                 effectChannel.trySend(CreateIngestionUiEffect.NavigateToEditReusableEntity(selectedKind, selectedId))
             }
 
+            CreateIngestionUiIntent.ClearRetiredReusableSelection -> updateState {
+                it.copy(
+                    selectedReusableEntitySummary = null,
+                    selectedReusableEntityId = null,
+                    selectedReusableEntityKind = null,
+                    reusableSearchQuery = "",
+                    formMessage = "Saved reusable item was retired. Review the text value before saving."
+                ).withFilteredReusableEntities()
+            }
+
             CreateIngestionUiIntent.Save -> save()
         }
     }

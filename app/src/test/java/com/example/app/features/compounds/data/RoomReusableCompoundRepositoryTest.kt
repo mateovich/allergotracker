@@ -1,5 +1,7 @@
 package com.example.app.features.compounds.data
 
+import android.database.sqlite.SQLiteConstraintException
+import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.compounds.domain.CompoundComponentKind
 import com.example.app.features.compounds.domain.CompoundCompositionStatus
@@ -123,11 +125,39 @@ class RoomReusableCompoundRepositoryTest {
         assertEquals(1, success.value.components.size)
         assertEquals(7L, success.value.components.single().ingredientId)
     }
+
+    @Test
+    fun delete_maps_fk_constraint_failures_to_integrity_error() = runBlocking {
+        val dao = FakeReusableCompoundDao(
+            existing = ReusableCompoundEntity(
+                id = 4L,
+                name = "Breakfast mix",
+                normalizedName = "breakfast mix",
+                notes = null,
+                compositionStatus = CompoundCompositionStatus.DRAFT.storageValue,
+                createdAtEpochMs = 1L,
+                updatedAtEpochMs = 1L
+            ),
+            deleteFailure = SQLiteConstraintException("fk")
+        )
+        val repository = RoomReusableCompoundRepository(dao) { 2_000L }
+
+        val result = repository.deleteCompound(4L)
+
+        val error = result as AppResult.Error
+        assertEquals(
+            DomainError.IntegrityError(
+                "This compound is still linked from other records. Replace those references before retiring it."
+            ),
+            error.error
+        )
+    }
 }
 
 private class FakeReusableCompoundDao(
     private val existing: ReusableCompoundEntity? = null,
-    private val existingComponents: List<ReusableCompoundComponentEntity> = emptyList()
+    private val existingComponents: List<ReusableCompoundComponentEntity> = emptyList(),
+    private val deleteFailure: Exception? = null
 ) : ReusableCompoundDao {
     val inserted = mutableListOf<ReusableCompoundEntity>()
     val updated = mutableListOf<ReusableCompoundEntity>()
@@ -154,7 +184,20 @@ private class FakeReusableCompoundDao(
         return 0
     }
 
+    override suspend fun deleteCompoundById(id: Long): Int {
+        deleteFailure?.let { throw it }
+        return if (existing?.id == id) 1 else 0
+    }
+
     override suspend fun existsById(id: Long): Boolean = existing?.id == id
+
+    override suspend fun countIngredientComponentReferences(ingredientId: Long): Int {
+        return existingComponents.count { it.ingredientId == ingredientId }
+    }
+
+    override suspend fun countChildCompoundReferences(compoundId: Long): Int {
+        return existingComponents.count { it.childCompoundId == compoundId }
+    }
 
     override suspend fun touchById(id: Long, updatedAtEpochMs: Long): Int = if (existing?.id == id) 1 else 0
 

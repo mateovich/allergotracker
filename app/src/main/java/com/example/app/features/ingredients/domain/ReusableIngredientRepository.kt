@@ -11,5 +11,8 @@ interface ReusableIngredientRepository {
     suspend fun updateIngredient(command: UpdateReusableIngredientCommand): AppResult<ReusableIngredient> =
         AppResult.Error(com.example.app.core.common.error.DomainError.PersistenceError("Unsupported operation."))
 
+    suspend fun deleteIngredient(id: Long): AppResult<Unit> =
+        AppResult.Error(com.example.app.core.common.error.DomainError.PersistenceError("Unsupported operation."))
+
     fun observeIngredients(): Flow<List<ReusableIngredient>>
 }

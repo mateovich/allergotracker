@@ -11,5 +11,8 @@ interface ReusableCompoundRepository {
     suspend fun updateCompound(command: UpdateReusableCompoundCommand): AppResult<ReusableCompound> =
         AppResult.Error(com.example.app.core.common.error.DomainError.PersistenceError("Unsupported operation."))
 
+    suspend fun deleteCompound(id: Long): AppResult<Unit> =
+        AppResult.Error(com.example.app.core.common.error.DomainError.PersistenceError("Unsupported operation."))
+
     fun observeCompounds(): Flow<List<ReusableCompound>>
 }

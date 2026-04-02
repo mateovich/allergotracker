@@ -177,6 +177,24 @@ class CreateIngestionViewModelTest {
     }
 
     @Test
+    fun clearing_retired_reusable_selection_keeps_text_but_drops_stale_identity() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(
+            CreateIngestionUiIntent.SelectReusableEntity(
+                IngestionReusableSelectionResult(id = 11L, name = "Oat milk", kind = ReusableEntityKind.INGREDIENT)
+            )
+        )
+        viewModel.onIntent(CreateIngestionUiIntent.ClearRetiredReusableSelection)
+
+        assertEquals("Oat milk", viewModel.state.value.itemName)
+        assertNull(viewModel.state.value.selectedReusableEntityId)
+        assertNull(viewModel.state.value.selectedReusableEntityKind)
+        assertNull(viewModel.state.value.selectedReusableEntitySummary)
+        assertEquals("Saved reusable item was retired. Review the text value before saving.", viewModel.state.value.formMessage)
+    }
+
+    @Test
     fun edit_selected_reusable_entity_emits_navigation_for_current_kind() = runBlocking {
         val viewModel = buildViewModel()
         val effect = async { viewModel.effects.first() }

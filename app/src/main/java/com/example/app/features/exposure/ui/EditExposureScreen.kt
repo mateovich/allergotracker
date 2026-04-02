@@ -46,6 +46,7 @@ fun EditExposureScreen(
     viewModelFactory: ViewModelProvider.Factory,
     openDeleteOnStart: Boolean = false,
     editedCatalogSelection: EditedEventCatalogSelectionResult? = null,
+    retiredCatalogKind: ReusableEventCatalogKind? = null,
     onEditedCatalogConsumed: () -> Unit = {},
     viewModel: EditExposureViewModel = viewModel(factory = viewModelFactory)
 ) {
@@ -55,6 +56,13 @@ fun EditExposureScreen(
     LaunchedEffect(editedCatalogSelection) {
         editedCatalogSelection?.takeIf { it.kind == ReusableEventCatalogKind.EXPOSURE_TYPE }?.let {
             viewModel.onIntent(EditExposureUiIntent.SelectExposureCatalogOption(it.id, it.name))
+            onEditedCatalogConsumed()
+        }
+    }
+
+    LaunchedEffect(retiredCatalogKind) {
+        if (retiredCatalogKind == ReusableEventCatalogKind.EXPOSURE_TYPE) {
+            viewModel.onIntent(EditExposureUiIntent.ClearRetiredExposureCatalogSelection)
             onEditedCatalogConsumed()
         }
     }

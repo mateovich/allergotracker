@@ -202,6 +202,8 @@ private class FakeReusableEventCatalogDao(
         return 1
     }
 
+    override suspend fun deleteById(kind: String, id: Long): Int = if (existingById?.kind == kind && existingById.id == id) 1 else 0
+
     override fun observeByKind(kind: String): Flow<List<ReusableEventCatalogEntity>> = emptyFlow()
 
     override suspend fun findByNormalizedName(kind: String, normalizedName: String): ReusableEventCatalogEntity? {

@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -479,6 +480,141 @@ class MainActivityTest {
         composeRule.onNodeWithText("Exposure type").assertIsDisplayed()
         composeRule.onNodeWithText("Save changes").assertIsDisplayed()
         composeRule.onNodeWithText("Works offline. Saved only on this device.").assertIsDisplayed()
+    }
+
+    @Test
+    fun ingredient_retirement_confirm_flow_clears_reusable_selection_after_return() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+        composeRule.onNodeWithTag("ingestion-create-ingredient").performClick()
+        composeRule.onNodeWithTag("ingredient-name").performTextInput("Oat milk")
+        composeRule.onNodeWithTag("ingredient-save").performClick()
+        composeRule.onNodeWithTag("ingestion-reusable-edit").performClick()
+
+        composeRule.onNodeWithTag("edit-ingredient-retire").performClick()
+        composeRule.onNodeWithTag("edit-ingredient-retire-message").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-ingredient-retire-confirm").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-ingredient-retire-confirm").performClick()
+
+        composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("ingestion-reusable-summary").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("ingestion-reusable-edit").assertCountEquals(0)
+        composeRule.onNodeWithTag("ingestion-form-message")
+            .assertTextContains("Saved reusable item was retired. Review the text value before saving.")
+        composeRule.onNodeWithTag("ingestion-item-name").assertTextContains("Oat milk")
+    }
+
+    @Test
+    fun compound_retirement_confirm_flow_clears_reusable_selection_after_return() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
+        composeRule.onNodeWithTag("compound-name").performTextInput("Breakfast mix")
+        composeRule.onNodeWithTag("compound-save").performClick()
+        composeRule.onNodeWithTag("ingestion-reusable-edit").performClick()
+
+        composeRule.onNodeWithTag("edit-compound-retire").performClick()
+        composeRule.onNodeWithTag("edit-compound-retire-message").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-compound-retire-confirm").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-compound-retire-confirm").performClick()
+
+        composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("ingestion-reusable-summary").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("ingestion-reusable-edit").assertCountEquals(0)
+        composeRule.onNodeWithTag("ingestion-form-message")
+            .assertTextContains("Saved reusable item was retired. Review the text value before saving.")
+        composeRule.onNodeWithTag("ingestion-item-name").assertTextContains("Breakfast mix")
+    }
+
+    @Test
+    fun exposure_event_catalog_retirement_confirm_flow_recovers_create_screen_and_saves_record() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Exposure").performClick()
+        composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
+        composeRule.onNodeWithTag("exposure-type-create-inline").performClick()
+        composeRule.onNodeWithTag("exposure-save").performClick()
+
+        composeRule.onNodeWithText("Pollen").performClick()
+        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        composeRule.onNodeWithTag("edit-exposure-delete").performClick()
+        composeRule.onNodeWithTag("edit-exposure-delete-confirm").performClick()
+
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Exposure").performClick()
+        composeRule.onNodeWithText("Pollen").performClick()
+        composeRule.onNodeWithTag("exposure-type-edit").performClick()
+        composeRule.onNodeWithTag("edit-event-catalog-retire").performClick()
+        composeRule.onNodeWithTag("edit-event-catalog-retire-message").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-event-catalog-retire-confirm").assertIsDisplayed().performClick()
+
+        composeRule.onNodeWithTag("create-exposure-form-screen").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("exposure-type-summary").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("exposure-type-edit").assertCountEquals(0)
+        composeRule.onNodeWithTag("exposure-form-message")
+            .assertTextContains("Saved exposure type was retired. Review the text value before saving.")
+        composeRule.onNodeWithTag("exposure-type").assertTextContains("Pollen")
+
+        composeRule.onNodeWithTag("exposure-save").performClick()
+
+        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        composeRule.onNodeWithText("Exposure").assertIsDisplayed()
+        composeRule.onNodeWithText("Pollen").assertIsDisplayed()
+    }
+
+    @Test
+    fun outbreak_event_catalog_retirement_confirm_flow_recovers_create_screen_and_saves_record() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Outbreak").performClick()
+        composeRule.onNodeWithTag("outbreak-descriptor").performTextInput("Skin flare")
+        composeRule.onNodeWithTag("outbreak-body-location").performTextInput("Arm")
+        composeRule.onNodeWithTag("outbreak-body-location-create-inline").performClick()
+        composeRule.onNodeWithTag("outbreak-save").performClick()
+
+        composeRule.onNodeWithText("Skin flare").performClick()
+        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        composeRule.onNodeWithTag("edit-outbreak-delete").performClick()
+        composeRule.onNodeWithTag("edit-outbreak-delete-confirm").performClick()
+
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Outbreak").performClick()
+        composeRule.onNodeWithTag("outbreak-descriptor").performTextInput("Skin flare")
+        composeRule.onNodeWithText("Arm").performClick()
+        composeRule.onNodeWithTag("outbreak-body-location-clear-edit").performClick()
+        composeRule.onNodeWithTag("edit-event-catalog-retire").performClick()
+        composeRule.onNodeWithTag("edit-event-catalog-retire-message").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-event-catalog-retire-confirm").assertIsDisplayed().performClick()
+
+        composeRule.onNodeWithTag("create-outbreak-form-screen").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Saved body location selected: Arm").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("outbreak-body-location-clear-edit").assertCountEquals(0)
+        composeRule.onNodeWithTag("outbreak-form-message")
+            .assertTextContains("Saved body location was retired. Review the text value before saving.")
+        composeRule.onNodeWithTag("outbreak-body-location").assertTextContains("Arm")
+
+        composeRule.onNodeWithTag("outbreak-save").performClick()
+
+        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        composeRule.onNodeWithText("Outbreak").assertIsDisplayed()
+        composeRule.onNodeWithText("Skin flare").assertIsDisplayed()
+        composeRule.onNodeWithText("Arm").assertIsDisplayed()
+    }
+
+    @Test
+    fun event_catalog_retirement_shows_blocked_message_when_record_still_references_it() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Exposure").performClick()
+        composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
+        composeRule.onNodeWithTag("exposure-type-create-inline").performClick()
+        composeRule.onNodeWithTag("exposure-save").performClick()
+        composeRule.onNodeWithText("Pollen").performClick()
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        composeRule.onNodeWithTag("edit-exposure-type-edit").performClick()
+
+        composeRule.onNodeWithTag("edit-event-catalog-retire").performClick()
+        composeRule.onNodeWithTag("edit-event-catalog-retire-message").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("edit-event-catalog-retire-confirm").assertCountEquals(0)
+        composeRule.onNodeWithTag("edit-event-catalog-retire-dismiss").performClick()
+        composeRule.onNodeWithTag("edit-event-catalog-form-screen").assertIsDisplayed()
     }
 
     @Test

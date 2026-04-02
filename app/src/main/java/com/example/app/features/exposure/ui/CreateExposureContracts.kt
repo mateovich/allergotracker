@@ -44,6 +44,7 @@ sealed interface CreateExposureUiIntent {
     data class SelectExposureCatalogOption(val id: Long, val name: String) : CreateExposureUiIntent
     data object UseTypedExposureType : CreateExposureUiIntent
     data object ClearExposureCatalogSelection : CreateExposureUiIntent
+    data object ClearRetiredExposureCatalogSelection : CreateExposureUiIntent
     data object EditSelectedExposureCatalog : CreateExposureUiIntent
     data class UpdateNotes(val value: String) : CreateExposureUiIntent
     data class UpdateOccurredAtInput(val value: String) : CreateExposureUiIntent

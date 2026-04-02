@@ -71,6 +71,7 @@ sealed interface CreateIngestionUiIntent {
     data object CreateNewIngredient : CreateIngestionUiIntent
     data object CreateNewCompound : CreateIngestionUiIntent
     data object EditSelectedReusableEntity : CreateIngestionUiIntent
+    data object ClearRetiredReusableSelection : CreateIngestionUiIntent
     data object Save : CreateIngestionUiIntent
 }
 

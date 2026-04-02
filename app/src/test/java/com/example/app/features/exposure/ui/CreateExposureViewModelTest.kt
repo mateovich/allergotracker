@@ -134,6 +134,19 @@ class CreateExposureViewModelTest {
     }
 
     @Test
+    fun clearing_retired_catalog_selection_keeps_text_but_drops_stale_id() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateExposureUiIntent.SelectExposureCatalogOption(5L, "Pollen"))
+        viewModel.onIntent(CreateExposureUiIntent.ClearRetiredExposureCatalogSelection)
+
+        assertEquals("Pollen", viewModel.state.value.exposureType)
+        assertEquals(null, viewModel.state.value.selectedExposureTypeCatalogId)
+        assertEquals(null, viewModel.state.value.selectedExposureTypeSummary)
+        assertEquals("Saved exposure type was retired. Review the text value before saving.", viewModel.state.value.formMessage)
+    }
+
+    @Test
     fun second_save_while_first_is_in_flight_is_ignored() = runBlocking {
         var createCalls = 0
         val saveGate = CompletableDeferred<Unit>()

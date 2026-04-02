@@ -35,6 +35,7 @@ sealed interface EditIngestionUiIntent {
     data class SelectTimePreset(val preset: IngestionTimePreset) : EditIngestionUiIntent
     data class ApplyReusableSelection(val result: IngestionReusableSelectionResult) : EditIngestionUiIntent
     data object EditSelectedReusableEntity : EditIngestionUiIntent
+    data object ClearRetiredReusableSelection : EditIngestionUiIntent
     data object ShowDeleteConfirmation : EditIngestionUiIntent
     data object DismissDeleteConfirmation : EditIngestionUiIntent
     data object ConfirmDelete : EditIngestionUiIntent

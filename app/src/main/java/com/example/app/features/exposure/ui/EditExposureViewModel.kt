@@ -114,6 +114,14 @@ class EditExposureViewModel(
                     canSave = it.exposureType.isNotBlank()
                 ).withFilteredExposureTypes()
             }
+            EditExposureUiIntent.ClearRetiredExposureCatalogSelection -> updateState {
+                it.copy(
+                    selectedExposureTypeCatalogId = null,
+                    selectedExposureTypeSummary = null,
+                    formMessage = "Saved exposure type was retired. Review the text value before saving.",
+                    canSave = it.exposureType.isNotBlank()
+                ).withFilteredExposureTypes()
+            }
             EditExposureUiIntent.EditSelectedExposureCatalog -> {
                 val selectedId = mutableState.value.selectedExposureTypeCatalogId ?: return
                 effectChannel.trySend(

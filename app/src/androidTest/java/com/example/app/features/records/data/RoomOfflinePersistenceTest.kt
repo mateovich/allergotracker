@@ -12,6 +12,8 @@ import com.example.app.features.exposure.domain.CreateExposureEventCommand
 import com.example.app.features.exposure.domain.UpdateExposureEventCommand
 import com.example.app.features.ingredients.data.RoomReusableIngredientRepository
 import com.example.app.features.ingredients.domain.CreateReusableIngredientCommand
+import com.example.app.features.ingredients.domain.GetReusableIngredientRetirementImpactUseCase
+import com.example.app.features.ingredients.domain.RetireReusableIngredientUseCase
 import com.example.app.features.ingredients.domain.UpdateReusableIngredientCommand
 import com.example.app.features.ingredients.domain.UpdateReusableIngredientUseCase
 import com.example.app.features.ingestion.data.RoomIngestionRepository
@@ -21,10 +23,14 @@ import com.example.app.features.ingestion.domain.ReusableEntityKind
 import com.example.app.features.ingestion.domain.UpdateIngestionEventCommand
 import com.example.app.features.compounds.data.RoomReusableCompoundRepository
 import com.example.app.features.compounds.domain.CreateReusableCompoundCommand
+import com.example.app.features.compounds.domain.GetReusableCompoundRetirementImpactUseCase
+import com.example.app.features.compounds.domain.RetireReusableCompoundUseCase
 import com.example.app.features.compounds.domain.UpdateReusableCompoundCommand
 import com.example.app.features.compounds.domain.UpdateReusableCompoundUseCase
 import com.example.app.features.eventcatalog.data.RoomReusableEventCatalogRepository
+import com.example.app.features.eventcatalog.domain.GetReusableEventCatalogRetirementImpactUseCase
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
+import com.example.app.features.eventcatalog.domain.RetireReusableEventCatalogUseCase
 import com.example.app.features.eventcatalog.domain.UpdateReusableEventCatalogUseCase
 import com.example.app.features.outbreak.data.RoomOutbreakRepository
 import com.example.app.features.outbreak.domain.CreateOutbreakEventCommand
@@ -708,6 +714,141 @@ class RoomOfflinePersistenceTest {
             database.reusableEventCatalogDao().findById(ReusableEventCatalogKind.BODY_LOCATION.storageValue, bodyLocationCatalog.id)?.name
         )
         assertEquals("Left arm", database.outbreakEventDao().getById(outbreakId)?.bodyLocation)
+    }
+
+    @Test
+    fun retiring_reusable_ingredient_detaches_ingestion_links_and_keeps_records_interpretable_after_reopen() = runBlocking {
+        val now = 1_700_000_123_000L
+        val ingredientRepository = RoomReusableIngredientRepository(database.reusableIngredientDao()) { now }
+        val reusableIngredient = ingredientRepository.createIngredient(
+            CreateReusableIngredientCommand(name = "Oat milk", notes = "Staple")
+        ).requireSuccess()
+        val ingestionRepository = RoomIngestionRepository(
+            database.ingestionEventDao(),
+            CurrentTimeProvider { now },
+            reusableEntityExists = { kind, id ->
+                when (kind) {
+                    ReusableEntityKind.INGREDIENT -> database.reusableIngredientDao().existsById(id)
+                    ReusableEntityKind.COMPOUND -> database.reusableCompoundDao().existsById(id)
+                }
+            }
+        )
+        ingestionRepository.createIngestion(
+            CreateIngestionEventCommand(
+                itemName = reusableIngredient.name,
+                quantityLevel = 2,
+                occurredAtEpochMs = now - 1_000L,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.INGREDIENT,
+                reusableEntityId = reusableIngredient.id
+            )
+        ).requireSuccess()
+
+        val result = RetireReusableIngredientUseCase(
+            repository = ingredientRepository,
+            getImpact = GetReusableIngredientRetirementImpactUseCase(
+                repository = ingredientRepository,
+                countIngestionReferences = { ingredientId ->
+                    database.ingestionEventDao().countReusableEntityReferences(ReusableEntityKind.INGREDIENT.storageValue, ingredientId)
+                },
+                countCompoundReferences = { ingredientId ->
+                    database.reusableCompoundDao().countIngredientComponentReferences(ingredientId)
+                }
+            ),
+            detachIngestionReferences = { ingredientId ->
+                database.ingestionEventDao().clearReusableEntityReferences(ReusableEntityKind.INGREDIENT.storageValue, ingredientId)
+            },
+            runAtomically = { block ->
+                database.withTransaction { block() }
+            }
+        ).invoke(reusableIngredient.id)
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(null, database.ingestionEventDao().getById(1L)?.reusableEntityId)
+
+        database.close()
+        database = buildDatabase()
+
+        val reopenedRecordsRepository = RoomRecordsRepository(
+            ingestionEventDao = database.ingestionEventDao(),
+            exposureEventDao = database.exposureEventDao(),
+            outbreakEventDao = database.outbreakEventDao()
+        )
+        val records = reopenedRecordsRepository.observeRecords().first()
+
+        assertEquals(listOf("Oat milk"), records.map { it.title })
+        assertTrue(records.single().detailLabel.contains("Light snack"))
+    }
+
+    @Test
+    fun retiring_nested_reusable_compound_is_blocked() = runBlocking {
+        val now = 1_700_000_123_000L
+        val compoundRepository = RoomReusableCompoundRepository(database.reusableCompoundDao()) { now }
+        val parent = compoundRepository.createCompound(CreateReusableCompoundCommand(name = "Parent", notes = null)).requireSuccess()
+        val child = compoundRepository.createCompound(CreateReusableCompoundCommand(name = "Child", notes = null)).requireSuccess()
+        database.openHelper.writableDatabase.execSQL(
+            "INSERT INTO reusable_compound_components (compound_id, position, component_kind, ingredient_id, child_compound_id, proportion_basis_points) VALUES (?, ?, ?, ?, ?, ?)",
+            arrayOf<Any?>(parent.id, 0, "compound", null, child.id, 10_000)
+        )
+
+        val result = RetireReusableCompoundUseCase(
+            repository = compoundRepository,
+            getImpact = GetReusableCompoundRetirementImpactUseCase(
+                repository = compoundRepository,
+                countIngestionReferences = { compoundId ->
+                    database.ingestionEventDao().countReusableEntityReferences(ReusableEntityKind.COMPOUND.storageValue, compoundId)
+                },
+                countChildCompoundReferences = { compoundId ->
+                    database.reusableCompoundDao().countChildCompoundReferences(compoundId)
+                }
+            ),
+            detachIngestionReferences = { compoundId ->
+                database.ingestionEventDao().clearReusableEntityReferences(ReusableEntityKind.COMPOUND.storageValue, compoundId)
+            },
+            runAtomically = { block ->
+                database.withTransaction { block() }
+            }
+        ).invoke(child.id)
+
+        assertTrue(result is AppResult.Error)
+        assertTrue(database.reusableCompoundDao().existsById(child.id))
+    }
+
+    @Test
+    fun retiring_referenced_event_catalog_is_blocked_and_preserves_detail_views() = runBlocking {
+        val now = 1_700_000_123_000L
+        val eventCatalogRepository = RoomReusableEventCatalogRepository(database.reusableEventCatalogDao()) { now }
+        val exposureCatalog = eventCatalogRepository.ensureCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, "Pollen")
+        val exposureRepository = RoomExposureRepository(database.exposureEventDao(), CurrentTimeProvider { now }, eventCatalogRepository)
+        exposureRepository.createExposure(
+            CreateExposureEventCommand(
+                exposureType = exposureCatalog.name,
+                occurredAtEpochMs = now - 1_000L,
+                notes = null,
+                exposureTypeCatalogId = exposureCatalog.id
+            )
+        ).requireSuccess()
+
+        val result = RetireReusableEventCatalogUseCase(
+            repository = eventCatalogRepository,
+            getImpact = GetReusableEventCatalogRetirementImpactUseCase(
+                repository = eventCatalogRepository,
+                countReferences = { kind, catalogId ->
+                    when (kind) {
+                        ReusableEventCatalogKind.EXPOSURE_TYPE -> database.exposureEventDao().countCatalogReferences(catalogId)
+                        ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR -> database.outbreakEventDao().countOutbreakDescriptorCatalogReferences(catalogId)
+                        ReusableEventCatalogKind.BODY_LOCATION -> database.outbreakEventDao().countBodyLocationCatalogReferences(catalogId)
+                    }
+                }
+            ),
+            runAtomically = { block ->
+                database.withTransaction { block() }
+            }
+        ).invoke(ReusableEventCatalogKind.EXPOSURE_TYPE, exposureCatalog.id)
+
+        assertTrue(result is AppResult.Error)
+        assertEquals("Pollen", database.exposureEventDao().getById(1L)?.exposureType)
+        assertTrue(database.reusableEventCatalogDao().existsById(ReusableEventCatalogKind.EXPOSURE_TYPE.storageValue, exposureCatalog.id))
     }
 
     private fun <T> AppResult<T>.requireSuccess(): T {

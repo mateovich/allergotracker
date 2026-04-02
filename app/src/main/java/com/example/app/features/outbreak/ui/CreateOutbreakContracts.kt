@@ -51,11 +51,13 @@ sealed interface CreateOutbreakUiIntent {
     data class SelectOutbreakDescriptorCatalogOption(val id: Long, val name: String) : CreateOutbreakUiIntent
     data object UseTypedOutbreakDescriptor : CreateOutbreakUiIntent
     data object ClearOutbreakDescriptorCatalogSelection : CreateOutbreakUiIntent
+    data object ClearRetiredOutbreakDescriptorCatalogSelection : CreateOutbreakUiIntent
     data object EditSelectedOutbreakDescriptorCatalog : CreateOutbreakUiIntent
     data class UpdateBodyLocation(val value: String) : CreateOutbreakUiIntent
     data class SelectBodyLocationCatalogOption(val id: Long, val name: String) : CreateOutbreakUiIntent
     data object UseTypedBodyLocation : CreateOutbreakUiIntent
     data object ClearBodyLocationCatalogSelection : CreateOutbreakUiIntent
+    data object ClearRetiredBodyLocationCatalogSelection : CreateOutbreakUiIntent
     data object EditSelectedBodyLocationCatalog : CreateOutbreakUiIntent
     data class UpdateNotes(val value: String) : CreateOutbreakUiIntent
     data class UpdateOccurredAtInput(val value: String) : CreateOutbreakUiIntent

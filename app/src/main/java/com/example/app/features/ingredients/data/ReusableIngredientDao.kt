@@ -21,6 +21,9 @@ interface ReusableIngredientDao {
     @Update
     suspend fun update(entity: ReusableIngredientEntity): Int
 
+    @Query("DELETE FROM reusable_ingredients WHERE id = :id")
+    suspend fun deleteById(id: Long): Int
+
     @Query("SELECT EXISTS(SELECT 1 FROM reusable_ingredients WHERE id = :id)")
     suspend fun existsById(id: Long): Boolean
 

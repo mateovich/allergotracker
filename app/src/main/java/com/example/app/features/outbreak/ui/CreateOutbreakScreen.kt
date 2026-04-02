@@ -37,6 +37,7 @@ fun CreateOutbreakScreen(
     onNavigateToRoute: (String) -> Unit,
     viewModelFactory: ViewModelProvider.Factory,
     editedCatalogSelection: EditedEventCatalogSelectionResult? = null,
+    retiredCatalogKind: ReusableEventCatalogKind? = null,
     onEditedCatalogConsumed: () -> Unit = {},
     viewModel: CreateOutbreakViewModel = viewModel(factory = viewModelFactory)
 ) {
@@ -56,6 +57,22 @@ fun CreateOutbreakScreen(
             }
 
             else -> Unit
+        }
+    }
+
+    LaunchedEffect(retiredCatalogKind) {
+        when (retiredCatalogKind) {
+            ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR -> {
+                viewModel.onIntent(CreateOutbreakUiIntent.ClearRetiredOutbreakDescriptorCatalogSelection)
+                onEditedCatalogConsumed()
+            }
+
+            ReusableEventCatalogKind.BODY_LOCATION -> {
+                viewModel.onIntent(CreateOutbreakUiIntent.ClearRetiredBodyLocationCatalogSelection)
+                onEditedCatalogConsumed()
+            }
+
+            null, ReusableEventCatalogKind.EXPOSURE_TYPE -> Unit
         }
     }
 

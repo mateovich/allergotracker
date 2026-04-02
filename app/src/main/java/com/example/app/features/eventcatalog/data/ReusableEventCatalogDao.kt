@@ -15,6 +15,9 @@ interface ReusableEventCatalogDao {
     @Update
     suspend fun update(entity: ReusableEventCatalogEntity): Int
 
+    @Query("DELETE FROM reusable_event_catalog WHERE kind = :kind AND id = :id")
+    suspend fun deleteById(kind: String, id: Long): Int
+
     @Query("SELECT * FROM reusable_event_catalog WHERE kind = :kind ORDER BY usage_count DESC, last_used_at_epoch_ms DESC, updated_at_epoch_ms DESC, name COLLATE NOCASE ASC, id ASC")
     fun observeByKind(kind: String): Flow<List<ReusableEventCatalogEntity>>
 

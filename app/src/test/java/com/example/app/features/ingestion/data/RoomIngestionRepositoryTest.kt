@@ -263,5 +263,6 @@ private class FakeIngestionEventDaoForRepository(
     }
     override suspend fun updateReusableEntityName(kind: String, reusableId: Long, name: String): Int = 0
     override suspend fun countReusableEntityReferences(kind: String, reusableId: Long): Int = 0
+    override suspend fun clearReusableEntityReferences(kind: String, reusableId: Long): Int = 0
     override fun observeIngestionEvents(): Flow<List<IngestionEventEntity>> = emptyFlow()
 }

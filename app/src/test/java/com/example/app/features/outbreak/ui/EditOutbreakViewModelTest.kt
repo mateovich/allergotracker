@@ -362,6 +362,24 @@ class EditOutbreakViewModelTest {
         assertEquals(null, viewModel.state.value.selectedBodyLocationSummary)
     }
 
+    @Test
+    fun clearing_retired_catalog_selection_keeps_text_but_drops_stale_ids() = runBlocking {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(EditOutbreakUiIntent.Load)
+        viewModel.onIntent(EditOutbreakUiIntent.SelectOutbreakDescriptorCatalogOption(11L, "Skin flare"))
+        viewModel.onIntent(EditOutbreakUiIntent.SelectBodyLocationCatalogOption(12L, "Left arm"))
+        viewModel.onIntent(EditOutbreakUiIntent.ClearRetiredOutbreakDescriptorCatalogSelection)
+        viewModel.onIntent(EditOutbreakUiIntent.ClearRetiredBodyLocationCatalogSelection)
+
+        assertEquals("Skin flare", viewModel.state.value.outbreakDescriptor)
+        assertEquals("Left arm", viewModel.state.value.bodyLocation)
+        assertEquals(null, viewModel.state.value.selectedOutbreakDescriptorCatalogId)
+        assertEquals(null, viewModel.state.value.selectedBodyLocationCatalogId)
+        assertEquals(null, viewModel.state.value.selectedOutbreakDescriptorSummary)
+        assertEquals(null, viewModel.state.value.selectedBodyLocationSummary)
+    }
+
     private fun buildViewModel(): EditOutbreakViewModel {
         val repository = object : OutbreakRepository {
             override suspend fun createOutbreak(command: com.example.app.features.outbreak.domain.CreateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")

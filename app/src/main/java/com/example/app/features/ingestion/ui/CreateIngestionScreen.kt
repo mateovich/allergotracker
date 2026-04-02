@@ -39,6 +39,7 @@ fun CreateIngestionScreen(
     onNavigateToRoute: (String) -> Unit,
     viewModelFactory: ViewModelProvider.Factory,
     selectedReusableEntity: IngestionReusableSelectionResult? = null,
+    retiredReusableSelection: Boolean = false,
     onReusableEntityConsumed: () -> Unit = {},
     viewModel: CreateIngestionViewModel = viewModel(factory = viewModelFactory)
 ) {
@@ -48,6 +49,13 @@ fun CreateIngestionScreen(
     LaunchedEffect(selectedReusableEntity) {
         selectedReusableEntity?.let {
             viewModel.onIntent(CreateIngestionUiIntent.ApplyReusableSelection(it))
+            onReusableEntityConsumed()
+        }
+    }
+
+    LaunchedEffect(retiredReusableSelection) {
+        if (retiredReusableSelection) {
+            viewModel.onIntent(CreateIngestionUiIntent.ClearRetiredReusableSelection)
             onReusableEntityConsumed()
         }
     }
