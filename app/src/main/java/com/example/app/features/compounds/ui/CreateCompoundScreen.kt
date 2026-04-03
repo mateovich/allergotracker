@@ -128,9 +128,11 @@ fun CreateCompoundScreen(
                                 .testTag("compound-component-proportion-$index"),
                             label = { Text("Proportion (%)") },
                             supportingText = {
-                                val message = component.proportionError ?: component.targetError
-                                if (message != null) {
-                                    Text(message)
+                                if (component.targetError != null || component.proportionError != null) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        component.targetError?.let { Text(it) }
+                                        component.proportionError?.let { Text(it) }
+                                    }
                                 }
                             },
                             isError = component.proportionError != null || component.targetError != null,

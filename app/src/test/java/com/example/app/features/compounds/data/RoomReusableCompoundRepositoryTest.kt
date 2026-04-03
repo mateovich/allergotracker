@@ -117,6 +117,65 @@ class RoomReusableCompoundRepositoryTest {
     }
 
     @Test
+    fun create_returns_validation_error_when_component_list_is_empty() = runBlocking {
+        val dao = FakeReusableCompoundDao()
+        val repository = RoomReusableCompoundRepository(
+            compoundDao = dao,
+            ingredientExists = { true },
+            compoundExists = { true },
+            nowEpochMillis = { 1_700_000_123_000L }
+        )
+
+        val result = repository.createCompound(
+            CreateReusableCompoundCommand(
+                name = "Breakfast mix",
+                notes = null,
+                components = emptyList()
+            )
+        )
+
+        val error = result as AppResult.Error
+        assertEquals(
+            "Add at least one component.",
+            (error.error as DomainError.ValidationError).fieldErrors["components"]
+        )
+        assertTrue(dao.inserted.isEmpty())
+    }
+
+    @Test
+    fun create_returns_validation_error_when_total_proportion_is_not_100_percent() = runBlocking {
+        val dao = FakeReusableCompoundDao()
+        val repository = RoomReusableCompoundRepository(
+            compoundDao = dao,
+            ingredientExists = { true },
+            compoundExists = { true },
+            nowEpochMillis = { 1_700_000_123_000L }
+        )
+
+        val result = repository.createCompound(
+            CreateReusableCompoundCommand(
+                name = "Breakfast mix",
+                notes = null,
+                components = listOf(
+                    validIngredientComponent(proportionBasisPoints = 6_000),
+                    CreateReusableCompoundComponentCommand(
+                        kind = CompoundComponentKind.COMPOUND,
+                        reusableEntityId = 9L,
+                        proportionBasisPoints = 2_000
+                    )
+                )
+            )
+        )
+
+        val error = result as AppResult.Error
+        assertEquals(
+            "Total proportion must equal 100%.",
+            (error.error as DomainError.ValidationError).fieldErrors["componentsTotal"]
+        )
+        assertTrue(dao.inserted.isEmpty())
+    }
+
+    @Test
     fun update_persists_trimmed_name_and_notes() = runBlocking {
         val dao = FakeReusableCompoundDao(
             existing = ReusableCompoundEntity(
@@ -222,11 +281,13 @@ class RoomReusableCompoundRepositoryTest {
     }
 }
 
-private fun validIngredientComponent(): CreateReusableCompoundComponentCommand {
+private fun validIngredientComponent(
+    proportionBasisPoints: Int = 10_000
+): CreateReusableCompoundComponentCommand {
     return CreateReusableCompoundComponentCommand(
         kind = CompoundComponentKind.INGREDIENT,
         reusableEntityId = 7L,
-        proportionBasisPoints = 10_000
+        proportionBasisPoints = proportionBasisPoints
     )
 }
 

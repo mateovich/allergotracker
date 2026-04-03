@@ -212,9 +212,8 @@ class CreateCompoundViewModel(
 
     private fun CreateCompoundUiState.withDerivedFields(): CreateCompoundUiState {
         val totalBasisPoints = components.sumOf { it.proportionPercent.toBasisPointsOrNull() ?: 0 }
-        val totalPercent = totalBasisPoints / 100
         return copy(
-            totalPercentLabel = "$totalPercent% total",
+            totalPercentLabel = "${totalBasisPoints.toPercentLabel()} total",
             canSave = name.isNotBlank() && components.isNotEmpty() && totalBasisPoints == 10_000
         ).withFilteredComponents()
     }
@@ -235,6 +234,16 @@ class CreateCompoundViewModel(
         val percent = toBigDecimalOrNull() ?: return null
         val basisPoints = percent.multiply(java.math.BigDecimal(100)).toInt()
         return basisPoints.takeIf { it in 1..10_000 }
+    }
+
+    private fun Int.toPercentLabel(): String {
+        val whole = this / 100
+        val fractional = this % 100
+        return if (fractional == 0) {
+            whole.toString() + "%"
+        } else {
+            "%d.%02d%%".format(whole, fractional)
+        }
     }
 
     private fun DomainError.fieldError(key: String): String? {

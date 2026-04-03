@@ -73,6 +73,21 @@ class CreateCompoundViewModelTest {
         assertNull(viewModel.state.value.componentsError)
     }
 
+    @Test
+    fun decimal_proportions_keep_precise_total_label() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 0, value = "33.34"))
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 1, value = "33.34"))
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 2, value = "33.34"))
+
+        assertEquals("100.02% total", viewModel.state.value.totalPercentLabel)
+        assertTrue(!viewModel.state.value.canSave)
+    }
+
     private fun buildViewModel(): CreateCompoundViewModel {
         val ingredients = MutableStateFlow(
             listOf(

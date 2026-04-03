@@ -148,6 +148,9 @@ class RoomReusableCompoundRepository(
 
     private suspend fun validateComponents(command: CreateReusableCompoundCommand): DomainError? {
         val fieldErrors = linkedMapOf<String, String>()
+        if (command.components.isEmpty()) {
+            fieldErrors["components"] = "Add at least one component."
+        }
         command.components.forEachIndexed { index, component ->
             val reusableId = component.reusableEntityId
             val targetKey = "components[$index].target"
@@ -164,6 +167,10 @@ class RoomReusableCompoundRepository(
             if (component.proportionBasisPoints == null || component.proportionBasisPoints !in 1..10_000) {
                 fieldErrors[proportionKey] = "Enter a proportion greater than 0%."
             }
+        }
+        val totalProportion = command.components.sumOf { it.proportionBasisPoints ?: 0 }
+        if (command.components.isNotEmpty() && totalProportion != 10_000) {
+            fieldErrors["componentsTotal"] = "Total proportion must equal 100%."
         }
         if (fieldErrors.isNotEmpty()) {
             return DomainError.ValidationError(
