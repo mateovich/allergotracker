@@ -199,7 +199,19 @@ class RoomReusableCompoundRepositoryTest {
             com.example.app.features.compounds.domain.UpdateReusableCompoundCommand(
                 id = 4L,
                 name = "  Breakfast   mix plus  ",
-                notes = "Updated"
+                notes = "Updated",
+                components = listOf(
+                    com.example.app.features.compounds.domain.UpdateReusableCompoundComponentCommand(
+                        kind = CompoundComponentKind.INGREDIENT,
+                        reusableEntityId = 7L,
+                        proportionBasisPoints = 7_500
+                    ),
+                    com.example.app.features.compounds.domain.UpdateReusableCompoundComponentCommand(
+                        kind = CompoundComponentKind.COMPOUND,
+                        reusableEntityId = 9L,
+                        proportionBasisPoints = 2_500
+                    )
+                )
             )
         )
 
@@ -207,6 +219,8 @@ class RoomReusableCompoundRepositoryTest {
         assertEquals("Breakfast mix plus", success.value.name)
         assertEquals("breakfast mix plus", dao.updated.single().normalizedName)
         assertEquals("Updated", dao.updated.single().notes)
+        assertEquals(2, dao.replacedComponents.single().size)
+        assertEquals(7_500, success.value.components.first().proportionBasisPoints)
     }
 
     @Test
@@ -299,6 +313,7 @@ private class FakeReusableCompoundDao(
     val inserted = mutableListOf<ReusableCompoundEntity>()
     val insertedComponents = mutableListOf<ReusableCompoundComponentEntity>()
     val updated = mutableListOf<ReusableCompoundEntity>()
+    val replacedComponents = mutableListOf<List<ReusableCompoundComponentEntity>>()
 
     override suspend fun insertCompound(entity: ReusableCompoundEntity): Long {
         inserted += entity
@@ -315,11 +330,17 @@ private class FakeReusableCompoundDao(
 
     override suspend fun findCompoundWithComponentsById(id: Long): ReusableCompoundWithComponents? {
         val compound = when {
+            existing?.id == id && updated.isNotEmpty() -> updated.last()
             existing?.id == id -> existing
             inserted.isNotEmpty() && id == 1L -> inserted.single().copy(id = 1L)
             else -> null
         } ?: return null
         val components = when {
+            existing?.id == id && replacedComponents.isNotEmpty() -> {
+                replacedComponents.last().mapIndexed { index, component ->
+                    component.copy(id = index + 1L, compoundId = id)
+                }
+            }
             existing?.id == id -> existingComponents
             insertedComponents.isNotEmpty() && id == 1L -> insertedComponents.mapIndexed { index, component ->
                 component.copy(id = index + 1L, compoundId = id)
@@ -341,6 +362,13 @@ private class FakeReusableCompoundDao(
         val removed = insertedComponents.count { it.compoundId == compoundId }
         insertedComponents.removeAll { it.compoundId == compoundId }
         return removed
+    }
+
+    override suspend fun replaceCompoundComponents(
+        compoundId: Long,
+        components: List<ReusableCompoundComponentEntity>
+    ) {
+        replacedComponents += components
     }
 
     override suspend fun deleteCompoundById(id: Long): Int {

@@ -6,6 +6,8 @@ import kotlinx.coroutines.CancellationException
 
 class UpdateReusableCompoundUseCase(
     private val repository: ReusableCompoundRepository,
+    private val ingredientExists: suspend (Long) -> Boolean = { true },
+    private val compoundExists: suspend (Long) -> Boolean = { true },
     private val syncReferences: suspend (Long, String) -> Int = { _, _ -> 0 },
     private val countReferences: suspend (Long) -> Int = { 0 },
     private val runAtomically: suspend (suspend () -> AppResult<ReusableCompound>) -> AppResult<ReusableCompound> = { block -> block() }
@@ -25,6 +27,43 @@ class UpdateReusableCompoundUseCase(
                 DomainError.ValidationError(
                     message = "Please fix the highlighted fields.",
                     fieldErrors = mapOf("name" to "Enter a compound name.")
+                )
+            )
+        }
+
+        val fieldErrors = linkedMapOf<String, String>()
+        if (sanitizedCommand.components.isEmpty()) {
+            fieldErrors["components"] = "Add at least one component."
+        }
+        sanitizedCommand.components.forEachIndexed { index, component ->
+            val reusableId = component.reusableEntityId
+            val targetKey = "components[$index].target"
+            val proportionKey = "components[$index].proportion"
+            when {
+                reusableId == null || reusableId <= 0L -> fieldErrors[targetKey] = "Choose a saved ingredient or compound."
+                component.kind == CompoundComponentKind.INGREDIENT && !ingredientExists(reusableId) -> {
+                    fieldErrors[targetKey] = "Selected ingredient is no longer available."
+                }
+                component.kind == CompoundComponentKind.COMPOUND && reusableId == sanitizedCommand.id -> {
+                    fieldErrors[targetKey] = "A compound cannot include itself."
+                }
+                component.kind == CompoundComponentKind.COMPOUND && !compoundExists(reusableId) -> {
+                    fieldErrors[targetKey] = "Selected compound is no longer available."
+                }
+            }
+            if (component.proportionBasisPoints == null || component.proportionBasisPoints !in 1..10_000) {
+                fieldErrors[proportionKey] = "Enter a proportion greater than 0%."
+            }
+        }
+        val totalProportion = sanitizedCommand.components.sumOf { it.proportionBasisPoints ?: 0 }
+        if (sanitizedCommand.components.isNotEmpty() && totalProportion != 10_000) {
+            fieldErrors["componentsTotal"] = "Total proportion must equal 100%."
+        }
+        if (fieldErrors.isNotEmpty()) {
+            return AppResult.Error(
+                DomainError.ValidationError(
+                    message = "Please fix the highlighted fields.",
+                    fieldErrors = fieldErrors
                 )
             )
         }

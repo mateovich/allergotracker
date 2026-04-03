@@ -268,6 +268,8 @@ class AppContainer(appContext: Context) {
     )
     private val updateReusableCompoundUseCase = UpdateReusableCompoundUseCase(
         repository = reusableCompoundRepository,
+        ingredientExists = { ingredientId -> reusableIngredientDao.existsById(ingredientId) },
+        compoundExists = { reusableCompoundDao.existsById(it) },
         syncReferences = { compoundId, name ->
             ingestionEventDao.updateReusableEntityName(ReusableEntityKind.COMPOUND.storageValue, compoundId, name)
         },
@@ -367,6 +369,8 @@ class AppContainer(appContext: Context) {
             reusableId,
             getReusableCompoundUseCase,
             updateReusableCompoundUseCase,
+            observeReusableIngredientsUseCase,
+            observeReusableCompoundsUseCase,
             getReusableCompoundRetirementImpactUseCase,
             retireReusableCompoundUseCase
         )

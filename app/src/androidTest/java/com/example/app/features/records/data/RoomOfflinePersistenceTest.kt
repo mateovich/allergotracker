@@ -413,7 +413,20 @@ class RoomOfflinePersistenceTest {
             syncReferences = { compoundId, name ->
                 database.ingestionEventDao().updateReusableEntityName(ReusableEntityKind.COMPOUND.storageValue, compoundId, name)
             }
-        ).invoke(UpdateReusableCompoundCommand(reusableCompound.id, "Breakfast mix plus", "Draft"))
+        ).invoke(
+            UpdateReusableCompoundCommand(
+                reusableCompound.id,
+                "Breakfast mix plus",
+                "Draft",
+                reusableCompound.components.map { component ->
+                    com.example.app.features.compounds.domain.UpdateReusableCompoundComponentCommand(
+                        kind = component.kind,
+                        reusableEntityId = component.ingredientId ?: component.childCompoundId,
+                        proportionBasisPoints = component.proportionBasisPoints
+                    )
+                }
+            )
+        )
         UpdateReusableEventCatalogUseCase(
             repository = eventCatalogRepository,
             syncReferences = { kind, catalogId, name ->
@@ -562,7 +575,20 @@ class RoomOfflinePersistenceTest {
             runAtomically = { block ->
                 database.withTransaction { block() }
             }
-        ).invoke(UpdateReusableCompoundCommand(reusableCompound.id, "Breakfast mix plus", "Draft"))
+        ).invoke(
+            UpdateReusableCompoundCommand(
+                reusableCompound.id,
+                "Breakfast mix plus",
+                "Draft",
+                reusableCompound.components.map { component ->
+                    com.example.app.features.compounds.domain.UpdateReusableCompoundComponentCommand(
+                        kind = component.kind,
+                        reusableEntityId = component.ingredientId ?: component.childCompoundId,
+                        proportionBasisPoints = component.proportionBasisPoints
+                    )
+                }
+            )
+        )
 
         assertTrue(result is AppResult.Error)
         assertEquals("Breakfast mix", database.reusableCompoundDao().findById(reusableCompound.id)?.name)

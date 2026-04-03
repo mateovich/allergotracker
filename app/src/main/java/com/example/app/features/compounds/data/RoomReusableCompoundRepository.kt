@@ -95,26 +95,45 @@ class RoomReusableCompoundRepository(
                     )
                 }
             }
+            val validationError = validateComponents(
+                components = command.components.map { component ->
+                    ComponentValidationInput(
+                        kind = component.kind,
+                        reusableEntityId = component.reusableEntityId,
+                        proportionBasisPoints = component.proportionBasisPoints
+                    )
+                },
+                compoundId = command.id
+            )
+            if (validationError != null) {
+                return AppResult.Error(validationError)
+            }
             val updated = current.copy(
                 name = canonicalName,
                 normalizedName = normalizedName,
                 notes = command.notes,
+                compositionStatus = CompoundCompositionStatus.COMPLETE.storageValue,
                 updatedAtEpochMs = nowEpochMillis()
             )
             if (compoundDao.updateCompound(updated) == 0) {
                 return AppResult.Error(DomainError.IntegrityError("Saved compound is no longer available."))
             }
-            AppResult.Success(
-                ReusableCompound(
-                    id = updated.id,
-                    name = updated.name,
-                    notes = updated.notes,
-                    compositionStatus = CompoundCompositionStatus.fromStorageValue(updated.compositionStatus),
-                    components = emptyList(),
-                    createdAtEpochMs = updated.createdAtEpochMs,
-                    updatedAtEpochMs = updated.updatedAtEpochMs
-                )
+            compoundDao.replaceCompoundComponents(
+                compoundId = command.id,
+                components = command.components.mapIndexed { index, component ->
+                    ReusableCompoundComponentEntity(
+                        compoundId = command.id,
+                        position = index,
+                        componentKind = component.kind.storageValue,
+                        ingredientId = component.reusableEntityId.takeIf { component.kind == CompoundComponentKind.INGREDIENT },
+                        childCompoundId = component.reusableEntityId.takeIf { component.kind == CompoundComponentKind.COMPOUND },
+                        proportionBasisPoints = component.proportionBasisPoints
+                    )
+                }
             )
+            val savedCompound = compoundDao.findCompoundWithComponentsById(command.id)
+                ?: return AppResult.Error(DomainError.IntegrityError("Saved compound is no longer available."))
+            AppResult.Success(savedCompound.toDomain())
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (_: Exception) {
@@ -147,11 +166,26 @@ class RoomReusableCompoundRepository(
     }
 
     private suspend fun validateComponents(command: CreateReusableCompoundCommand): DomainError? {
+        return validateComponents(
+            components = command.components.map { component ->
+                ComponentValidationInput(
+                    kind = component.kind,
+                    reusableEntityId = component.reusableEntityId,
+                    proportionBasisPoints = component.proportionBasisPoints
+                )
+            }
+        )
+    }
+
+    private suspend fun validateComponents(
+        components: List<ComponentValidationInput>,
+        compoundId: Long? = null
+    ): DomainError? {
         val fieldErrors = linkedMapOf<String, String>()
-        if (command.components.isEmpty()) {
+        if (components.isEmpty()) {
             fieldErrors["components"] = "Add at least one component."
         }
-        command.components.forEachIndexed { index, component ->
+        components.forEachIndexed { index, component ->
             val reusableId = component.reusableEntityId
             val targetKey = "components[$index].target"
             val proportionKey = "components[$index].proportion"
@@ -159,6 +193,9 @@ class RoomReusableCompoundRepository(
                 reusableId == null || reusableId <= 0L -> fieldErrors[targetKey] = "Choose a saved ingredient or compound."
                 component.kind == CompoundComponentKind.INGREDIENT && !ingredientExists(reusableId) -> {
                     fieldErrors[targetKey] = "Selected ingredient is no longer available."
+                }
+                component.kind == CompoundComponentKind.COMPOUND && reusableId == compoundId -> {
+                    fieldErrors[targetKey] = "A compound cannot include itself."
                 }
                 component.kind == CompoundComponentKind.COMPOUND && !compoundExists(reusableId) -> {
                     fieldErrors[targetKey] = "Selected compound is no longer available."
@@ -168,8 +205,8 @@ class RoomReusableCompoundRepository(
                 fieldErrors[proportionKey] = "Enter a proportion greater than 0%."
             }
         }
-        val totalProportion = command.components.sumOf { it.proportionBasisPoints ?: 0 }
-        if (command.components.isNotEmpty() && totalProportion != 10_000) {
+        val totalProportion = components.sumOf { it.proportionBasisPoints ?: 0 }
+        if (components.isNotEmpty() && totalProportion != 10_000) {
             fieldErrors["componentsTotal"] = "Total proportion must equal 100%."
         }
         if (fieldErrors.isNotEmpty()) {
@@ -204,3 +241,9 @@ private fun ReusableCompoundWithComponents.toDomain(): ReusableCompound {
 }
 
 private fun String.normalizedKey(): String = normalizeReusableName().lowercase()
+
+private data class ComponentValidationInput(
+    val kind: CompoundComponentKind,
+    val reusableEntityId: Long?,
+    val proportionBasisPoints: Int?
+)

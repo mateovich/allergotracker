@@ -68,18 +68,18 @@ class CreateCompoundViewModel(
     fun onIntent(intent: CreateCompoundUiIntent) {
         when (intent) {
             is CreateCompoundUiIntent.UpdateName -> updateState {
-                val nextState = it.copy(name = intent.value, nameError = null, formMessage = "")
-                nextState.withDerivedFields()
+                it.copy(name = intent.value, nameError = null, formMessage = "").withDerivedFields()
             }
 
             is CreateCompoundUiIntent.UpdateNotes -> updateState { it.copy(notes = intent.value) }
             is CreateCompoundUiIntent.UpdateComponentSearchQuery -> updateState {
-                it.copy(componentSearchQuery = intent.value, formMessage = "").withFilteredComponents()
+                it.copy(componentSearchQuery = intent.value, formMessage = "").withDerivedFields()
             }
 
             is CreateCompoundUiIntent.AddIngredientComponent -> addComponent(CompoundComponentKind.INGREDIENT, intent.reusableId)
             is CreateCompoundUiIntent.AddCompoundComponent -> addComponent(CompoundComponentKind.COMPOUND, intent.reusableId)
             is CreateCompoundUiIntent.UpdateComponentProportion -> updateComponentProportion(intent.index, intent.value)
+            is CreateCompoundUiIntent.AdjustComponentProportion -> applyAdjustedProportion(intent.index, intent.basisPoints)
             is CreateCompoundUiIntent.RemoveComponent -> removeComponent(intent.index)
             CreateCompoundUiIntent.Save -> save()
         }
@@ -91,7 +91,7 @@ class CreateCompoundViewModel(
                 it.kind == kind.storageValue && it.id == reusableId
             } ?: return@updateState current
             current.copy(
-                components = current.components + CreateCompoundComponentRowUiModel(
+                components = current.components + CompoundComponentRowUiModel(
                     kind = kind.storageValue,
                     reusableEntityId = reusableId,
                     name = option.name
@@ -104,27 +104,52 @@ class CreateCompoundViewModel(
 
     private fun updateComponentProportion(index: Int, value: String) {
         updateState { current ->
-            if (index !in current.components.indices) return@updateState current
-            val sanitizedValue = value.filter { it.isDigit() || it == '.' }
-            current.copy(
-                components = current.components.mapIndexed { componentIndex, component ->
-                    if (componentIndex == index) {
-                        component.copy(proportionPercent = sanitizedValue, proportionError = null, targetError = null)
-                    } else {
-                        component
-                    }
-                },
-                totalError = null,
-                formMessage = ""
-            ).withDerivedFields()
+            if (index !in current.components.indices) {
+                return@updateState current
+            }
+            val sanitizedValue = sanitizePercentInput(value)
+            val requestedBasisPoints = sanitizedValue.toBasisPointsOrNull()
+            if (sanitizedValue.isBlank() || requestedBasisPoints == null) {
+                current.copy(
+                    components = current.components.mapIndexed { componentIndex, component ->
+                        if (componentIndex == index) {
+                            component.copy(
+                                proportionBasisPoints = null,
+                                proportionPercent = sanitizedValue,
+                                proportionError = null,
+                                targetError = null
+                            )
+                        } else {
+                            component
+                        }
+                    },
+                    totalError = null,
+                    formMessage = ""
+                ).withDerivedFields()
+            } else {
+                current.applyAdjustedProportion(index, requestedBasisPoints)
+            }
         }
+    }
+
+    private fun applyAdjustedProportion(index: Int, requestedBasisPoints: Int) {
+        updateState { current -> current.applyAdjustedProportion(index, requestedBasisPoints) }
     }
 
     private fun removeComponent(index: Int) {
         updateState { current ->
-            if (index !in current.components.indices) return@updateState current
+            if (index !in current.components.indices) {
+                return@updateState current
+            }
+            val basisPoints = current.components[index].proportionBasisPoints ?: 0
+            if (current.components.size > 1 && basisPoints != 0) {
+                return@updateState current.copy(formMessage = "Set the component to 0% before removing it.")
+            }
             current.copy(
                 components = current.components.filterIndexed { componentIndex, _ -> componentIndex != index },
+                touchedComponentOrder = current.touchedComponentOrder
+                    .filter { it != index }
+                    .map { touchedIndex -> if (touchedIndex > index) touchedIndex - 1 else touchedIndex },
                 formMessage = ""
             ).withDerivedFields()
         }
@@ -143,7 +168,7 @@ class CreateCompoundViewModel(
                             CreateReusableCompoundComponentCommand(
                                 kind = CompoundComponentKind.fromStorageValue(component.kind),
                                 reusableEntityId = component.reusableEntityId,
-                                proportionBasisPoints = component.proportionPercent.toBasisPointsOrNull()
+                                proportionBasisPoints = component.proportionBasisPoints
                             )
                         }
                     )
@@ -202,7 +227,7 @@ class CreateCompoundViewModel(
                             .thenBy { it.kind }
                             .thenBy { it.id }
                     )
-            ).withFilteredComponents()
+            ).withDerivedFields()
         }
     }
 
@@ -210,40 +235,40 @@ class CreateCompoundViewModel(
         mutableState.value = transform(mutableState.value)
     }
 
+    private fun CreateCompoundUiState.applyAdjustedProportion(index: Int, requestedBasisPoints: Int): CreateCompoundUiState {
+        val adjustment = CompoundProportionAdjustmentEngine.adjust(
+            values = components.normalizedValuesForAdjustment(),
+            touchedOrder = touchedComponentOrder,
+            index = index,
+            requestedBasisPoints = requestedBasisPoints
+        )
+        return copy(
+            components = components.mapIndexed { componentIndex, component ->
+                val basisPoints = adjustment.values[componentIndex]
+                component.copy(
+                    proportionBasisPoints = basisPoints,
+                    proportionPercent = basisPoints.toPercentInput(),
+                    proportionError = null,
+                    targetError = null,
+                    isTouched = componentIndex in adjustment.touchedOrder
+                )
+            },
+            touchedComponentOrder = adjustment.touchedOrder,
+            totalError = null,
+            componentsError = null,
+            formMessage = ""
+        ).withDerivedFields()
+    }
+
     private fun CreateCompoundUiState.withDerivedFields(): CreateCompoundUiState {
-        val totalBasisPoints = components.sumOf { it.proportionPercent.toBasisPointsOrNull() ?: 0 }
+        val totalBasisPoints = components.sumOf { it.proportionBasisPoints ?: 0 }
         return copy(
             totalPercentLabel = "${totalBasisPoints.toPercentLabel()} total",
-            canSave = name.isNotBlank() && components.isNotEmpty() && totalBasisPoints == 10_000
-        ).withFilteredComponents()
-    }
-
-    private fun CreateCompoundUiState.withFilteredComponents(): CreateCompoundUiState {
-        val normalizedQuery = componentSearchQuery.trim().lowercase()
-        return copy(
+            canSave = name.isNotBlank() && components.hasCompleteValidComposition(),
             filteredComponents = availableComponents
-                .filter { option ->
-                    normalizedQuery.isBlank() || option.name.lowercase().contains(normalizedQuery)
-                }
-                .take(if (normalizedQuery.isBlank()) MAX_VISIBLE_COMPONENT_OPTIONS else Int.MAX_VALUE)
+                .filterByQuery(componentSearchQuery)
+                .take(if (componentSearchQuery.isBlank()) MAX_VISIBLE_COMPONENT_OPTIONS else Int.MAX_VALUE)
         )
-    }
-
-    private fun String.toBasisPointsOrNull(): Int? {
-        if (isBlank()) return null
-        val percent = toBigDecimalOrNull() ?: return null
-        val basisPoints = percent.multiply(java.math.BigDecimal(100)).toInt()
-        return basisPoints.takeIf { it in 1..10_000 }
-    }
-
-    private fun Int.toPercentLabel(): String {
-        val whole = this / 100
-        val fractional = this % 100
-        return if (fractional == 0) {
-            whole.toString() + "%"
-        } else {
-            "%d.%02d%%".format(whole, fractional)
-        }
     }
 
     private fun DomainError.fieldError(key: String): String? {

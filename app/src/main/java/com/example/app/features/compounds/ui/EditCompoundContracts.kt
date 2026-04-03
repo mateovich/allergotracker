@@ -7,7 +7,15 @@ data class EditCompoundUiState(
     val title: String = "Edit Compound",
     val name: String = "",
     val notes: String = "",
-    val helperMessage: String = "This story only edits reusable metadata. Composition stays unchanged.",
+    val helperMessage: String = "Adjust saved components and keep the total locked at 100% before saving.",
+    val componentSearchQuery: String = "",
+    val availableComponents: List<CompoundComponentCatalogOptionUiModel> = emptyList(),
+    val filteredComponents: List<CompoundComponentCatalogOptionUiModel> = emptyList(),
+    val components: List<CompoundComponentRowUiModel> = emptyList(),
+    val touchedComponentOrder: List<Int> = emptyList(),
+    val totalPercentLabel: String = "0% total",
+    val componentsError: String? = null,
+    val totalError: String? = null,
     val nameError: String? = null,
     val formMessage: String = "",
     val isLoading: Boolean = true,
@@ -22,6 +30,12 @@ sealed interface EditCompoundUiIntent {
     data object Load : EditCompoundUiIntent
     data class UpdateName(val value: String) : EditCompoundUiIntent
     data class UpdateNotes(val value: String) : EditCompoundUiIntent
+    data class UpdateComponentSearchQuery(val value: String) : EditCompoundUiIntent
+    data class AddIngredientComponent(val reusableId: Long) : EditCompoundUiIntent
+    data class AddCompoundComponent(val reusableId: Long) : EditCompoundUiIntent
+    data class UpdateComponentProportion(val index: Int, val value: String) : EditCompoundUiIntent
+    data class AdjustComponentProportion(val index: Int, val basisPoints: Int) : EditCompoundUiIntent
+    data class RemoveComponent(val index: Int) : EditCompoundUiIntent
     data object Save : EditCompoundUiIntent
     data object RequestRetirementPreview : EditCompoundUiIntent
     data object DismissRetirementDialog : EditCompoundUiIntent

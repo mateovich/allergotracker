@@ -4,13 +4,17 @@ import com.example.app.MainDispatcherRule
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.compounds.domain.CompoundCompositionStatus
+import com.example.app.features.compounds.domain.CompoundComponentKind
 import com.example.app.features.compounds.domain.GetReusableCompoundRetirementImpactUseCase
 import com.example.app.features.compounds.domain.GetReusableCompoundUseCase
+import com.example.app.features.compounds.domain.ObserveReusableCompoundsUseCase
 import com.example.app.features.compounds.domain.ReusableCompound
+import com.example.app.features.compounds.domain.ReusableCompoundComponent
 import com.example.app.features.compounds.domain.ReusableCompoundRepository
 import com.example.app.features.compounds.domain.RetireReusableCompoundUseCase
 import com.example.app.features.compounds.domain.UpdateReusableCompoundCommand
 import com.example.app.features.compounds.domain.UpdateReusableCompoundUseCase
+import com.example.app.features.ingredients.domain.ObserveReusableIngredientsUseCase
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -34,13 +38,27 @@ class EditCompoundViewModelTest {
         val effect = async { viewModel.effects.first() }
 
         viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.UpdateComponentProportion(index = 0, value = "75"))
         viewModel.onIntent(EditCompoundUiIntent.UpdateName("Breakfast mix plus"))
         viewModel.onIntent(EditCompoundUiIntent.Save)
 
         val navigation = effect.await() as EditCompoundUiEffect.NavigateBackWithSelection
 
         assertEquals("Breakfast mix plus", repository.updatedCommand?.name)
+        assertEquals(7_500, repository.updatedCommand?.components?.first()?.proportionBasisPoints)
         assertEquals(9L, navigation.result.id)
+    }
+
+    @Test
+    fun load_maps_existing_components_and_total_label() = runBlocking {
+        val repository = FakeEditCompoundRepository()
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+
+        assertEquals(2, viewModel.state.value.components.size)
+        assertEquals("100% total", viewModel.state.value.totalPercentLabel)
+        assertTrue(viewModel.state.value.canSave)
     }
 
     @Test
@@ -71,6 +89,19 @@ class EditCompoundViewModelTest {
         viewModel.onIntent(EditCompoundUiIntent.UpdateName("   "))
 
         assertEquals("Enter a compound name.", viewModel.state.value.nameError)
+        assertFalse(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun zero_percent_component_disables_save_until_removed() = runBlocking {
+        val repository = FakeEditCompoundRepository()
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.UpdateComponentProportion(index = 0, value = "100"))
+        viewModel.onIntent(EditCompoundUiIntent.UpdateComponentProportion(index = 1, value = "0"))
+
+        assertEquals("100% total", viewModel.state.value.totalPercentLabel)
         assertFalse(viewModel.state.value.canSave)
     }
 
@@ -159,6 +190,8 @@ class EditCompoundViewModelTest {
             compoundId = 9L,
             getReusableCompoundUseCase = GetReusableCompoundUseCase(repository),
             updateReusableCompoundUseCase = UpdateReusableCompoundUseCase(repository),
+            observeReusableIngredients = ObserveReusableIngredientsUseCase(FakeObserveIngredientsRepository()),
+            observeReusableCompounds = ObserveReusableCompoundsUseCase(repository),
             getReusableCompoundRetirementImpactUseCase = impactUseCase,
             retireReusableCompoundUseCase = RetireReusableCompoundUseCase(repository, impactUseCase)
         )
@@ -182,7 +215,24 @@ private class FakeEditCompoundRepository(
                 name = "Breakfast mix",
                 notes = "Draft",
                 compositionStatus = CompoundCompositionStatus.DRAFT,
-                components = emptyList(),
+                components = listOf(
+                    ReusableCompoundComponent(
+                        id = 1L,
+                        position = 0,
+                        kind = CompoundComponentKind.INGREDIENT,
+                        ingredientId = 7L,
+                        childCompoundId = null,
+                        proportionBasisPoints = 6_000
+                    ),
+                    ReusableCompoundComponent(
+                        id = 2L,
+                        position = 1,
+                        kind = CompoundComponentKind.COMPOUND,
+                        ingredientId = null,
+                        childCompoundId = 11L,
+                        proportionBasisPoints = 4_000
+                    )
+                ),
                 createdAtEpochMs = 1L,
                 updatedAtEpochMs = 1L
             )
@@ -197,7 +247,16 @@ private class FakeEditCompoundRepository(
                 name = command.name,
                 notes = command.notes,
                 compositionStatus = CompoundCompositionStatus.DRAFT,
-                components = emptyList(),
+                components = command.components.mapIndexed { index, component ->
+                    ReusableCompoundComponent(
+                        id = index + 1L,
+                        position = index,
+                        kind = component.kind,
+                        ingredientId = component.reusableEntityId.takeIf { component.kind == CompoundComponentKind.INGREDIENT },
+                        childCompoundId = component.reusableEntityId.takeIf { component.kind == CompoundComponentKind.COMPOUND },
+                        proportionBasisPoints = component.proportionBasisPoints
+                    )
+                },
                 createdAtEpochMs = 1L,
                 updatedAtEpochMs = 2L
             )
@@ -207,4 +266,12 @@ private class FakeEditCompoundRepository(
     override suspend fun deleteCompound(id: Long): AppResult<Unit> = deleteResult
 
     override fun observeCompounds(): Flow<List<ReusableCompound>> = emptyFlow()
+}
+
+private class FakeObserveIngredientsRepository : com.example.app.features.ingredients.domain.ReusableIngredientRepository {
+    override suspend fun createIngredient(
+        command: com.example.app.features.ingredients.domain.CreateReusableIngredientCommand
+    ): AppResult<com.example.app.features.ingredients.domain.ReusableIngredient> = error("unused")
+
+    override fun observeIngredients(): Flow<List<com.example.app.features.ingredients.domain.ReusableIngredient>> = emptyFlow()
 }

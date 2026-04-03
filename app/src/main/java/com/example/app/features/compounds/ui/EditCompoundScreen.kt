@@ -96,20 +96,6 @@ fun EditCompoundScreen(
                 isError = state.nameError != null,
                 singleLine = true
             )
-            OutlinedTextField(
-                value = state.notes,
-                onValueChange = { viewModel.onIntent(EditCompoundUiIntent.UpdateNotes(it)) },
-                modifier = Modifier.fillMaxWidth().testTag("edit-compound-notes"),
-                label = { Text("Notes (optional)") },
-                minLines = 3
-            )
-            if (state.formMessage.isNotBlank()) {
-                Text(
-                    text = state.formMessage,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.testTag("edit-compound-form-message")
-                )
-            }
             Button(
                 onClick = { viewModel.onIntent(EditCompoundUiIntent.Save) },
                 enabled = state.canSave && !state.isSaving,
@@ -123,6 +109,39 @@ fun EditCompoundScreen(
                 modifier = Modifier.fillMaxWidth().testTag("edit-compound-retire")
             ) {
                 Text("Retire compound")
+            }
+            CompoundComposer(
+                prefix = "edit-compound",
+                componentSearchQuery = state.componentSearchQuery,
+                filteredComponents = state.filteredComponents,
+                components = state.components,
+                totalPercentLabel = state.totalPercentLabel,
+                componentsError = state.componentsError,
+                totalError = state.totalError,
+                onSearchQueryChange = { viewModel.onIntent(EditCompoundUiIntent.UpdateComponentSearchQuery(it)) },
+                onAddIngredient = { viewModel.onIntent(EditCompoundUiIntent.AddIngredientComponent(it)) },
+                onAddCompound = { viewModel.onIntent(EditCompoundUiIntent.AddCompoundComponent(it)) },
+                onProportionTextChange = { index, value ->
+                    viewModel.onIntent(EditCompoundUiIntent.UpdateComponentProportion(index, value))
+                },
+                onProportionSliderChange = { index, basisPoints ->
+                    viewModel.onIntent(EditCompoundUiIntent.AdjustComponentProportion(index, basisPoints))
+                },
+                onRemoveComponent = { viewModel.onIntent(EditCompoundUiIntent.RemoveComponent(it)) }
+            )
+            OutlinedTextField(
+                value = state.notes,
+                onValueChange = { viewModel.onIntent(EditCompoundUiIntent.UpdateNotes(it)) },
+                modifier = Modifier.fillMaxWidth().testTag("edit-compound-notes"),
+                label = { Text("Notes (optional)") },
+                minLines = 3
+            )
+            if (state.formMessage.isNotBlank()) {
+                Text(
+                    text = state.formMessage,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("edit-compound-form-message")
+                )
             }
         }
 

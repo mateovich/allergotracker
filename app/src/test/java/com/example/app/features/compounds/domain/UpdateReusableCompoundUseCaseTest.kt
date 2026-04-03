@@ -13,6 +13,56 @@ import org.junit.Test
 class UpdateReusableCompoundUseCaseTest {
 
     @Test
+    fun invalid_total_returns_validation_error_before_persistence() = runBlocking {
+        val repository = FakeUpdateReusableCompoundRepository()
+        val useCase = UpdateReusableCompoundUseCase(repository)
+
+        val result = useCase(
+            UpdateReusableCompoundCommand(
+                id = 9L,
+                name = "Breakfast mix plus",
+                notes = null,
+                components = listOf(
+                    UpdateReusableCompoundComponentCommand(
+                        kind = CompoundComponentKind.INGREDIENT,
+                        reusableEntityId = 7L,
+                        proportionBasisPoints = 6_000
+                    )
+                )
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Total proportion must equal 100%.", error.fieldErrors["componentsTotal"])
+        assertEquals(0, repository.updatedCommands.size)
+    }
+
+    @Test
+    fun direct_self_reference_returns_field_error() = runBlocking {
+        val repository = FakeUpdateReusableCompoundRepository()
+        val useCase = UpdateReusableCompoundUseCase(repository)
+
+        val result = useCase(
+            UpdateReusableCompoundCommand(
+                id = 9L,
+                name = "Breakfast mix plus",
+                notes = null,
+                components = listOf(
+                    UpdateReusableCompoundComponentCommand(
+                        kind = CompoundComponentKind.COMPOUND,
+                        reusableEntityId = 9L,
+                        proportionBasisPoints = 10_000
+                    )
+                )
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("A compound cannot include itself.", error.fieldErrors["components[0].target"])
+        assertEquals(0, repository.updatedCommands.size)
+    }
+
+    @Test
     fun mismatch_between_reference_count_and_synced_rows_returns_integrity_error() = runBlocking {
         val useCase = UpdateReusableCompoundUseCase(
             repository = FakeUpdateReusableCompoundRepository(),
@@ -20,7 +70,7 @@ class UpdateReusableCompoundUseCaseTest {
             countReferences = { 1 }
         )
 
-        val result = useCase(UpdateReusableCompoundCommand(9L, "Breakfast mix plus", null))
+        val result = useCase(validUpdateCommand())
 
         val error = (result as AppResult.Error).error as DomainError.IntegrityError
         assertEquals("Couldn't keep linked compound records in sync. Try again.", error.message)
@@ -34,7 +84,7 @@ class UpdateReusableCompoundUseCaseTest {
             countReferences = { 1 }
         )
 
-        val result = useCase(UpdateReusableCompoundCommand(9L, "Breakfast mix plus", null))
+        val result = useCase(validUpdateCommand())
 
         val error = (result as AppResult.Error).error as DomainError.PersistenceError
         assertEquals("Couldn't update compound locally. Try again.", error.message)
@@ -49,7 +99,7 @@ class UpdateReusableCompoundUseCaseTest {
         )
 
         try {
-            useCase(UpdateReusableCompoundCommand(9L, "Breakfast mix plus", null))
+            useCase(validUpdateCommand())
             fail("Expected CancellationException")
         } catch (_: CancellationException) {
             // expected
@@ -58,16 +108,28 @@ class UpdateReusableCompoundUseCaseTest {
 }
 
 private class FakeUpdateReusableCompoundRepository : ReusableCompoundRepository {
+    val updatedCommands = mutableListOf<UpdateReusableCompoundCommand>()
+
     override suspend fun createCompound(command: CreateReusableCompoundCommand): AppResult<ReusableCompound> = error("unused")
 
     override suspend fun updateCompound(command: UpdateReusableCompoundCommand): AppResult<ReusableCompound> {
+        updatedCommands += command
         return AppResult.Success(
             ReusableCompound(
                 id = command.id,
                 name = command.name,
                 notes = command.notes,
                 compositionStatus = CompoundCompositionStatus.DRAFT,
-                components = emptyList(),
+                components = command.components.mapIndexed { index, component ->
+                    ReusableCompoundComponent(
+                        id = index + 1L,
+                        position = index,
+                        kind = component.kind,
+                        ingredientId = component.reusableEntityId.takeIf { component.kind == CompoundComponentKind.INGREDIENT },
+                        childCompoundId = component.reusableEntityId.takeIf { component.kind == CompoundComponentKind.COMPOUND },
+                        proportionBasisPoints = component.proportionBasisPoints
+                    )
+                },
                 createdAtEpochMs = 1L,
                 updatedAtEpochMs = 2L
             )
@@ -75,4 +137,24 @@ private class FakeUpdateReusableCompoundRepository : ReusableCompoundRepository 
     }
 
     override fun observeCompounds(): Flow<List<ReusableCompound>> = emptyFlow()
+}
+
+private fun validUpdateCommand(): UpdateReusableCompoundCommand {
+    return UpdateReusableCompoundCommand(
+        id = 9L,
+        name = "Breakfast mix plus",
+        notes = null,
+        components = listOf(
+            UpdateReusableCompoundComponentCommand(
+                kind = CompoundComponentKind.INGREDIENT,
+                reusableEntityId = 7L,
+                proportionBasisPoints = 6_000
+            ),
+            UpdateReusableCompoundComponentCommand(
+                kind = CompoundComponentKind.COMPOUND,
+                reusableEntityId = 8L,
+                proportionBasisPoints = 4_000
+            )
+        )
+    )
 }

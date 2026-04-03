@@ -15,7 +15,14 @@ data class CreateReusableCompoundComponentCommand(
 data class UpdateReusableCompoundCommand(
     val id: Long,
     val name: String,
-    val notes: String?
+    val notes: String?,
+    val components: List<UpdateReusableCompoundComponentCommand>
+)
+
+data class UpdateReusableCompoundComponentCommand(
+    val kind: CompoundComponentKind,
+    val reusableEntityId: Long?,
+    val proportionBasisPoints: Int?
 )
 
 enum class CompoundCompositionStatus(val storageValue: String) {

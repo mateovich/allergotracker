@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -64,12 +65,15 @@ class CreateCompoundViewModelTest {
         val viewModel = buildViewModel()
 
         viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
         viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 0, value = "60"))
 
-        val row = viewModel.state.value.components.single()
-        assertEquals("Oat milk", row.name)
-        assertEquals("60", row.proportionPercent)
-        assertEquals("60% total", viewModel.state.value.totalPercentLabel)
+        val firstRow = viewModel.state.value.components[0]
+        val secondRow = viewModel.state.value.components[1]
+        assertEquals("Oat milk", firstRow.name)
+        assertEquals("60", firstRow.proportionPercent)
+        assertEquals("40", secondRow.proportionPercent)
+        assertEquals("100% total", viewModel.state.value.totalPercentLabel)
         assertNull(viewModel.state.value.componentsError)
     }
 
@@ -84,8 +88,23 @@ class CreateCompoundViewModelTest {
         viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 1, value = "33.34"))
         viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 2, value = "33.34"))
 
-        assertEquals("100.02% total", viewModel.state.value.totalPercentLabel)
-        assertTrue(!viewModel.state.value.canSave)
+        assertEquals("100% total", viewModel.state.value.totalPercentLabel)
+        assertEquals(10_000, viewModel.state.value.components.sumOf { it.proportionBasisPoints ?: 0 })
+        assertTrue(viewModel.state.value.components.all { it.proportionBasisPoints != null })
+    }
+
+    @Test
+    fun zero_percent_component_disables_save_until_removed() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateName("Breakfast mix"))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 0, value = "100"))
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 1, value = "0"))
+
+        assertEquals("100% total", viewModel.state.value.totalPercentLabel)
+        assertFalse(viewModel.state.value.canSave)
     }
 
     private fun buildViewModel(): CreateCompoundViewModel {
