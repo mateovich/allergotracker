@@ -17,6 +17,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -226,35 +227,6 @@ fun EditExposureScreen(
                     }
                 }
             }
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "When did it happen?", style = MaterialTheme.typography.titleSmall)
-                OutlinedTextField(
-                    value = state.occurredAtInput,
-                    onValueChange = { viewModel.onIntent(EditExposureUiIntent.UpdateOccurredAtInput(it)) },
-                    modifier = Modifier.fillMaxWidth().testTag("edit-exposure-occurred-at-input"),
-                    label = { Text("Date and time") },
-                    supportingText = { state.occurredAtError?.let { Text(it) } },
-                    isError = state.occurredAtError != null,
-                    singleLine = true
-                )
-                Text(text = state.occurredAtLabel, modifier = Modifier.testTag("edit-exposure-occurred-at-label"))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ExposureTimePreset.entries.forEach { preset ->
-                        AssistChip(
-                            onClick = { viewModel.onIntent(EditExposureUiIntent.SelectTimePreset(preset)) },
-                            label = { Text(preset.label) },
-                            modifier = Modifier.testTag("edit-exposure-time-${preset.name.lowercase()}")
-                        )
-                    }
-                }
-            }
-            OutlinedTextField(
-                value = state.notes,
-                onValueChange = { viewModel.onIntent(EditExposureUiIntent.UpdateNotes(it)) },
-                modifier = Modifier.fillMaxWidth().testTag("edit-exposure-notes"),
-                label = { Text("Notes (optional)") },
-                minLines = 3
-            )
             if (state.formMessage.isNotBlank()) {
                 Text(text = state.formMessage, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("edit-exposure-form-message"))
             }
@@ -280,6 +252,55 @@ fun EditExposureScreen(
             ) {
                 Text(if (state.isDeleting) "Deleting..." else "Delete record", color = MaterialTheme.colorScheme.error)
             }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = "When did it happen?", style = MaterialTheme.typography.titleSmall)
+                OutlinedTextField(
+                    value = state.occurredAtInput,
+                    onValueChange = { viewModel.onIntent(EditExposureUiIntent.UpdateOccurredAtInput(it)) },
+                    modifier = Modifier.fillMaxWidth().testTag("edit-exposure-occurred-at-input"),
+                    label = { Text("Date and time") },
+                    supportingText = { state.occurredAtError?.let { Text(it) } },
+                    isError = state.occurredAtError != null,
+                    singleLine = true
+                )
+                Text(text = state.occurredAtLabel, modifier = Modifier.testTag("edit-exposure-occurred-at-label"))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ExposureTimePreset.entries.forEach { preset ->
+                        AssistChip(
+                            onClick = { viewModel.onIntent(EditExposureUiIntent.SelectTimePreset(preset)) },
+                            label = { Text(preset.label) },
+                            modifier = Modifier.testTag("edit-exposure-time-${preset.name.lowercase()}")
+                        )
+                    }
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = "How intense was it?", style = MaterialTheme.typography.titleSmall)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.intensityOptions.forEach { option ->
+                        FilterChip(
+                            selected = state.selectedIntensityLevel == option.level,
+                            onClick = { viewModel.onIntent(EditExposureUiIntent.SelectIntensityLevel(option.level)) },
+                            label = { Text(option.label) },
+                            modifier = Modifier.testTag("edit-exposure-intensity-${option.level}")
+                        )
+                    }
+                }
+                state.intensityLevelError?.let {
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag("edit-exposure-intensity-error")
+                    )
+                }
+            }
+            OutlinedTextField(
+                value = state.notes,
+                onValueChange = { viewModel.onIntent(EditExposureUiIntent.UpdateNotes(it)) },
+                modifier = Modifier.fillMaxWidth().testTag("edit-exposure-notes"),
+                label = { Text("Notes (optional)") },
+                minLines = 3
+            )
         }
     }
 }

@@ -39,7 +39,8 @@ class EditExposureViewModel(
     private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     private val mutableState = MutableStateFlow(
         EditExposureUiState(
-            timeOptions = ExposureTimePreset.entries.map { ExposureTimeOptionUiModel(it.name, it.label, it.offsetMillis) }
+            timeOptions = ExposureTimePreset.entries.map { ExposureTimeOptionUiModel(it.name, it.label, it.offsetMillis) },
+            intensityOptions = exposureIntensityOptions()
         )
     )
     val state: StateFlow<EditExposureUiState> = mutableState.asStateFlow()
@@ -132,6 +133,13 @@ class EditExposureViewModel(
                 )
             }
             is EditExposureUiIntent.UpdateNotes -> updateState { it.copy(notes = intent.value) }
+            is EditExposureUiIntent.SelectIntensityLevel -> updateState {
+                it.copy(
+                    selectedIntensityLevel = intent.level,
+                    intensityLevelError = null,
+                    formMessage = ""
+                )
+            }
             is EditExposureUiIntent.UpdateOccurredAtInput -> {
                 val parsedOccurredAt = parseOccurredAtInput(intent.value)
                 updateState {
@@ -177,6 +185,7 @@ class EditExposureViewModel(
                             exposureType = event.exposureType,
                             deleteRecordLabel = event.exposureType,
                             notes = event.notes.orEmpty(),
+                            selectedIntensityLevel = event.intensityLevel,
                             occurredAtEpochMs = event.occurredAtEpochMs,
                             occurredAtInput = formatDateTimeInput(event.occurredAtEpochMs),
                             occurredAtLabel = formatTime(event.occurredAtEpochMs),
@@ -220,6 +229,7 @@ class EditExposureViewModel(
                         exposureType = currentState.exposureType,
                         occurredAtEpochMs = parsedOccurredAt,
                         notes = currentState.notes,
+                        intensityLevel = currentState.selectedIntensityLevel,
                         exposureTypeCatalogId = currentState.selectedExposureTypeCatalogId
                     )
                 )
@@ -234,6 +244,7 @@ class EditExposureViewModel(
                         it.copy(
                             isSaving = false,
                             exposureTypeError = error.fieldError("exposureType"),
+                            intensityLevelError = error.fieldError("intensityLevel"),
                             occurredAtError = error.fieldError("occurredAtEpochMs"),
                             formMessage = error.message,
                             canSave = it.exposureType.isNotBlank()
@@ -310,5 +321,11 @@ class EditExposureViewModel(
             filteredExposureTypes = filteredOptions,
             showCreateExposureTypeOption = exposureType.trim().isNotBlank() && !availableExposureTypes.hasExactName(exposureType)
         )
+    }
+
+    private fun exposureIntensityOptions(): List<ExposureIntensityOptionUiModel> {
+        return (1..5).map { level ->
+            ExposureIntensityOptionUiModel(level = level, label = level.toString())
+        }
     }
 }

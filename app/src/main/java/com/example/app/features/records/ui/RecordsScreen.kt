@@ -296,7 +296,7 @@ private fun RecordsFilterDialog(
                         FilterChip(
                             selected = option in state.filterDraft.selectedIntensityLevels,
                             onClick = { onToggleIntensity(option) },
-                            label = { Text(option.label) },
+                            label = { Text(option.level.toString()) },
                             modifier = Modifier.testTag("records-filter-intensity-${option.level}")
                         )
                     }

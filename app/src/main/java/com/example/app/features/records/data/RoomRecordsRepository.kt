@@ -99,7 +99,7 @@ private fun com.example.app.features.ingestion.data.IngestionEventEntity.toRecor
         createdAtEpochMs = createdAtEpochMs,
         sourceId = id,
         eventType = RecordEventType.INGESTION,
-        ingestionQuantityLevel = quantityLevel
+        intensityLevel = quantityLevel
     )
 }
 
@@ -109,12 +109,15 @@ private fun com.example.app.features.exposure.data.ExposureEventEntity.toRecordS
         sortKey = id,
         typeLabel = "Exposure",
         title = exposureType,
-        detailLabel = notes?.takeIf { it.isNotBlank() } ?: "Exposure recorded",
+        detailLabel = listOfNotNull(
+            intensitySummaryLabel(intensityLevel),
+            notes?.takeIf { it.isNotBlank() }
+        ).joinToString(" - ").ifBlank { "Exposure recorded" },
         occurredAtEpochMs = occurredAtEpochMs,
         createdAtEpochMs = createdAtEpochMs,
         sourceId = id,
         eventType = RecordEventType.EXPOSURE,
-        ingestionQuantityLevel = null
+        intensityLevel = intensityLevel
     )
 }
 
@@ -125,6 +128,7 @@ private fun com.example.app.features.outbreak.data.OutbreakEventEntity.toRecordS
         typeLabel = "Outbreak",
         title = outbreakDescriptor,
         detailLabel = listOfNotNull(
+            intensitySummaryLabel(intensityLevel),
             bodyLocation.takeIf { it.isNotBlank() },
             notes?.takeIf { it.isNotBlank() }
         ).joinToString(" - "),
@@ -132,7 +136,7 @@ private fun com.example.app.features.outbreak.data.OutbreakEventEntity.toRecordS
         createdAtEpochMs = createdAtEpochMs,
         sourceId = id,
         eventType = RecordEventType.OUTBREAK,
-        ingestionQuantityLevel = null
+        intensityLevel = intensityLevel
     )
 }
 
@@ -153,6 +157,7 @@ private fun com.example.app.features.exposure.data.ExposureEventEntity.toRecordD
         recordId = id,
         occurredAtEpochMs = occurredAtEpochMs,
         exposureType = exposureType,
+        intensityLabel = intensitySummaryLabel(intensityLevel),
         notes = notes
     )
 }
@@ -163,9 +168,12 @@ private fun com.example.app.features.outbreak.data.OutbreakEventEntity.toRecordD
         occurredAtEpochMs = occurredAtEpochMs,
         outbreakDescriptor = outbreakDescriptor,
         bodyLocation = bodyLocation,
+        intensityLabel = intensitySummaryLabel(intensityLevel),
         notes = notes
     )
 }
+
+private fun intensitySummaryLabel(level: Int): String = "Intensity $level"
 
 private fun RecordSummary.matches(filters: RecordsFilter, zoneId: ZoneId): Boolean {
     if (filters.eventTypes.isNotEmpty() && eventType !in filters.eventTypes) {
@@ -182,7 +190,7 @@ private fun RecordSummary.matches(filters: RecordsFilter, zoneId: ZoneId): Boole
 
     if (filters.intensityLevels.isNotEmpty()) {
         val matchingLevels = filters.intensityLevels.map { it.level }.toSet()
-        if (eventType != RecordEventType.INGESTION || ingestionQuantityLevel !in matchingLevels) {
+        if (intensityLevel !in matchingLevels) {
             return false
         }
     }

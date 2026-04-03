@@ -8,6 +8,11 @@ data class ExposureTimeOptionUiModel(
     val offsetMillis: Long
 )
 
+data class ExposureIntensityOptionUiModel(
+    val level: Int,
+    val label: String
+)
+
 enum class ExposureTimePreset(
     val label: String,
     val offsetMillis: Long
@@ -21,18 +26,21 @@ data class CreateExposureUiState(
     val title: String = "Create Exposure",
     val exposureType: String = "",
     val notes: String = "",
+    val selectedIntensityLevel: Int = 3,
     val occurredAtEpochMs: Long = 0L,
     val occurredAtInput: String = "",
     val occurredAtLabel: String = "",
     val isOccurredAtManuallyEdited: Boolean = false,
     val selectedTimePreset: ExposureTimePreset = ExposureTimePreset.NOW,
     val timeOptions: List<ExposureTimeOptionUiModel> = emptyList(),
+    val intensityOptions: List<ExposureIntensityOptionUiModel> = emptyList(),
     val selectedExposureTypeCatalogId: Long? = null,
     val selectedExposureTypeSummary: String? = null,
     val availableExposureTypes: List<ReusableEventCatalogOptionUiModel> = emptyList(),
     val filteredExposureTypes: List<ReusableEventCatalogOptionUiModel> = emptyList(),
     val showCreateExposureTypeOption: Boolean = false,
     val exposureTypeError: String? = null,
+    val intensityLevelError: String? = null,
     val occurredAtError: String? = null,
     val formMessage: String = "",
     val isSaving: Boolean = false,
@@ -47,6 +55,7 @@ sealed interface CreateExposureUiIntent {
     data object ClearRetiredExposureCatalogSelection : CreateExposureUiIntent
     data object EditSelectedExposureCatalog : CreateExposureUiIntent
     data class UpdateNotes(val value: String) : CreateExposureUiIntent
+    data class SelectIntensityLevel(val level: Int) : CreateExposureUiIntent
     data class UpdateOccurredAtInput(val value: String) : CreateExposureUiIntent
     data class SelectTimePreset(val preset: ExposureTimePreset) : CreateExposureUiIntent
     data object Save : CreateExposureUiIntent

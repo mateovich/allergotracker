@@ -16,5 +16,5 @@ data class RecordSummary(
     val createdAtEpochMs: Long,
     val sourceId: Long,
     val eventType: RecordEventType,
-    val ingestionQuantityLevel: Int? = null
+    val intensityLevel: Int? = null
 )

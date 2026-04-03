@@ -2,6 +2,11 @@ package com.example.app.features.outbreak.ui
 
 import com.example.app.features.eventcatalog.ui.ReusableEventCatalogOptionUiModel
 
+data class OutbreakIntensityOptionUiModel(
+    val level: Int,
+    val label: String
+)
+
 data class OutbreakTimeOptionUiModel(
     val key: String,
     val label: String,
@@ -38,8 +43,11 @@ data class CreateOutbreakUiState(
     val availableBodyLocations: List<ReusableEventCatalogOptionUiModel> = emptyList(),
     val filteredBodyLocations: List<ReusableEventCatalogOptionUiModel> = emptyList(),
     val showCreateBodyLocationOption: Boolean = false,
+    val intensityOptions: List<OutbreakIntensityOptionUiModel> = emptyList(),
+    val selectedIntensityLevel: Int = 0,
     val outbreakDescriptorError: String? = null,
     val bodyLocationError: String? = null,
+    val intensityError: String? = null,
     val occurredAtError: String? = null,
     val formMessage: String = "",
     val isSaving: Boolean = false,
@@ -59,6 +67,7 @@ sealed interface CreateOutbreakUiIntent {
     data object ClearBodyLocationCatalogSelection : CreateOutbreakUiIntent
     data object ClearRetiredBodyLocationCatalogSelection : CreateOutbreakUiIntent
     data object EditSelectedBodyLocationCatalog : CreateOutbreakUiIntent
+    data class SelectIntensityLevel(val level: Int) : CreateOutbreakUiIntent
     data class UpdateNotes(val value: String) : CreateOutbreakUiIntent
     data class UpdateOccurredAtInput(val value: String) : CreateOutbreakUiIntent
     data class SelectTimePreset(val preset: OutbreakTimePreset) : CreateOutbreakUiIntent

@@ -7,7 +7,8 @@ class CreateExposureDefaultsUseCase(
 ) {
     operator fun invoke(): CreateExposureDefaults {
         return CreateExposureDefaults(
-            occurredAtEpochMs = currentTimeProvider.nowEpochMillis()
+            occurredAtEpochMs = currentTimeProvider.nowEpochMillis(),
+            intensityLevel = DEFAULT_INTENSITY_LEVEL
         )
     }
 }

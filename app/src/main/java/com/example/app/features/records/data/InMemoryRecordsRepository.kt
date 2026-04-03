@@ -45,7 +45,7 @@ class InMemoryRecordsRepository(
                             occurredAtEpochMs = record.occurredAtEpochMs,
                             itemName = record.title,
                             quantityLabel = record.detailLabel.ifBlank {
-                                IngestionQuantityOption.fromLevel(record.ingestionQuantityLevel ?: 0)?.label.orEmpty()
+                                IngestionQuantityOption.fromLevel(record.intensityLevel ?: 0)?.label.orEmpty()
                             },
                             reusableEntityKind = null,
                             reusableEntityId = null,
@@ -56,6 +56,7 @@ class InMemoryRecordsRepository(
                             recordId = record.sourceId,
                             occurredAtEpochMs = record.occurredAtEpochMs,
                             exposureType = record.title,
+                            intensityLabel = IngestionQuantityOption.fromLevel(record.intensityLevel ?: 0)?.label.orEmpty(),
                             notes = record.detailLabel.takeIf { it.isNotBlank() && it != "Exposure recorded" }
                         )
 
@@ -64,6 +65,7 @@ class InMemoryRecordsRepository(
                             occurredAtEpochMs = record.occurredAtEpochMs,
                             outbreakDescriptor = record.title,
                             bodyLocation = record.detailLabel.substringBefore(" - ").ifBlank { "Unknown" },
+                            intensityLabel = IngestionQuantityOption.fromLevel(record.intensityLevel ?: 0)?.label.orEmpty(),
                             notes = record.detailLabel.substringAfter(" - ", "").ifBlank { null }
                         )
                     }
@@ -88,7 +90,7 @@ private fun RecordSummary.matches(filters: RecordsFilter, zoneId: ZoneId): Boole
 
     if (filters.intensityLevels.isNotEmpty()) {
         val matchingLevels = filters.intensityLevels.map { it.level }.toSet()
-        if (eventType != RecordEventType.INGESTION || ingestionQuantityLevel !in matchingLevels) {
+        if (intensityLevel !in matchingLevels) {
             return false
         }
     }

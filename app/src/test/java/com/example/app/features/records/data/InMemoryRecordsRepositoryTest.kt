@@ -32,7 +32,7 @@ class InMemoryRecordsRepositoryTest {
                     id = "ingestion-7",
                     occurredAtEpochMs = includedDate.atStartOfDay(zoneId).plusHours(9).toInstant().toEpochMilli(),
                     eventType = RecordEventType.INGESTION,
-                    ingestionQuantityLevel = 2
+                    intensityLevel = 2
                 ),
                 record(
                     id = "exposure-5",
@@ -43,7 +43,7 @@ class InMemoryRecordsRepositoryTest {
                     id = "ingestion-9",
                     occurredAtEpochMs = includedDate.minusDays(1).atStartOfDay(zoneId).plusHours(8).toInstant().toEpochMilli(),
                     eventType = RecordEventType.INGESTION,
-                    ingestionQuantityLevel = 2
+                    intensityLevel = 2
                 )
             )
         )
@@ -62,22 +62,23 @@ class InMemoryRecordsRepositoryTest {
     }
 
     @Test
-    fun observe_records_applies_ingestion_only_intensity_filter() = runBlocking {
+    fun observe_records_applies_shared_intensity_filter() = runBlocking {
         val repository = InMemoryRecordsRepository(
             initialRecords = listOf(
                 record(
                     id = "ingestion-7",
                     eventType = RecordEventType.INGESTION,
-                    ingestionQuantityLevel = 2
+                    intensityLevel = 2
                 ),
                 record(
                     id = "ingestion-8",
                     eventType = RecordEventType.INGESTION,
-                    ingestionQuantityLevel = 4
+                    intensityLevel = 4
                 ),
                 record(
                     id = "outbreak-9",
-                    eventType = RecordEventType.OUTBREAK
+                    eventType = RecordEventType.OUTBREAK,
+                    intensityLevel = 2
                 )
             )
         )
@@ -88,14 +89,14 @@ class InMemoryRecordsRepositoryTest {
             )
         ).first()
 
-        assertEquals(listOf("ingestion-7"), visible.map { it.id })
+        assertEquals(listOf("ingestion-7", "outbreak-9"), visible.map { it.id })
     }
 
     private fun record(
         id: String,
         occurredAtEpochMs: Long = Instant.parse("2026-03-20T09:00:00Z").toEpochMilli(),
         eventType: RecordEventType,
-        ingestionQuantityLevel: Int? = null
+        intensityLevel: Int? = null
     ): RecordSummary {
         return RecordSummary(
             id = id,
@@ -107,7 +108,7 @@ class InMemoryRecordsRepositoryTest {
             createdAtEpochMs = occurredAtEpochMs,
             sourceId = id.substringAfter('-').toLong(),
             eventType = eventType,
-            ingestionQuantityLevel = ingestionQuantityLevel
+            intensityLevel = intensityLevel
         )
     }
 }

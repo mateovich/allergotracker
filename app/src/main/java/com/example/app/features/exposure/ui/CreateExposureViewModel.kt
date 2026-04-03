@@ -126,6 +126,14 @@ class CreateExposureViewModel(
                 it.copy(notes = intent.value)
             }
 
+            is CreateExposureUiIntent.SelectIntensityLevel -> updateState {
+                it.copy(
+                    selectedIntensityLevel = intent.level,
+                    intensityLevelError = null,
+                    formMessage = ""
+                )
+            }
+
             is CreateExposureUiIntent.UpdateOccurredAtInput -> updateState {
                 val parsedOccurredAt = parseOccurredAtInput(intent.value)
                 it.copy(
@@ -185,6 +193,7 @@ class CreateExposureViewModel(
                         exposureType = currentState.exposureType,
                         occurredAtEpochMs = occurredAtEpochMs,
                         notes = currentState.notes,
+                        intensityLevel = currentState.selectedIntensityLevel,
                         exposureTypeCatalogId = currentState.selectedExposureTypeCatalogId
                     )
                 )
@@ -200,6 +209,7 @@ class CreateExposureViewModel(
                         it.copy(
                             isSaving = false,
                             exposureTypeError = error.fieldError("exposureType"),
+                            intensityLevelError = error.fieldError("intensityLevel"),
                             occurredAtError = error.fieldError("occurredAtEpochMs"),
                             formMessage = error.message,
                             canSave = it.exposureType.isNotBlank()
@@ -213,6 +223,7 @@ class CreateExposureViewModel(
     private fun buildInitialState(): CreateExposureUiState {
         val defaults = createExposureDefaultsUseCase()
         return CreateExposureUiState(
+            selectedIntensityLevel = defaults.intensityLevel,
             occurredAtEpochMs = defaults.occurredAtEpochMs,
             occurredAtInput = formatDateTimeInput(defaults.occurredAtEpochMs),
             occurredAtLabel = formatTime(defaults.occurredAtEpochMs),
@@ -223,7 +234,8 @@ class CreateExposureViewModel(
                     label = preset.label,
                     offsetMillis = preset.offsetMillis
                 )
-            }
+            },
+            intensityOptions = exposureIntensityOptions()
         ).withFilteredExposureTypes()
     }
 
@@ -266,5 +278,11 @@ class CreateExposureViewModel(
             filteredExposureTypes = filteredOptions,
             showCreateExposureTypeOption = exposureType.trim().isNotBlank() && !availableExposureTypes.hasExactName(exposureType)
         )
+    }
+
+    private fun exposureIntensityOptions(): List<ExposureIntensityOptionUiModel> {
+        return (1..5).map { level ->
+            ExposureIntensityOptionUiModel(level = level, label = level.toString())
+        }
     }
 }

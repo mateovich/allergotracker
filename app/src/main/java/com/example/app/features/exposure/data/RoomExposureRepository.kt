@@ -24,6 +24,7 @@ class RoomExposureRepository(
                 exposureType = command.exposureType,
                 occurredAtEpochMs = command.occurredAtEpochMs,
                 notes = command.notes,
+                intensityLevel = command.intensityLevel,
                 createdAtEpochMs = currentTimeProvider.nowEpochMillis(),
                 exposureTypeCatalogId = exposureCatalogId
             )
@@ -34,6 +35,7 @@ class RoomExposureRepository(
                     exposureType = entity.exposureType,
                     occurredAtEpochMs = entity.occurredAtEpochMs,
                     notes = entity.notes,
+                    intensityLevel = entity.intensityLevel,
                     exposureTypeCatalogId = entity.exposureTypeCatalogId
                 )
             )
@@ -64,6 +66,7 @@ class RoomExposureRepository(
                 exposureType = command.exposureType,
                 occurredAtEpochMs = command.occurredAtEpochMs,
                 notes = command.notes,
+                intensityLevel = command.intensityLevel,
                 exposureTypeCatalogId = resolveExposureCatalogId(command.exposureTypeCatalogId, command.exposureType)
             )
             val updatedCount = exposureEventDao.update(updatedEntity)
@@ -100,6 +103,7 @@ class RoomExposureRepository(
             exposureType = exposureType,
             occurredAtEpochMs = occurredAtEpochMs,
             notes = notes,
+            intensityLevel = intensityLevel,
             exposureTypeCatalogId = exposureTypeCatalogId
         )
     }

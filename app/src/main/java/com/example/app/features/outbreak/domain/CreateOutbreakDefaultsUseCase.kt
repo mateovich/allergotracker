@@ -7,7 +7,8 @@ class CreateOutbreakDefaultsUseCase(
 ) {
     operator fun invoke(): CreateOutbreakDefaults {
         return CreateOutbreakDefaults(
-            occurredAtEpochMs = currentTimeProvider.nowEpochMillis()
+            occurredAtEpochMs = currentTimeProvider.nowEpochMillis(),
+            intensityLevel = DEFAULT_INTENSITY_LEVEL
         )
     }
 }

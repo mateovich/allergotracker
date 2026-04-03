@@ -43,6 +43,7 @@ class CreateExposureViewModelTest {
 
         assertEquals(expectedTimeLabel, viewModel.state.value.occurredAtLabel)
         assertEquals(ExposureTimePreset.NOW, viewModel.state.value.selectedTimePreset)
+        assertEquals(3, viewModel.state.value.selectedIntensityLevel)
         assertTrue(viewModel.state.value.occurredAtInput.isNotBlank())
         assertFalse(viewModel.state.value.canSave)
     }
@@ -59,6 +60,18 @@ class CreateExposureViewModelTest {
         assertEquals("   ", viewModel.state.value.exposureType)
         assertEquals("Enter what you were exposed to.", viewModel.state.value.exposureTypeError)
         assertTrue(viewModel.state.value.formMessage.isNotBlank())
+    }
+
+    @Test
+    fun invalid_intensity_save_surfaces_inline_error() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType("Pollen"))
+        viewModel.onIntent(CreateExposureUiIntent.SelectIntensityLevel(0))
+        viewModel.onIntent(CreateExposureUiIntent.Save)
+
+        assertEquals("Choose a valid intensity.", viewModel.state.value.intensityLevelError)
+        assertEquals("Please fix the highlighted fields.", viewModel.state.value.formMessage)
     }
 
     @Test
@@ -165,7 +178,8 @@ class CreateExposureViewModelTest {
                                 id = 11L,
                                 exposureType = command.exposureType,
                                 occurredAtEpochMs = command.occurredAtEpochMs,
-                                notes = command.notes
+                                notes = command.notes,
+                                intensityLevel = command.intensityLevel
                             )
                         )
                     }
@@ -188,6 +202,44 @@ class CreateExposureViewModelTest {
         assertEquals(1, createCalls)
     }
 
+    @Test
+    fun save_uses_selected_intensity_level() = runBlocking {
+        var savedCommand: CreateExposureEventCommand? = null
+        val timeProvider = object : CurrentTimeProvider {
+            override fun nowEpochMillis(): Long = fixedNow
+        }
+        val viewModel = CreateExposureViewModel(
+            createExposureDefaultsUseCase = CreateExposureDefaultsUseCase(timeProvider),
+            createExposureEventUseCase = CreateExposureEventUseCase(
+                repository = object : ExposureRepository {
+                    override suspend fun createExposure(command: CreateExposureEventCommand): AppResult<ExposureEvent> {
+                        savedCommand = command
+                        return AppResult.Success(
+                            ExposureEvent(
+                                id = 11L,
+                                exposureType = command.exposureType,
+                                occurredAtEpochMs = command.occurredAtEpochMs,
+                                notes = command.notes,
+                                intensityLevel = command.intensityLevel
+                            )
+                        )
+                    }
+
+                    override suspend fun getExposure(id: Long): AppResult<ExposureEvent> = error("unused")
+                    override suspend fun updateExposure(command: com.example.app.features.exposure.domain.UpdateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
+                    override suspend fun deleteExposure(id: Long): AppResult<Unit> = error("unused")
+                },
+                currentTimeProvider = timeProvider
+            )
+        )
+
+        viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType("Pollen"))
+        viewModel.onIntent(CreateExposureUiIntent.SelectIntensityLevel(5))
+        viewModel.onIntent(CreateExposureUiIntent.Save)
+
+        assertEquals(5, savedCommand?.intensityLevel)
+    }
+
     private fun buildViewModel(
         availableCatalog: List<ReusableEventCatalog> = emptyList()
     ): CreateExposureViewModel {
@@ -204,7 +256,8 @@ class CreateExposureViewModelTest {
                                 id = 11L,
                                 exposureType = command.exposureType,
                                 occurredAtEpochMs = command.occurredAtEpochMs,
-                                notes = command.notes
+                                notes = command.notes,
+                                intensityLevel = command.intensityLevel
                             )
                         )
                     }

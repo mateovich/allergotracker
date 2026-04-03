@@ -40,6 +40,8 @@ data class OutbreakEventEntity(
     val notes: String?,
     @ColumnInfo(name = "created_at_epoch_ms")
     val createdAtEpochMs: Long,
+    @ColumnInfo(name = "intensity_level")
+    val intensityLevel: Int = 3,
     @ColumnInfo(name = "outbreak_descriptor_catalog_id")
     val outbreakDescriptorCatalogId: Long? = null,
     @ColumnInfo(name = "body_location_catalog_id")

@@ -43,7 +43,45 @@ class EditOutbreakViewModelTest {
         assertEquals("Left arm", viewModel.state.value.bodyLocation)
         assertEquals("Skin flare at Left arm", viewModel.state.value.deleteRecordLabel)
         assertEquals("after workout", viewModel.state.value.notes)
+        assertEquals(3, viewModel.state.value.selectedIntensityLevel)
         assertTrue(viewModel.state.value.canDelete)
+    }
+
+    @Test
+    fun selecting_intensity_updates_loaded_state_and_save_command() = runBlocking {
+        var savedCommand: UpdateOutbreakEventCommand? = null
+        val repository = object : OutbreakRepository {
+            override suspend fun createOutbreak(command: com.example.app.features.outbreak.domain.CreateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
+            override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> = AppResult.Success(OutbreakEvent(id, "Skin flare", "Left arm", existingOccurredAt, "after workout"))
+            override suspend fun updateOutbreak(command: UpdateOutbreakEventCommand): AppResult<OutbreakEvent> {
+                savedCommand = command
+                return AppResult.Success(
+                    OutbreakEvent(
+                        id = command.id,
+                        outbreakDescriptor = command.outbreakDescriptor,
+                        bodyLocation = command.bodyLocation,
+                        occurredAtEpochMs = command.occurredAtEpochMs,
+                        notes = command.notes,
+                        intensityLevel = command.intensityLevel
+                    )
+                )
+            }
+            override suspend fun deleteOutbreak(id: Long): AppResult<Unit> = AppResult.Success(Unit)
+        }
+        val viewModel = EditOutbreakViewModel(
+            recordId = 9L,
+            getOutbreakEventUseCase = GetOutbreakEventUseCase(repository),
+            deleteOutbreakEventUseCase = DeleteOutbreakEventUseCase(repository),
+            updateOutbreakEventUseCase = UpdateOutbreakEventUseCase(repository, CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = CurrentTimeProvider { fixedNow }
+        )
+
+        viewModel.onIntent(EditOutbreakUiIntent.Load)
+        viewModel.onIntent(EditOutbreakUiIntent.SelectIntensityLevel(4))
+        viewModel.onIntent(EditOutbreakUiIntent.Save)
+
+        assertEquals(4, viewModel.state.value.selectedIntensityLevel)
+        assertEquals(4, savedCommand?.intensityLevel)
     }
 
     @Test
@@ -337,6 +375,7 @@ class EditOutbreakViewModelTest {
                     command.bodyLocation,
                     command.occurredAtEpochMs,
                     command.notes,
+                    command.intensityLevel,
                     command.outbreakDescriptorCatalogId,
                     command.bodyLocationCatalogId
                 )

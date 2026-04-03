@@ -76,7 +76,7 @@ class RecordSummarySortingTest {
             createdAtEpochMs = createdAtEpochMs,
             sourceId = sourceId,
             eventType = eventType,
-            ingestionQuantityLevel = null
+            intensityLevel = null
         )
     }
 }

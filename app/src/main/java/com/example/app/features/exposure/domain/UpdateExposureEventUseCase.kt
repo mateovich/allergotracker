@@ -4,6 +4,7 @@ import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalog
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
+import com.example.app.features.ingestion.domain.IngestionQuantityOption.Companion.fromLevel
 
 class UpdateExposureEventUseCase(
     private val repository: ExposureRepository,
@@ -19,6 +20,9 @@ class UpdateExposureEventUseCase(
         val fieldErrors = buildMap {
             if (sanitizedCommand.exposureType.isBlank()) {
                 put("exposureType", "Enter what you were exposed to.")
+            }
+            if (fromLevel(sanitizedCommand.intensityLevel) == null) {
+                put("intensityLevel", "Choose a valid intensity.")
             }
             if (sanitizedCommand.occurredAtEpochMs <= 0L) {
                 put("occurredAtEpochMs", "Choose a valid time.")

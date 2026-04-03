@@ -19,7 +19,15 @@ class UpdateExposureEventUseCaseTest {
         val repository = FakeEditableExposureRepository()
         val useCase = UpdateExposureEventUseCase(repository, FakeExposureCurrentTimeProvider(fixedNow))
 
-        val result = useCase(UpdateExposureEventCommand(5L, "Pollen", fixedNow + 60_000L, null))
+        val result = useCase(
+            UpdateExposureEventCommand(
+                id = 5L,
+                exposureType = "Pollen",
+                occurredAtEpochMs = fixedNow + 60_000L,
+                notes = null,
+                intensityLevel = 3
+            )
+        )
 
         val error = (result as AppResult.Error).error as DomainError.ValidationError
         assertEquals("Time cannot be in the future.", error.fieldErrors["occurredAtEpochMs"])
@@ -31,12 +39,42 @@ class UpdateExposureEventUseCaseTest {
         val repository = FakeEditableExposureRepository()
         val useCase = UpdateExposureEventUseCase(repository, FakeExposureCurrentTimeProvider(fixedNow))
 
-        val result = useCase(UpdateExposureEventCommand(5L, "  Pollen  ", fixedNow, "  windy  "))
+        val result = useCase(
+            UpdateExposureEventCommand(
+                id = 5L,
+                exposureType = "  Pollen  ",
+                occurredAtEpochMs = fixedNow,
+                notes = "  windy  ",
+                intensityLevel = 4
+            )
+        )
 
         val success = result as AppResult.Success
         assertEquals("Pollen", success.value.exposureType)
+        assertEquals(4, success.value.intensityLevel)
         assertEquals("Pollen", repository.updatedCommands.single().exposureType)
+        assertEquals(4, repository.updatedCommands.single().intensityLevel)
         assertEquals("windy", repository.updatedCommands.single().notes)
+    }
+
+    @Test
+    fun rejects_invalid_intensity_without_updating_repository() = runBlocking {
+        val repository = FakeEditableExposureRepository()
+        val useCase = UpdateExposureEventUseCase(repository, FakeExposureCurrentTimeProvider(fixedNow))
+
+        val result = useCase(
+            UpdateExposureEventCommand(
+                id = 5L,
+                exposureType = "Pollen",
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                intensityLevel = 0
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Choose a valid intensity.", error.fieldErrors["intensityLevel"])
+        assertTrue(repository.updatedCommands.isEmpty())
     }
 
     @Test
@@ -48,7 +86,16 @@ class UpdateExposureEventUseCaseTest {
             exposureCatalogExists = { false }
         )
 
-        val result = useCase(UpdateExposureEventCommand(5L, "Pollen", fixedNow, null, exposureTypeCatalogId = 77L))
+        val result = useCase(
+            UpdateExposureEventCommand(
+                id = 5L,
+                exposureType = "Pollen",
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                intensityLevel = 3,
+                exposureTypeCatalogId = 77L
+            )
+        )
 
         val error = (result as AppResult.Error).error as DomainError.ValidationError
         assertEquals("Choose a saved exposure type that still exists.", error.fieldErrors["exposureType"])
@@ -67,7 +114,16 @@ class UpdateExposureEventUseCaseTest {
             }
         )
 
-        val result = useCase(UpdateExposureEventCommand(5L, "Dust", fixedNow, null, exposureTypeCatalogId = 77L))
+        val result = useCase(
+            UpdateExposureEventCommand(
+                id = 5L,
+                exposureType = "Dust",
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                intensityLevel = 3,
+                exposureTypeCatalogId = 77L
+            )
+        )
 
         val error = (result as AppResult.Error).error as DomainError.ValidationError
         assertEquals(
@@ -84,12 +140,28 @@ private class FakeEditableExposureRepository : ExposureRepository {
     override suspend fun createExposure(command: CreateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
 
     override suspend fun getExposure(id: Long): AppResult<ExposureEvent> {
-        return AppResult.Success(ExposureEvent(id, "Pollen", 1_700_000_000_000L, "notes"))
+        return AppResult.Success(
+            ExposureEvent(
+                id = id,
+                exposureType = "Pollen",
+                occurredAtEpochMs = 1_700_000_000_000L,
+                notes = "notes",
+                intensityLevel = 3
+            )
+        )
     }
 
     override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> {
         updatedCommands += command
-        return AppResult.Success(ExposureEvent(command.id, command.exposureType, command.occurredAtEpochMs, command.notes))
+        return AppResult.Success(
+            ExposureEvent(
+                id = command.id,
+                exposureType = command.exposureType,
+                occurredAtEpochMs = command.occurredAtEpochMs,
+                notes = command.notes,
+                intensityLevel = command.intensityLevel
+            )
+        )
     }
 
     override suspend fun deleteExposure(id: Long): AppResult<Unit> = error("unused")

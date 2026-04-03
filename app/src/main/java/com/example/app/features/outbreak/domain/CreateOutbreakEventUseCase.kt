@@ -4,6 +4,7 @@ import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalog
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
+import com.example.app.features.ingestion.domain.IngestionQuantityOption.Companion.fromLevel
 
 class CreateOutbreakEventUseCase(
     private val repository: OutbreakRepository,
@@ -25,6 +26,9 @@ class CreateOutbreakEventUseCase(
             }
             if (sanitizedCommand.bodyLocation.isBlank()) {
                 put("bodyLocation", "Enter where on the body it happened.")
+            }
+            if (fromLevel(sanitizedCommand.intensityLevel) == null) {
+                put("intensityLevel", "Choose a valid intensity.")
             }
             if (sanitizedCommand.occurredAtEpochMs <= 0L) {
                 put("occurredAtEpochMs", "Choose a valid time.")

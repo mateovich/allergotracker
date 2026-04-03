@@ -226,11 +226,11 @@ class MainActivityTest {
         composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
         composeRule.onNodeWithTag("exposure-save").performClick()
 
-        composeRule.onNodeWithText("Records").assertIsDisplayed()
-        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        waitForTag("records-list")
+        composeRule.onNodeWithText("Records").assertExists()
         composeRule.onNodeWithText("Exposure").assertIsDisplayed()
         composeRule.onNodeWithText("Pollen").assertIsDisplayed()
-        composeRule.onNodeWithText("Exposure recorded").assertIsDisplayed()
+        composeRule.onNodeWithText("Intensity 3").assertIsDisplayed()
     }
 
     @Test
@@ -239,10 +239,10 @@ class MainActivityTest {
         composeRule.onNodeWithText("Exposure").performClick()
 
         composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
-        composeRule.onNodeWithTag("exposure-occurred-at-input").performTextInput("invalid")
+        composeRule.onNodeWithTag("exposure-occurred-at-input").performTextReplacement("invalid")
         composeRule.onNodeWithTag("exposure-save").performClick()
 
-        composeRule.onNodeWithText("Enter date and time as yyyy-MM-dd HH:mm.").assertIsDisplayed()
+        waitForText("Enter date and time as yyyy-MM-dd HH:mm.")
     }
 
     @Test
@@ -263,11 +263,10 @@ class MainActivityTest {
         composeRule.onNodeWithTag("outbreak-body-location").performTextInput("Left arm")
         composeRule.onNodeWithTag("outbreak-save").performClick()
 
-        composeRule.onNodeWithText("Records").assertIsDisplayed()
-        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        waitForTag("records-list")
         composeRule.onNodeWithText("Outbreak").assertIsDisplayed()
         composeRule.onNodeWithText("Skin flare").assertIsDisplayed()
-        composeRule.onNodeWithText("Left arm").assertIsDisplayed()
+        composeRule.onNodeWithText("Intensity 3 - Left arm").assertIsDisplayed()
     }
 
     @Test
@@ -277,10 +276,10 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("outbreak-descriptor").performTextInput("Skin flare")
         composeRule.onNodeWithTag("outbreak-body-location").performTextInput("Left arm")
-        composeRule.onNodeWithTag("outbreak-occurred-at-input").performTextInput("invalid")
+        composeRule.onNodeWithTag("outbreak-occurred-at-input").performTextReplacement("invalid")
         composeRule.onNodeWithTag("outbreak-save").performClick()
 
-        composeRule.onNodeWithText("Enter date and time as yyyy-MM-dd HH:mm.").assertIsDisplayed()
+        waitForText("Enter date and time as yyyy-MM-dd HH:mm.")
     }
 
     @Test
@@ -340,14 +339,16 @@ class MainActivityTest {
         composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
         composeRule.onNodeWithTag("exposure-save").performClick()
 
+        waitForText("Pollen")
         composeRule.onNodeWithText("Pollen").performClick()
+        waitForTag("record-detail-edit")
         composeRule.onNodeWithTag("record-detail-edit").performClick()
         assertOfflineFormHasNoDependencyWarnings("edit-exposure-form-screen")
 
         composeRule.onNodeWithTag("edit-exposure-type").performTextReplacement("Dust")
         composeRule.onNodeWithTag("edit-exposure-save").performClick()
 
-        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        waitForTag("records-list")
         composeRule.onNodeWithText("Dust").assertIsDisplayed()
         composeRule.onAllNodesWithText("Pollen").assertCountEquals(0)
 
@@ -369,7 +370,9 @@ class MainActivityTest {
         composeRule.onNodeWithTag("exposure-type-create-inline").performClick()
         composeRule.onNodeWithTag("exposure-save").performClick()
 
+        waitForText("Pollen")
         composeRule.onNodeWithText("Pollen").performClick()
+        waitForTag("record-detail-edit")
         composeRule.onNodeWithTag("record-detail-edit").performClick()
         composeRule.onNodeWithTag("edit-exposure-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("edit-exposure-type-summary").assertIsDisplayed()
@@ -384,7 +387,7 @@ class MainActivityTest {
         composeRule.onNodeWithText("Saved exposure type selected: Dust").assertIsDisplayed()
         composeRule.onNodeWithTag("edit-exposure-save").performClick()
 
-        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        waitForTag("records-list")
         composeRule.onNodeWithText("Dust").assertIsDisplayed()
         composeRule.onAllNodesWithText("Pollen").assertCountEquals(0)
 
@@ -534,7 +537,9 @@ class MainActivityTest {
         composeRule.onNodeWithTag("exposure-type-create-inline").performClick()
         composeRule.onNodeWithTag("exposure-save").performClick()
 
+        waitForText("Pollen")
         composeRule.onNodeWithText("Pollen").performClick()
+        waitForTag("record-detail-delete")
         composeRule.onNodeWithTag("record-detail-delete").performClick()
         composeRule.onNodeWithTag("edit-exposure-delete").performClick()
         composeRule.onNodeWithTag("edit-exposure-delete-confirm").performClick()
@@ -556,7 +561,7 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("exposure-save").performClick()
 
-        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        waitForTag("records-list")
         composeRule.onNodeWithText("Exposure").assertIsDisplayed()
         composeRule.onNodeWithText("Pollen").assertIsDisplayed()
     }
@@ -570,7 +575,9 @@ class MainActivityTest {
         composeRule.onNodeWithTag("outbreak-body-location-create-inline").performClick()
         composeRule.onNodeWithTag("outbreak-save").performClick()
 
+        waitForText("Skin flare")
         composeRule.onNodeWithText("Skin flare").performClick()
+        waitForTag("record-detail-delete")
         composeRule.onNodeWithTag("record-detail-delete").performClick()
         composeRule.onNodeWithTag("edit-outbreak-delete").performClick()
         composeRule.onNodeWithTag("edit-outbreak-delete-confirm").performClick()
@@ -593,10 +600,10 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("outbreak-save").performClick()
 
-        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        waitForTag("records-list")
         composeRule.onNodeWithText("Outbreak").assertIsDisplayed()
         composeRule.onNodeWithText("Skin flare").assertIsDisplayed()
-        composeRule.onNodeWithText("Arm").assertIsDisplayed()
+        composeRule.onNodeWithText("Intensity 3 - Arm").assertIsDisplayed()
     }
 
     @Test
@@ -626,7 +633,9 @@ class MainActivityTest {
         composeRule.onNodeWithTag("outbreak-body-location").performTextInput("Arm")
         composeRule.onNodeWithTag("outbreak-save").performClick()
 
+        waitForText("Skin flare")
         composeRule.onNodeWithText("Skin flare").performClick()
+        waitForTag("record-detail-edit")
         composeRule.onNodeWithTag("record-detail-edit").performClick()
         assertOfflineFormHasNoDependencyWarnings("edit-outbreak-form-screen")
 
@@ -634,7 +643,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("edit-outbreak-body-location").performTextReplacement("Left arm")
         composeRule.onNodeWithTag("edit-outbreak-save").performClick()
 
-        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        waitForTag("records-list")
         composeRule.onNodeWithText("Skin rash").assertIsDisplayed()
         composeRule.onAllNodesWithText("Skin flare").assertCountEquals(0)
 
@@ -710,6 +719,18 @@ class MainActivityTest {
             destinationTag.startsWith("edit-ingestion") -> composeRule.onAllNodesWithText("Couldn't update ingestion locally. Try again.").assertCountEquals(0)
             destinationTag.startsWith("edit-exposure") -> composeRule.onAllNodesWithText("Couldn't update exposure locally. Try again.").assertCountEquals(0)
             destinationTag.startsWith("edit-outbreak") -> composeRule.onAllNodesWithText("Couldn't update outbreak locally. Try again.").assertCountEquals(0)
+        }
+    }
+
+    private fun waitForTag(tag: String) {
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    private fun waitForText(text: String) {
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
         }
     }
 }

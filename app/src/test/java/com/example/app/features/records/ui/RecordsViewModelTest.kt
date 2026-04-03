@@ -89,7 +89,7 @@ class RecordsViewModelTest {
                     detailLabel = "2 Light snack",
                     sourceId = 7L,
                     eventType = RecordEventType.INGESTION,
-                    ingestionQuantityLevel = 2
+                    intensityLevel = 2
                 )
             )
         )
@@ -126,7 +126,7 @@ class RecordsViewModelTest {
                     occurredAtEpochMs = includedDate.atStartOfDay(ZoneId.systemDefault()).plusHours(9).toInstant().toEpochMilli(),
                     sourceId = 7L,
                     eventType = RecordEventType.INGESTION,
-                    ingestionQuantityLevel = 2
+                    intensityLevel = 2
                 )
             )
         )
@@ -186,7 +186,7 @@ class RecordsViewModelTest {
                     occurredAtEpochMs = previousDayEpochMs,
                     sourceId = 7L,
                     eventType = RecordEventType.INGESTION,
-                    ingestionQuantityLevel = 2
+                    intensityLevel = 2
                 )
             )
         )
@@ -225,10 +225,11 @@ class RecordsViewModelTest {
                     id = "exposure-2",
                     typeLabel = "Exposure",
                     title = "Pollen",
-                    detailLabel = "Exposure recorded",
+                    detailLabel = "2 Light snack - Exposure recorded",
                     occurredAtEpochMs = todayEpochMs,
                     sourceId = 2L,
-                    eventType = RecordEventType.EXPOSURE
+                    eventType = RecordEventType.EXPOSURE,
+                    intensityLevel = 2
                 )
             )
         )
@@ -277,9 +278,10 @@ class RecordsViewModelTest {
                     id = "exposure-2",
                     typeLabel = "Exposure",
                     title = "Pollen",
-                    detailLabel = "Exposure recorded",
+                    detailLabel = "2 Light snack - outside",
                     sourceId = 2L,
-                    eventType = RecordEventType.EXPOSURE
+                    eventType = RecordEventType.EXPOSURE,
+                    intensityLevel = 2
                 )
             )
         )
@@ -314,16 +316,17 @@ class RecordsViewModelTest {
                     occurredAtEpochMs = includedDate.atStartOfDay(zoneId).plusHours(9).toInstant().toEpochMilli(),
                     sourceId = 7L,
                     eventType = RecordEventType.INGESTION,
-                    ingestionQuantityLevel = 2
+                    intensityLevel = 2
                 ),
                 record(
                     id = "exposure-5",
                     typeLabel = "Exposure",
                     title = "Pollen",
-                    detailLabel = "Exposure recorded",
+                    detailLabel = "2 Light snack - outside",
                     occurredAtEpochMs = includedDate.minusDays(1).atStartOfDay(zoneId).plusHours(8).toInstant().toEpochMilli(),
                     sourceId = 5L,
-                    eventType = RecordEventType.EXPOSURE
+                    eventType = RecordEventType.EXPOSURE,
+                    intensityLevel = 2
                 )
             )
         )
@@ -353,7 +356,7 @@ class RecordsViewModelTest {
                     detailLabel = "2 Light snack",
                     sourceId = 7L,
                     eventType = RecordEventType.INGESTION,
-                    ingestionQuantityLevel = 2
+                    intensityLevel = 2
                 )
             )
         )
@@ -394,16 +397,17 @@ class RecordsViewModelTest {
                     occurredAtEpochMs = includedDate.atStartOfDay(ZoneId.systemDefault()).plusHours(9).toInstant().toEpochMilli(),
                     sourceId = 7L,
                     eventType = RecordEventType.INGESTION,
-                    ingestionQuantityLevel = 2
+                    intensityLevel = 2
                 ),
                 record(
                     id = "exposure-5",
                     typeLabel = "Exposure",
                     title = "Pollen",
-                    detailLabel = "Exposure recorded",
+                    detailLabel = "2 Light snack - outside",
                     occurredAtEpochMs = includedDate.atStartOfDay(ZoneId.systemDefault()).plusHours(10).toInstant().toEpochMilli(),
                     sourceId = 5L,
-                    eventType = RecordEventType.EXPOSURE
+                    eventType = RecordEventType.EXPOSURE,
+                    intensityLevel = 2
                 )
             )
         )
@@ -417,7 +421,7 @@ class RecordsViewModelTest {
 
         assertEquals(listOf("ingestion-7"), viewModel.state.value.records.map { it.id })
         assertEquals(
-            listOf("2026-03-20 to 2026-03-20", "Types: Ingestion", "Intensity: 2 Light snack"),
+            listOf("2026-03-20 to 2026-03-20", "Types: Ingestion", "Intensity: 2"),
             viewModel.state.value.activeFilters.summaryLabels
         )
     }
@@ -431,7 +435,7 @@ class RecordsViewModelTest {
                     (activeFilters.eventTypes.isEmpty() || record.eventType in activeFilters.eventTypes) &&
                         (activeFilters.startDate == null || !Instant.ofEpochMilli(record.occurredAtEpochMs).atZone(ZoneId.systemDefault()).toLocalDate().isBefore(activeFilters.startDate)) &&
                         (activeFilters.endDate == null || !Instant.ofEpochMilli(record.occurredAtEpochMs).atZone(ZoneId.systemDefault()).toLocalDate().isAfter(activeFilters.endDate)) &&
-                        (activeFilters.intensityLevels.isEmpty() || activeFilters.intensityLevels.any { it.level == record.ingestionQuantityLevel })
+                        (activeFilters.intensityLevels.isEmpty() || activeFilters.intensityLevels.any { it.level == record.intensityLevel })
                 }
             }
         }
@@ -445,7 +449,7 @@ class RecordsViewModelTest {
         occurredAtEpochMs: Long = fixedNow,
         sourceId: Long,
         eventType: RecordEventType,
-        ingestionQuantityLevel: Int? = null
+        intensityLevel: Int? = null
     ): RecordSummary {
         return RecordSummary(
             id = id,
@@ -457,7 +461,7 @@ class RecordsViewModelTest {
             createdAtEpochMs = fixedNow,
             sourceId = sourceId,
             eventType = eventType,
-            ingestionQuantityLevel = ingestionQuantityLevel
+            intensityLevel = intensityLevel
         )
     }
 

@@ -25,6 +25,7 @@ class CreateExposureEventUseCaseTest {
         val result = useCase(
             CreateExposureEventCommand(
                 exposureType = "   ",
+                intensityLevel = 3,
                 occurredAtEpochMs = fixedNow,
                 notes = ""
             )
@@ -45,6 +46,7 @@ class CreateExposureEventUseCaseTest {
         val result = useCase(
             CreateExposureEventCommand(
                 exposureType = "Pollen",
+                intensityLevel = 3,
                 occurredAtEpochMs = fixedNow + 60_000L,
                 notes = null
             )
@@ -64,6 +66,7 @@ class CreateExposureEventUseCaseTest {
         val result = useCase(
             CreateExposureEventCommand(
                 exposureType = "Pollen",
+                intensityLevel = 3,
                 occurredAtEpochMs = 0L,
                 notes = null
             )
@@ -84,6 +87,7 @@ class CreateExposureEventUseCaseTest {
         val result = useCase(
             CreateExposureEventCommand(
                 exposureType = "  Pollen  ",
+                intensityLevel = 4,
                 occurredAtEpochMs = fixedNow,
                 notes = "  windy afternoon  "
             )
@@ -91,8 +95,32 @@ class CreateExposureEventUseCaseTest {
 
         val success = result as AppResult.Success
         assertEquals("Pollen", success.value.exposureType)
+        assertEquals(4, success.value.intensityLevel)
         assertEquals("Pollen", repository.savedCommands.single().exposureType)
+        assertEquals(4, repository.savedCommands.single().intensityLevel)
         assertEquals("windy afternoon", repository.savedCommands.single().notes)
+    }
+
+    @Test
+    fun rejects_intensity_outside_supported_range() = runBlocking {
+        val repository = FakeExposureRepository()
+        val useCase = CreateExposureEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow)
+        )
+
+        val result = useCase(
+            CreateExposureEventCommand(
+                exposureType = "Pollen",
+                intensityLevel = 6,
+                occurredAtEpochMs = fixedNow,
+                notes = null
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Choose a valid intensity.", error.fieldErrors["intensityLevel"])
+        assertTrue(repository.savedCommands.isEmpty())
     }
 
     @Test
@@ -107,6 +135,7 @@ class CreateExposureEventUseCaseTest {
         val result = useCase(
             CreateExposureEventCommand(
                 exposureType = "Pollen",
+                intensityLevel = 3,
                 occurredAtEpochMs = fixedNow,
                 notes = null,
                 exposureTypeCatalogId = 99L
@@ -133,6 +162,7 @@ class CreateExposureEventUseCaseTest {
         val result = useCase(
             CreateExposureEventCommand(
                 exposureType = "Dust",
+                intensityLevel = 3,
                 occurredAtEpochMs = fixedNow,
                 notes = null,
                 exposureTypeCatalogId = 99L
@@ -157,6 +187,7 @@ private class FakeExposureRepository : ExposureRepository {
             ExposureEvent(
                 id = 1L,
                 exposureType = command.exposureType,
+                intensityLevel = command.intensityLevel,
                 occurredAtEpochMs = command.occurredAtEpochMs,
                 notes = command.notes
             )

@@ -84,21 +84,6 @@ fun RecordDetailScreen(
                 modifier = Modifier.testTag("record-detail-occurred-at")
             )
 
-            state.fields.forEachIndexed { index, field ->
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("record-detail-field-$index"),
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow
-                ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(text = field.label, style = MaterialTheme.typography.labelMedium)
-                        Text(text = field.value, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-
             Button(
                 onClick = { viewModel.onIntent(RecordDetailUiIntent.OpenEdit) },
                 modifier = Modifier.fillMaxWidth().testTag("record-detail-edit")
@@ -116,6 +101,21 @@ fun RecordDetailScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            state.fields.forEachIndexed { index, field ->
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("record-detail-field-$index"),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(text = field.label, style = MaterialTheme.typography.labelMedium)
+                        Text(text = field.value, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
         }
     }
 

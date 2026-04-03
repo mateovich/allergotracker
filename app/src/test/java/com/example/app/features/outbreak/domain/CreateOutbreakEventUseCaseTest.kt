@@ -26,6 +26,7 @@ class CreateOutbreakEventUseCaseTest {
             CreateOutbreakEventCommand(
                 outbreakDescriptor = "   ",
                 bodyLocation = " ",
+                intensityLevel = 3,
                 occurredAtEpochMs = fixedNow,
                 notes = ""
             )
@@ -48,6 +49,7 @@ class CreateOutbreakEventUseCaseTest {
             CreateOutbreakEventCommand(
                 outbreakDescriptor = "Rash flare",
                 bodyLocation = "Left arm",
+                intensityLevel = 3,
                 occurredAtEpochMs = fixedNow + 60_000L,
                 notes = null
             )
@@ -68,6 +70,7 @@ class CreateOutbreakEventUseCaseTest {
             CreateOutbreakEventCommand(
                 outbreakDescriptor = "Rash flare",
                 bodyLocation = "Left arm",
+                intensityLevel = 3,
                 occurredAtEpochMs = 0L,
                 notes = null
             )
@@ -89,6 +92,7 @@ class CreateOutbreakEventUseCaseTest {
             CreateOutbreakEventCommand(
                 outbreakDescriptor = "  Rash flare  ",
                 bodyLocation = "  Left arm  ",
+                intensityLevel = 4,
                 occurredAtEpochMs = fixedNow,
                 notes = "  after workout  "
             )
@@ -97,9 +101,34 @@ class CreateOutbreakEventUseCaseTest {
         val success = result as AppResult.Success
         assertEquals("Rash flare", success.value.outbreakDescriptor)
         assertEquals("Left arm", success.value.bodyLocation)
+        assertEquals(4, success.value.intensityLevel)
         assertEquals("Rash flare", repository.savedCommands.single().outbreakDescriptor)
         assertEquals("Left arm", repository.savedCommands.single().bodyLocation)
+        assertEquals(4, repository.savedCommands.single().intensityLevel)
         assertEquals("after workout", repository.savedCommands.single().notes)
+    }
+
+    @Test
+    fun rejects_intensity_outside_supported_range() = runBlocking {
+        val repository = FakeOutbreakRepository()
+        val useCase = CreateOutbreakEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow)
+        )
+
+        val result = useCase(
+            CreateOutbreakEventCommand(
+                outbreakDescriptor = "Rash flare",
+                bodyLocation = "Left arm",
+                intensityLevel = 0,
+                occurredAtEpochMs = fixedNow,
+                notes = null
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Choose a valid intensity.", error.fieldErrors["intensityLevel"])
+        assertTrue(repository.savedCommands.isEmpty())
     }
 
     @Test
@@ -116,6 +145,7 @@ class CreateOutbreakEventUseCaseTest {
             CreateOutbreakEventCommand(
                 outbreakDescriptor = "Rash flare",
                 bodyLocation = "Left arm",
+                intensityLevel = 3,
                 occurredAtEpochMs = fixedNow,
                 notes = null,
                 outbreakDescriptorCatalogId = 7L,
@@ -149,6 +179,7 @@ class CreateOutbreakEventUseCaseTest {
             CreateOutbreakEventCommand(
                 outbreakDescriptor = "Heat rash",
                 bodyLocation = "Right arm",
+                intensityLevel = 3,
                 occurredAtEpochMs = fixedNow,
                 notes = null,
                 outbreakDescriptorCatalogId = 7L,
@@ -179,6 +210,7 @@ private class FakeOutbreakRepository : OutbreakRepository {
                 id = 1L,
                 outbreakDescriptor = command.outbreakDescriptor,
                 bodyLocation = command.bodyLocation,
+                intensityLevel = command.intensityLevel,
                 occurredAtEpochMs = command.occurredAtEpochMs,
                 notes = command.notes
             )

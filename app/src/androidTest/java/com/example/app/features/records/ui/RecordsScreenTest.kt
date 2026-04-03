@@ -110,7 +110,7 @@ class RecordsScreenTest {
                         createdAtEpochMs = 1_700_000_000_000L,
                         sourceId = 7L,
                         eventType = RecordEventType.INGESTION,
-                        ingestionQuantityLevel = 2
+                        intensityLevel = 2
                     )
                 )
             )
@@ -184,7 +184,7 @@ class RecordsScreenTest {
                     createdAtEpochMs = fixedNow,
                     sourceId = 7L,
                     eventType = RecordEventType.INGESTION,
-                    ingestionQuantityLevel = 2
+                    intensityLevel = 2
                 )
             )
         )
@@ -229,7 +229,7 @@ class RecordsScreenTest {
                     createdAtEpochMs = fixedNow - 60_000L,
                     sourceId = 7L,
                     eventType = RecordEventType.INGESTION,
-                    ingestionQuantityLevel = 2
+                    intensityLevel = 2
                 )
             )
         )
@@ -292,7 +292,7 @@ class RecordsScreenTest {
                         createdAtEpochMs = fixedNow,
                         sourceId = 7L,
                         eventType = RecordEventType.INGESTION,
-                        ingestionQuantityLevel = 2
+                        intensityLevel = 2
                     )
                 )
                 return AppResult.Success(currentEvent)
@@ -609,7 +609,7 @@ class RecordsScreenTest {
         composeRule.onNodeWithTag("records-active-filters").assertIsDisplayed()
         composeRule.onNodeWithText("Active filters").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Active filter: Types: Ingestion").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Active filter: Intensity: 2 Light snack").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Active filter: Intensity: 2").assertIsDisplayed()
         composeRule.onNodeWithText("Tea").assertIsDisplayed()
         composeRule.onAllNodesWithText("Pollen").assertCountEquals(0)
         composeRule.onNodeWithTag("records-clear-filters").assertIsDisplayed()
@@ -766,7 +766,7 @@ class RecordsScreenTest {
                         createdAtEpochMs = 100L,
                         sourceId = 10L,
                         eventType = RecordEventType.INGESTION,
-                        ingestionQuantityLevel = 2
+                        intensityLevel = 2
                     ),
                     RecordSummary(
                         id = "exposure-1",
@@ -778,7 +778,7 @@ class RecordsScreenTest {
                         createdAtEpochMs = 200L,
                         sourceId = 1L,
                         eventType = RecordEventType.EXPOSURE,
-                        ingestionQuantityLevel = null
+                        intensityLevel = null
                     )
                 ).sortedWith(RecordSummaryComparator)
             )
@@ -1057,7 +1057,7 @@ private class ReactiveRecordStore(
                     (activeFilters.eventTypes.isEmpty() || record.eventType in activeFilters.eventTypes) &&
                         (activeFilters.startDate == null || !Instant.ofEpochMilli(record.occurredAtEpochMs).atZone(ZoneId.systemDefault()).toLocalDate().isBefore(activeFilters.startDate)) &&
                         (activeFilters.endDate == null || !Instant.ofEpochMilli(record.occurredAtEpochMs).atZone(ZoneId.systemDefault()).toLocalDate().isAfter(activeFilters.endDate)) &&
-                        (activeFilters.intensityLevels.isEmpty() || activeFilters.intensityLevels.any { it.level == record.ingestionQuantityLevel })
+                        (activeFilters.intensityLevels.isEmpty() || activeFilters.intensityLevels.any { it.level == record.intensityLevel })
                 }
             }
         }
@@ -1085,6 +1085,7 @@ private class ReactiveRecordStore(
                                 recordId = it.id,
                                 occurredAtEpochMs = it.occurredAtEpochMs,
                                 exposureType = it.exposureType,
+                                intensityLabel = "${it.intensityLevel} ${com.example.app.features.ingestion.domain.IngestionQuantityOption.fromLevel(it.intensityLevel)?.label?.substringAfter(' ') ?: ""}".trim(),
                                 notes = it.notes
                             )
                         )
@@ -1097,6 +1098,7 @@ private class ReactiveRecordStore(
                                 occurredAtEpochMs = it.occurredAtEpochMs,
                                 outbreakDescriptor = it.outbreakDescriptor,
                                 bodyLocation = it.bodyLocation,
+                                intensityLabel = "${it.intensityLevel} ${com.example.app.features.ingestion.domain.IngestionQuantityOption.fromLevel(it.intensityLevel)?.label?.substringAfter(' ') ?: ""}".trim(),
                                 notes = it.notes
                             )
                         )
@@ -1211,7 +1213,7 @@ private fun IngestionEvent.toRecordSummary(): RecordSummary {
         createdAtEpochMs = occurredAtEpochMs,
         sourceId = id,
         eventType = RecordEventType.INGESTION,
-        ingestionQuantityLevel = quantityLevel
+        intensityLevel = quantityLevel
     )
 }
 
@@ -1226,7 +1228,7 @@ private fun ExposureEvent.toRecordSummary(): RecordSummary {
         createdAtEpochMs = occurredAtEpochMs,
         sourceId = id,
         eventType = RecordEventType.EXPOSURE,
-        ingestionQuantityLevel = null
+        intensityLevel = intensityLevel
     )
 }
 
@@ -1241,6 +1243,6 @@ private fun OutbreakEvent.toRecordSummary(): RecordSummary {
         createdAtEpochMs = occurredAtEpochMs,
         sourceId = id,
         eventType = RecordEventType.OUTBREAK,
-        ingestionQuantityLevel = null
+        intensityLevel = intensityLevel
     )
 }

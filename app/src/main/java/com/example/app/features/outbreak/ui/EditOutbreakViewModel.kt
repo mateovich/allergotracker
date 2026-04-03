@@ -11,6 +11,7 @@ import com.example.app.features.eventcatalog.ui.ReusableEventCatalogOptionUiMode
 import com.example.app.features.eventcatalog.ui.filterForQuery
 import com.example.app.features.eventcatalog.ui.hasExactName
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
+import com.example.app.features.ingestion.domain.IngestionQuantityOption
 import com.example.app.features.outbreak.domain.DeleteOutbreakEventUseCase
 import com.example.app.features.outbreak.domain.GetOutbreakEventUseCase
 import com.example.app.features.outbreak.domain.UpdateOutbreakEventCommand
@@ -39,6 +40,7 @@ class EditOutbreakViewModel(
     private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     private val mutableState = MutableStateFlow(
         EditOutbreakUiState(
+            intensityOptions = IngestionQuantityOption.entries.map { OutbreakIntensityOptionUiModel(it.level, it.label) },
             timeOptions = OutbreakTimePreset.entries.map { OutbreakTimeOptionUiModel(it.name, it.label, it.offsetMillis) }
         )
     )
@@ -106,7 +108,7 @@ class EditOutbreakViewModel(
                     selectedOutbreakDescriptorSummary = null,
                     outbreakDescriptorError = null,
                     formMessage = "",
-                    canSave = canSave(intent.value, it.bodyLocation)
+                    canSave = canSave(intent.value, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
             is EditOutbreakUiIntent.SelectOutbreakDescriptorCatalogOption -> updateState {
@@ -116,7 +118,7 @@ class EditOutbreakViewModel(
                     selectedOutbreakDescriptorSummary = "Saved outbreak descriptor selected: ${intent.name}",
                     outbreakDescriptorError = null,
                     formMessage = "",
-                    canSave = canSave(intent.name, it.bodyLocation)
+                    canSave = canSave(intent.name, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
             EditOutbreakUiIntent.UseTypedOutbreakDescriptor -> updateState {
@@ -125,7 +127,7 @@ class EditOutbreakViewModel(
                     selectedOutbreakDescriptorSummary = "New outbreak descriptor will be saved locally.",
                     outbreakDescriptorError = null,
                     formMessage = "",
-                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
             EditOutbreakUiIntent.ClearOutbreakDescriptorCatalogSelection -> updateState {
@@ -134,7 +136,7 @@ class EditOutbreakViewModel(
                     selectedOutbreakDescriptorSummary = null,
                     outbreakDescriptorError = null,
                     formMessage = "",
-                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
             EditOutbreakUiIntent.ClearRetiredOutbreakDescriptorCatalogSelection -> updateState {
@@ -142,7 +144,7 @@ class EditOutbreakViewModel(
                     selectedOutbreakDescriptorCatalogId = null,
                     selectedOutbreakDescriptorSummary = null,
                     formMessage = "Saved outbreak descriptor was retired. Review the text value before saving.",
-                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
             EditOutbreakUiIntent.EditSelectedOutbreakDescriptorCatalog -> {
@@ -161,7 +163,7 @@ class EditOutbreakViewModel(
                     selectedBodyLocationSummary = null,
                     bodyLocationError = null,
                     formMessage = "",
-                    canSave = canSave(it.outbreakDescriptor, intent.value)
+                    canSave = canSave(it.outbreakDescriptor, intent.value, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
             is EditOutbreakUiIntent.SelectBodyLocationCatalogOption -> updateState {
@@ -171,7 +173,7 @@ class EditOutbreakViewModel(
                     selectedBodyLocationSummary = "Saved body location selected: ${intent.name}",
                     bodyLocationError = null,
                     formMessage = "",
-                    canSave = canSave(it.outbreakDescriptor, intent.name)
+                    canSave = canSave(it.outbreakDescriptor, intent.name, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
             EditOutbreakUiIntent.UseTypedBodyLocation -> updateState {
@@ -180,7 +182,7 @@ class EditOutbreakViewModel(
                     selectedBodyLocationSummary = "New body location will be saved locally.",
                     bodyLocationError = null,
                     formMessage = "",
-                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
             EditOutbreakUiIntent.ClearBodyLocationCatalogSelection -> updateState {
@@ -189,7 +191,7 @@ class EditOutbreakViewModel(
                     selectedBodyLocationSummary = null,
                     bodyLocationError = null,
                     formMessage = "",
-                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
             EditOutbreakUiIntent.ClearRetiredBodyLocationCatalogSelection -> updateState {
@@ -197,7 +199,7 @@ class EditOutbreakViewModel(
                     selectedBodyLocationCatalogId = null,
                     selectedBodyLocationSummary = null,
                     formMessage = "Saved body location was retired. Review the text value before saving.",
-                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
             EditOutbreakUiIntent.EditSelectedBodyLocationCatalog -> {
@@ -207,6 +209,14 @@ class EditOutbreakViewModel(
                         ReusableEventCatalogKind.BODY_LOCATION.storageValue,
                         selectedId
                     )
+                )
+            }
+            is EditOutbreakUiIntent.SelectIntensityLevel -> updateState {
+                it.copy(
+                    selectedIntensityLevel = intent.level,
+                    intensityError = null,
+                    formMessage = "",
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation, intent.level)
                 )
             }
             is EditOutbreakUiIntent.UpdateNotes -> updateState { it.copy(notes = intent.value) }
@@ -256,6 +266,7 @@ class EditOutbreakViewModel(
                             bodyLocation = event.bodyLocation,
                             deleteRecordLabel = deleteRecordLabel(event.outbreakDescriptor, event.bodyLocation),
                             notes = event.notes.orEmpty(),
+                            selectedIntensityLevel = event.intensityLevel,
                             occurredAtEpochMs = event.occurredAtEpochMs,
                             occurredAtInput = formatDateTimeInput(event.occurredAtEpochMs),
                             occurredAtLabel = formatTime(event.occurredAtEpochMs),
@@ -272,7 +283,7 @@ class EditOutbreakViewModel(
                                 "Saved body location selected: ${event.bodyLocation}"
                             },
                             isLoading = false,
-                            canSave = canSave(event.outbreakDescriptor, event.bodyLocation),
+                            canSave = canSave(event.outbreakDescriptor, event.bodyLocation, event.intensityLevel),
                             canDelete = true
                         ).withFilteredCatalogs()
                     }
@@ -306,6 +317,7 @@ class EditOutbreakViewModel(
                         bodyLocation = currentState.bodyLocation,
                         occurredAtEpochMs = parsedOccurredAt,
                         notes = currentState.notes,
+                        intensityLevel = currentState.selectedIntensityLevel,
                         outbreakDescriptorCatalogId = currentState.selectedOutbreakDescriptorCatalogId,
                         bodyLocationCatalogId = currentState.selectedBodyLocationCatalogId
                     )
@@ -322,9 +334,10 @@ class EditOutbreakViewModel(
                             isSaving = false,
                             outbreakDescriptorError = error.fieldError("outbreakDescriptor"),
                             bodyLocationError = error.fieldError("bodyLocation"),
+                            intensityError = error.fieldError("intensityLevel"),
                             occurredAtError = error.fieldError("occurredAtEpochMs"),
                             formMessage = error.message,
-                            canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                            canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
                         )
                     }
                 }
@@ -353,7 +366,7 @@ class EditOutbreakViewModel(
                         it.copy(
                             isDeleting = false,
                             formMessage = result.error.message,
-                            canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                            canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
                         )
                     }
                 }
@@ -373,8 +386,10 @@ class EditOutbreakViewModel(
         return "$outbreakDescriptor at $bodyLocation"
     }
 
-    private fun canSave(outbreakDescriptor: String, bodyLocation: String): Boolean {
-        return outbreakDescriptor.isNotBlank() && bodyLocation.isNotBlank()
+    private fun canSave(outbreakDescriptor: String, bodyLocation: String, intensityLevel: Int): Boolean {
+        return outbreakDescriptor.isNotBlank() &&
+            bodyLocation.isNotBlank() &&
+            IngestionQuantityOption.fromLevel(intensityLevel) != null
     }
 
     private fun formatTime(epochMillis: Long): String = timeFormatter.format(Instant.ofEpochMilli(epochMillis))

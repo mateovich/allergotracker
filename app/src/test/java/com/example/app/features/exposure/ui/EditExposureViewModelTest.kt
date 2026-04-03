@@ -42,6 +42,7 @@ class EditExposureViewModelTest {
         assertEquals("Pollen", viewModel.state.value.exposureType)
         assertEquals("Pollen", viewModel.state.value.deleteRecordLabel)
         assertEquals("outside", viewModel.state.value.notes)
+        assertEquals(4, viewModel.state.value.selectedIntensityLevel)
         assertTrue(viewModel.state.value.occurredAtInput.isNotBlank())
         assertTrue(viewModel.state.value.canDelete)
     }
@@ -68,6 +69,18 @@ class EditExposureViewModelTest {
         viewModel.onIntent(EditExposureUiIntent.Save)
 
         assertEquals(EditExposureUiEffect.NavigateToRecords, effect.await())
+    }
+
+    @Test
+    fun invalid_intensity_save_surfaces_inline_error() = runBlocking {
+        val viewModel = buildViewModel()
+        viewModel.onIntent(EditExposureUiIntent.Load)
+
+        viewModel.onIntent(EditExposureUiIntent.SelectIntensityLevel(6))
+        viewModel.onIntent(EditExposureUiIntent.Save)
+
+        assertEquals("Choose a valid intensity.", viewModel.state.value.intensityLevelError)
+        assertEquals("Please fix the highlighted fields.", viewModel.state.value.formMessage)
     }
 
     @Test
@@ -259,6 +272,42 @@ class EditExposureViewModelTest {
     }
 
     @Test
+    fun save_preserves_existing_intensity_when_user_does_not_change_it() = runBlocking {
+        var savedCommand: UpdateExposureEventCommand? = null
+        val repository = object : ExposureRepository {
+            override suspend fun createExposure(command: com.example.app.features.exposure.domain.CreateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
+            override suspend fun getExposure(id: Long): AppResult<ExposureEvent> = AppResult.Success(
+                ExposureEvent(id, "Pollen", existingOccurredAt, "outside", intensityLevel = 5)
+            )
+            override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> {
+                savedCommand = command
+                return AppResult.Success(
+                    ExposureEvent(
+                        command.id,
+                        command.exposureType,
+                        command.occurredAtEpochMs,
+                        command.notes,
+                        intensityLevel = command.intensityLevel
+                    )
+                )
+            }
+            override suspend fun deleteExposure(id: Long): AppResult<Unit> = AppResult.Success(Unit)
+        }
+        val viewModel = EditExposureViewModel(
+            recordId = 5L,
+            getExposureEventUseCase = GetExposureEventUseCase(repository),
+            deleteExposureEventUseCase = DeleteExposureEventUseCase(repository),
+            updateExposureEventUseCase = UpdateExposureEventUseCase(repository, CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = CurrentTimeProvider { fixedNow }
+        )
+
+        viewModel.onIntent(EditExposureUiIntent.Load)
+        viewModel.onIntent(EditExposureUiIntent.Save)
+
+        assertEquals(5, savedCommand?.intensityLevel)
+    }
+
+    @Test
     fun failed_load_can_retry_and_recover() = runBlocking {
         var loadAttempts = 0
         val repository = object : ExposureRepository {
@@ -304,7 +353,14 @@ class EditExposureViewModelTest {
                 ExposureEvent(id, "Pollen", existingOccurredAt, "outside", exposureTypeCatalogId = 99L)
             )
             override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> = AppResult.Success(
-                ExposureEvent(command.id, command.exposureType, command.occurredAtEpochMs, command.notes, command.exposureTypeCatalogId)
+                ExposureEvent(
+                    id = command.id,
+                    exposureType = command.exposureType,
+                    occurredAtEpochMs = command.occurredAtEpochMs,
+                    notes = command.notes,
+                    intensityLevel = command.intensityLevel,
+                    exposureTypeCatalogId = command.exposureTypeCatalogId
+                )
             )
             override suspend fun deleteExposure(id: Long): AppResult<Unit> = AppResult.Success(Unit)
         }
@@ -344,11 +400,19 @@ class EditExposureViewModelTest {
             override suspend fun createExposure(command: com.example.app.features.exposure.domain.CreateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
 
             override suspend fun getExposure(id: Long): AppResult<ExposureEvent> {
-                return AppResult.Success(ExposureEvent(id, "Pollen", existingOccurredAt, "outside"))
+                return AppResult.Success(ExposureEvent(id, "Pollen", existingOccurredAt, "outside", intensityLevel = 4))
             }
 
             override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> {
-                return AppResult.Success(ExposureEvent(command.id, command.exposureType, command.occurredAtEpochMs, command.notes))
+                return AppResult.Success(
+                    ExposureEvent(
+                        command.id,
+                        command.exposureType,
+                        command.occurredAtEpochMs,
+                        command.notes,
+                        intensityLevel = command.intensityLevel
+                    )
+                )
             }
 
             override suspend fun deleteExposure(id: Long): AppResult<Unit> = AppResult.Success(Unit)

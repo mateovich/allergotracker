@@ -14,6 +14,7 @@ import com.example.app.core.database.migrations.Migration_7_8
 import com.example.app.core.database.migrations.Migration_8_9
 import com.example.app.core.database.migrations.Migration_10_11
 import com.example.app.core.database.migrations.Migration_11_12
+import com.example.app.core.database.migrations.Migration_12_13
 import com.example.app.core.database.migrations.Migration_9_10
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -43,7 +44,7 @@ class AppDatabaseMigrationTest {
         }
 
         Room.databaseBuilder(appContext, AppDatabase::class.java, dbName)
-            .addMigrations(Migration_1_2, Migration_2_3, Migration_3_4, Migration_4_5, Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12)
+            .addMigrations(Migration_1_2, Migration_2_3, Migration_3_4, Migration_4_5, Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12, Migration_12_13)
             .build()
             .openHelper
             .writableDatabase
@@ -89,7 +90,7 @@ class AppDatabaseMigrationTest {
         }
 
         Room.databaseBuilder(appContext, AppDatabase::class.java, dbName)
-            .addMigrations(Migration_2_3, Migration_3_4, Migration_4_5, Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12)
+            .addMigrations(Migration_2_3, Migration_3_4, Migration_4_5, Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12, Migration_12_13)
             .build()
             .openHelper
             .writableDatabase
@@ -140,7 +141,7 @@ class AppDatabaseMigrationTest {
         }
 
         Room.databaseBuilder(appContext, AppDatabase::class.java, dbName)
-            .addMigrations(Migration_3_4, Migration_4_5, Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12)
+            .addMigrations(Migration_3_4, Migration_4_5, Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12, Migration_12_13)
             .build()
             .openHelper
             .writableDatabase
@@ -199,7 +200,7 @@ class AppDatabaseMigrationTest {
         }
 
         Room.databaseBuilder(appContext, AppDatabase::class.java, dbName)
-            .addMigrations(Migration_4_5, Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12)
+            .addMigrations(Migration_4_5, Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12, Migration_12_13)
             .build()
             .openHelper
             .writableDatabase
@@ -267,7 +268,7 @@ class AppDatabaseMigrationTest {
         }
 
         Room.databaseBuilder(appContext, AppDatabase::class.java, dbName)
-            .addMigrations(Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12)
+            .addMigrations(Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12, Migration_12_13)
             .build()
             .openHelper
             .writableDatabase
@@ -381,7 +382,7 @@ class AppDatabaseMigrationTest {
         }
 
         Room.databaseBuilder(appContext, AppDatabase::class.java, dbName)
-            .addMigrations(Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12)
+            .addMigrations(Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12, Migration_12_13)
             .build()
             .openHelper
             .writableDatabase
@@ -493,7 +494,7 @@ class AppDatabaseMigrationTest {
         }
 
         Room.databaseBuilder(appContext, AppDatabase::class.java, dbName)
-            .addMigrations(Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12)
+            .addMigrations(Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12, Migration_12_13)
             .build()
             .openHelper
             .writableDatabase
@@ -609,7 +610,7 @@ class AppDatabaseMigrationTest {
         }
 
         Room.databaseBuilder(appContext, AppDatabase::class.java, dbName)
-            .addMigrations(Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12)
+            .addMigrations(Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12, Migration_12_13)
             .build()
             .openHelper
             .writableDatabase
@@ -760,7 +761,7 @@ class AppDatabaseMigrationTest {
         }
 
         Room.databaseBuilder(appContext, AppDatabase::class.java, dbName)
-            .addMigrations(Migration_9_10, Migration_10_11, Migration_11_12)
+            .addMigrations(Migration_9_10, Migration_10_11, Migration_11_12, Migration_12_13)
             .build()
             .openHelper
             .writableDatabase
@@ -818,7 +819,7 @@ class AppDatabaseMigrationTest {
                 .writableDatabase
             throw AssertionError("Expected migration failure when no migration is registered")
         } catch (error: IllegalStateException) {
-            assertTrue(error.message?.contains("A migration from 1 to 12 was required") == true)
+            assertTrue(error.message?.contains("A migration from 1 to 13 was required") == true)
         }
     }
 
@@ -913,7 +914,7 @@ class AppDatabaseMigrationTest {
         }
 
         Room.databaseBuilder(appContext, AppDatabase::class.java, dbName)
-            .addMigrations(Migration_9_10, Migration_10_11, Migration_11_12)
+            .addMigrations(Migration_9_10, Migration_10_11, Migration_11_12, Migration_12_13)
             .build()
             .openHelper
             .writableDatabase
@@ -1043,7 +1044,7 @@ class AppDatabaseMigrationTest {
         }
 
         Room.databaseBuilder(appContext, AppDatabase::class.java, dbName)
-            .addMigrations(Migration_10_11, Migration_11_12)
+            .addMigrations(Migration_10_11, Migration_11_12, Migration_12_13)
             .build()
             .openHelper
             .writableDatabase
@@ -1091,7 +1092,7 @@ class AppDatabaseMigrationTest {
         }
 
         Room.databaseBuilder(appContext, AppDatabase::class.java, dbName)
-            .addMigrations(Migration_11_12)
+            .addMigrations(Migration_11_12, Migration_12_13)
             .build()
             .openHelper
             .writableDatabase
@@ -1102,6 +1103,72 @@ class AppDatabaseMigrationTest {
                     throw AssertionError("Expected invalid kind insert to fail")
                 } catch (error: android.database.SQLException) {
                     assertTrue(error.message?.contains("Invalid reusable event catalog kind") == true)
+                }
+            }
+    }
+
+    @Test
+    fun migration_12_13_adds_event_intensity_columns_and_backfills_existing_rows() {
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val dbName = "migration-12-13-intensity-test"
+        val dbFile = appContext.getDatabasePath(dbName)
+
+        resetDatabaseFile(dbFile)
+        SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { database ->
+            database.execSQL("CREATE TABLE IF NOT EXISTS home_messages (id INTEGER NOT NULL, message_text TEXT NOT NULL, updated_at_epoch_ms INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(id))")
+            database.execSQL("CREATE TABLE IF NOT EXISTS ingestion_events (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, item_name TEXT NOT NULL, quantity_level INTEGER NOT NULL, occurred_at_epoch_ms INTEGER NOT NULL, notes TEXT, reusable_entity_kind TEXT, reusable_entity_id INTEGER, created_at_epoch_ms INTEGER NOT NULL)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_ingestion_events_reusable_entity_kind ON ingestion_events(reusable_entity_kind)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_ingestion_events_reusable_entity_id ON ingestion_events(reusable_entity_id)")
+            database.execSQL("CREATE TABLE IF NOT EXISTS reusable_ingredients (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, normalized_name TEXT NOT NULL, notes TEXT, created_at_epoch_ms INTEGER NOT NULL, updated_at_epoch_ms INTEGER NOT NULL)")
+            database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_reusable_ingredients_normalized_name ON reusable_ingredients(normalized_name)")
+            database.execSQL("CREATE TABLE IF NOT EXISTS reusable_compounds (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL, normalized_name TEXT NOT NULL, notes TEXT, composition_status TEXT NOT NULL, created_at_epoch_ms INTEGER NOT NULL, updated_at_epoch_ms INTEGER NOT NULL)")
+            database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_reusable_compounds_normalized_name ON reusable_compounds(normalized_name)")
+            database.execSQL("CREATE TABLE IF NOT EXISTS reusable_compound_components (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, compound_id INTEGER NOT NULL, position INTEGER NOT NULL, component_kind TEXT NOT NULL, ingredient_id INTEGER, child_compound_id INTEGER, proportion_basis_points INTEGER, FOREIGN KEY(compound_id) REFERENCES reusable_compounds(id) ON UPDATE NO ACTION ON DELETE CASCADE, FOREIGN KEY(ingredient_id) REFERENCES reusable_ingredients(id) ON UPDATE NO ACTION ON DELETE RESTRICT, FOREIGN KEY(child_compound_id) REFERENCES reusable_compounds(id) ON UPDATE NO ACTION ON DELETE RESTRICT)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_reusable_compound_components_compound_id ON reusable_compound_components(compound_id)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_reusable_compound_components_ingredient_id ON reusable_compound_components(ingredient_id)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_reusable_compound_components_child_compound_id ON reusable_compound_components(child_compound_id)")
+            database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_reusable_compound_components_compound_id_position ON reusable_compound_components(compound_id, position)")
+            database.execSQL("CREATE TABLE IF NOT EXISTS reusable_event_catalog (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL, normalized_name TEXT NOT NULL, usage_count INTEGER NOT NULL, created_at_epoch_ms INTEGER NOT NULL, updated_at_epoch_ms INTEGER NOT NULL, last_used_at_epoch_ms INTEGER NOT NULL)")
+            database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_reusable_event_catalog_kind_normalized_name ON reusable_event_catalog(kind, normalized_name)")
+            database.execSQL("CREATE TABLE IF NOT EXISTS exposure_events (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, exposure_type TEXT NOT NULL, occurred_at_epoch_ms INTEGER NOT NULL, notes TEXT, created_at_epoch_ms INTEGER NOT NULL, exposure_type_catalog_id INTEGER, FOREIGN KEY(exposure_type_catalog_id) REFERENCES reusable_event_catalog(id) ON UPDATE NO ACTION ON DELETE RESTRICT)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_exposure_events_exposure_type_catalog_id ON exposure_events(exposure_type_catalog_id)")
+            database.execSQL("CREATE TABLE IF NOT EXISTS outbreak_events (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, outbreak_descriptor TEXT NOT NULL, body_location TEXT NOT NULL, occurred_at_epoch_ms INTEGER NOT NULL, notes TEXT, created_at_epoch_ms INTEGER NOT NULL, outbreak_descriptor_catalog_id INTEGER, body_location_catalog_id INTEGER, FOREIGN KEY(outbreak_descriptor_catalog_id) REFERENCES reusable_event_catalog(id) ON UPDATE NO ACTION ON DELETE RESTRICT, FOREIGN KEY(body_location_catalog_id) REFERENCES reusable_event_catalog(id) ON UPDATE NO ACTION ON DELETE RESTRICT)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_outbreak_events_outbreak_descriptor_catalog_id ON outbreak_events(outbreak_descriptor_catalog_id)")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_outbreak_events_body_location_catalog_id ON outbreak_events(body_location_catalog_id)")
+            database.execSQL("INSERT INTO exposure_events(id, exposure_type, occurred_at_epoch_ms, notes, created_at_epoch_ms) VALUES (1, 'Pollen', 1000, NULL, 1000)")
+            database.execSQL("INSERT INTO outbreak_events(id, outbreak_descriptor, body_location, occurred_at_epoch_ms, notes, created_at_epoch_ms) VALUES (1, 'Skin flare', 'Left arm', 2000, NULL, 2000)")
+            database.version = 12
+        }
+
+        Room.databaseBuilder(appContext, AppDatabase::class.java, dbName)
+            .addMigrations(Migration_12_13)
+            .build()
+            .openHelper
+            .writableDatabase
+            .use { migratedDb ->
+                migratedDb.query("PRAGMA table_info(`exposure_events`)").use { cursor ->
+                    var foundIntensityColumn = false
+                    val nameIndex = cursor.getColumnIndex("name")
+                    val notNullIndex = cursor.getColumnIndex("notnull")
+
+                    while (cursor.moveToNext()) {
+                        if (cursor.getString(nameIndex) == "intensity_level") {
+                            foundIntensityColumn = true
+                            assertEquals(1, cursor.getInt(notNullIndex))
+                        }
+                    }
+
+                    assertTrue(foundIntensityColumn)
+                }
+
+                migratedDb.query("SELECT intensity_level FROM exposure_events WHERE id = 1").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(3, cursor.getInt(0))
+                }
+
+                migratedDb.query("SELECT intensity_level FROM outbreak_events WHERE id = 1").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(3, cursor.getInt(0))
                 }
             }
     }

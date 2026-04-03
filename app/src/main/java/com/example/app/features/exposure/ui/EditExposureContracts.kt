@@ -7,17 +7,20 @@ data class EditExposureUiState(
     val exposureType: String = "",
     val deleteRecordLabel: String = "",
     val notes: String = "",
+    val selectedIntensityLevel: Int = 3,
     val occurredAtEpochMs: Long = 0L,
     val occurredAtInput: String = "",
     val occurredAtLabel: String = "",
     val selectedTimePreset: ExposureTimePreset = ExposureTimePreset.NOW,
     val timeOptions: List<ExposureTimeOptionUiModel> = emptyList(),
+    val intensityOptions: List<ExposureIntensityOptionUiModel> = emptyList(),
     val selectedExposureTypeCatalogId: Long? = null,
     val selectedExposureTypeSummary: String? = null,
     val availableExposureTypes: List<ReusableEventCatalogOptionUiModel> = emptyList(),
     val filteredExposureTypes: List<ReusableEventCatalogOptionUiModel> = emptyList(),
     val showCreateExposureTypeOption: Boolean = false,
     val exposureTypeError: String? = null,
+    val intensityLevelError: String? = null,
     val occurredAtError: String? = null,
     val formMessage: String = "",
     val isLoading: Boolean = true,
@@ -37,6 +40,7 @@ sealed interface EditExposureUiIntent {
     data object ClearRetiredExposureCatalogSelection : EditExposureUiIntent
     data object EditSelectedExposureCatalog : EditExposureUiIntent
     data class UpdateNotes(val value: String) : EditExposureUiIntent
+    data class SelectIntensityLevel(val level: Int) : EditExposureUiIntent
     data class UpdateOccurredAtInput(val value: String) : EditExposureUiIntent
     data class SelectTimePreset(val preset: ExposureTimePreset) : EditExposureUiIntent
     data object ShowDeleteConfirmation : EditExposureUiIntent

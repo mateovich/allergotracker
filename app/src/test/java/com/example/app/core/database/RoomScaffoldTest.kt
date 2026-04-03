@@ -10,6 +10,7 @@ import com.example.app.core.database.migrations.Migration_7_8
 import com.example.app.core.database.migrations.Migration_8_9
 import com.example.app.core.database.migrations.Migration_10_11
 import com.example.app.core.database.migrations.Migration_11_12
+import com.example.app.core.database.migrations.Migration_12_13
 import com.example.app.core.database.migrations.Migration_9_10
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -33,7 +34,7 @@ class RoomScaffoldTest {
         assertTrue(source.contains("ReusableCompoundEntity::class"))
         assertTrue(source.contains("ReusableCompoundComponentEntity::class"))
         assertTrue(source.contains("ReusableEventCatalogEntity::class"))
-        assertTrue(source.contains("version = 12"))
+        assertTrue(source.contains("version = 13"))
         assertTrue(source.contains("exportSchema = true"))
         assertTrue(source.contains("abstract fun homeDao(): HomeDao"))
         assertTrue(source.contains("abstract fun ingestionEventDao(): IngestionEventDao"))
@@ -123,5 +124,11 @@ class RoomScaffoldTest {
     fun reusable_event_catalog_kind_guards_migration_11_12_is_declared() {
         assertEquals(11, Migration_11_12.startVersion)
         assertEquals(12, Migration_11_12.endVersion)
+    }
+
+    @Test
+    fun event_intensity_backfill_migration_12_13_is_declared() {
+        assertEquals(12, Migration_12_13.startVersion)
+        assertEquals(13, Migration_12_13.endVersion)
     }
 }

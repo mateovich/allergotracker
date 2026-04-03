@@ -27,7 +27,7 @@ import com.example.app.features.outbreak.data.OutbreakEventEntity
         ReusableCompoundEntity::class,
         ReusableCompoundComponentEntity::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

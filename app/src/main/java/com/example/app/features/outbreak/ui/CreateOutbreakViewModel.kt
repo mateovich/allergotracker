@@ -12,6 +12,7 @@ import com.example.app.features.eventcatalog.ui.hasExactName
 import com.example.app.features.outbreak.domain.CreateOutbreakDefaultsUseCase
 import com.example.app.features.outbreak.domain.CreateOutbreakEventCommand
 import com.example.app.features.outbreak.domain.CreateOutbreakEventUseCase
+import com.example.app.features.ingestion.domain.IngestionQuantityOption
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -85,7 +86,7 @@ class CreateOutbreakViewModel(
                     selectedOutbreakDescriptorSummary = null,
                     outbreakDescriptorError = null,
                     formMessage = "",
-                    canSave = canSave(intent.value, it.bodyLocation)
+                    canSave = canSave(intent.value, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
 
@@ -96,7 +97,7 @@ class CreateOutbreakViewModel(
                     selectedOutbreakDescriptorSummary = "Saved outbreak descriptor selected: ${intent.name}",
                     outbreakDescriptorError = null,
                     formMessage = "",
-                    canSave = canSave(intent.name, it.bodyLocation)
+                    canSave = canSave(intent.name, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
 
@@ -106,7 +107,7 @@ class CreateOutbreakViewModel(
                     selectedOutbreakDescriptorSummary = "New outbreak descriptor will be saved locally.",
                     outbreakDescriptorError = null,
                     formMessage = "",
-                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
 
@@ -116,7 +117,7 @@ class CreateOutbreakViewModel(
                     selectedOutbreakDescriptorSummary = null,
                     outbreakDescriptorError = null,
                     formMessage = "",
-                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
 
@@ -125,7 +126,7 @@ class CreateOutbreakViewModel(
                     selectedOutbreakDescriptorCatalogId = null,
                     selectedOutbreakDescriptorSummary = null,
                     formMessage = "Saved outbreak descriptor was retired. Review the text value before saving.",
-                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
 
@@ -146,7 +147,7 @@ class CreateOutbreakViewModel(
                     selectedBodyLocationSummary = null,
                     bodyLocationError = null,
                     formMessage = "",
-                    canSave = canSave(it.outbreakDescriptor, intent.value)
+                    canSave = canSave(it.outbreakDescriptor, intent.value, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
 
@@ -157,7 +158,7 @@ class CreateOutbreakViewModel(
                     selectedBodyLocationSummary = "Saved body location selected: ${intent.name}",
                     bodyLocationError = null,
                     formMessage = "",
-                    canSave = canSave(it.outbreakDescriptor, intent.name)
+                    canSave = canSave(it.outbreakDescriptor, intent.name, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
 
@@ -167,7 +168,7 @@ class CreateOutbreakViewModel(
                     selectedBodyLocationSummary = "New body location will be saved locally.",
                     bodyLocationError = null,
                     formMessage = "",
-                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
 
@@ -177,7 +178,7 @@ class CreateOutbreakViewModel(
                     selectedBodyLocationSummary = null,
                     bodyLocationError = null,
                     formMessage = "",
-                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
 
@@ -186,7 +187,7 @@ class CreateOutbreakViewModel(
                     selectedBodyLocationCatalogId = null,
                     selectedBodyLocationSummary = null,
                     formMessage = "Saved body location was retired. Review the text value before saving.",
-                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
                 ).withFilteredCatalogs()
             }
 
@@ -197,6 +198,15 @@ class CreateOutbreakViewModel(
                         ReusableEventCatalogKind.BODY_LOCATION.storageValue,
                         selectedId
                     )
+                )
+            }
+
+            is CreateOutbreakUiIntent.SelectIntensityLevel -> updateState {
+                it.copy(
+                    selectedIntensityLevel = intent.level,
+                    intensityError = null,
+                    formMessage = "",
+                    canSave = canSave(it.outbreakDescriptor, it.bodyLocation, intent.level)
                 )
             }
 
@@ -264,6 +274,7 @@ class CreateOutbreakViewModel(
                         bodyLocation = currentState.bodyLocation,
                         occurredAtEpochMs = occurredAtEpochMs,
                         notes = currentState.notes,
+                        intensityLevel = currentState.selectedIntensityLevel,
                         outbreakDescriptorCatalogId = currentState.selectedOutbreakDescriptorCatalogId,
                         bodyLocationCatalogId = currentState.selectedBodyLocationCatalogId
                     )
@@ -281,9 +292,10 @@ class CreateOutbreakViewModel(
                             isSaving = false,
                             outbreakDescriptorError = error.fieldError("outbreakDescriptor"),
                             bodyLocationError = error.fieldError("bodyLocation"),
+                            intensityError = error.fieldError("intensityLevel"),
                             occurredAtError = error.fieldError("occurredAtEpochMs"),
                             formMessage = error.message,
-                            canSave = canSave(it.outbreakDescriptor, it.bodyLocation)
+                            canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
                         )
                     }
                 }
@@ -297,6 +309,10 @@ class CreateOutbreakViewModel(
             occurredAtEpochMs = defaults.occurredAtEpochMs,
             occurredAtInput = formatDateTimeInput(defaults.occurredAtEpochMs),
             occurredAtLabel = formatTime(defaults.occurredAtEpochMs),
+            intensityOptions = IngestionQuantityOption.entries.map { option ->
+                OutbreakIntensityOptionUiModel(level = option.level, label = option.label)
+            },
+            selectedIntensityLevel = defaults.intensityLevel,
             isOccurredAtManuallyEdited = false,
             timeOptions = OutbreakTimePreset.entries.map { preset ->
                 OutbreakTimeOptionUiModel(
@@ -330,8 +346,10 @@ class CreateOutbreakViewModel(
         }
     }
 
-    private fun canSave(outbreakDescriptor: String, bodyLocation: String): Boolean {
-        return outbreakDescriptor.isNotBlank() && bodyLocation.isNotBlank()
+    private fun canSave(outbreakDescriptor: String, bodyLocation: String, intensityLevel: Int): Boolean {
+        return outbreakDescriptor.isNotBlank() &&
+            bodyLocation.isNotBlank() &&
+            IngestionQuantityOption.fromLevel(intensityLevel) != null
     }
 
     private fun updateState(transform: (CreateOutbreakUiState) -> CreateOutbreakUiState) {

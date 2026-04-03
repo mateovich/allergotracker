@@ -19,7 +19,16 @@ class UpdateOutbreakEventUseCaseTest {
         val repository = FakeEditableOutbreakRepository()
         val useCase = UpdateOutbreakEventUseCase(repository, FakeOutbreakCurrentTimeProvider(fixedNow))
 
-        val result = useCase(UpdateOutbreakEventCommand(9L, "Rash flare", "   ", fixedNow, null))
+        val result = useCase(
+            UpdateOutbreakEventCommand(
+                id = 9L,
+                outbreakDescriptor = "Rash flare",
+                bodyLocation = "   ",
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                intensityLevel = 3
+            )
+        )
 
         val error = (result as AppResult.Error).error as DomainError.ValidationError
         assertEquals("Enter where on the body it happened.", error.fieldErrors["bodyLocation"])
@@ -31,12 +40,44 @@ class UpdateOutbreakEventUseCaseTest {
         val repository = FakeEditableOutbreakRepository()
         val useCase = UpdateOutbreakEventUseCase(repository, FakeOutbreakCurrentTimeProvider(fixedNow))
 
-        val result = useCase(UpdateOutbreakEventCommand(9L, "  Rash flare  ", "  Left arm  ", fixedNow, "  after workout  "))
+        val result = useCase(
+            UpdateOutbreakEventCommand(
+                id = 9L,
+                outbreakDescriptor = "  Rash flare  ",
+                bodyLocation = "  Left arm  ",
+                occurredAtEpochMs = fixedNow,
+                notes = "  after workout  ",
+                intensityLevel = 4
+            )
+        )
 
         val success = result as AppResult.Success
         assertEquals("Rash flare", success.value.outbreakDescriptor)
         assertEquals("Left arm", success.value.bodyLocation)
+        assertEquals(4, success.value.intensityLevel)
+        assertEquals(4, repository.updatedCommands.single().intensityLevel)
         assertEquals("after workout", repository.updatedCommands.single().notes)
+    }
+
+    @Test
+    fun rejects_invalid_intensity_without_updating_repository() = runBlocking {
+        val repository = FakeEditableOutbreakRepository()
+        val useCase = UpdateOutbreakEventUseCase(repository, FakeOutbreakCurrentTimeProvider(fixedNow))
+
+        val result = useCase(
+            UpdateOutbreakEventCommand(
+                id = 9L,
+                outbreakDescriptor = "Rash flare",
+                bodyLocation = "Left arm",
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                intensityLevel = 7
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Choose a valid intensity.", error.fieldErrors["intensityLevel"])
+        assertTrue(repository.updatedCommands.isEmpty())
     }
 
     @Test
@@ -56,6 +97,7 @@ class UpdateOutbreakEventUseCaseTest {
                 "Left arm",
                 fixedNow,
                 null,
+                intensityLevel = 3,
                 outbreakDescriptorCatalogId = 12L,
                 bodyLocationCatalogId = 13L
             )
@@ -90,6 +132,7 @@ class UpdateOutbreakEventUseCaseTest {
                 "Right arm",
                 fixedNow,
                 null,
+                intensityLevel = 3,
                 outbreakDescriptorCatalogId = 12L,
                 bodyLocationCatalogId = 13L
             )
@@ -114,13 +157,30 @@ private class FakeEditableOutbreakRepository : OutbreakRepository {
     override suspend fun createOutbreak(command: CreateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
 
     override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> {
-        return AppResult.Success(OutbreakEvent(id, "Rash flare", "Left arm", 1_700_000_000_000L, "notes"))
+        return AppResult.Success(
+            OutbreakEvent(
+                id = id,
+                outbreakDescriptor = "Rash flare",
+                bodyLocation = "Left arm",
+                occurredAtEpochMs = 1_700_000_000_000L,
+                notes = "notes",
+                intensityLevel = 3
+            )
+        )
     }
 
     override suspend fun updateOutbreak(command: UpdateOutbreakEventCommand): AppResult<OutbreakEvent> {
         updatedCommands += command
         return AppResult.Success(
-            OutbreakEvent(command.id, command.outbreakDescriptor, command.bodyLocation, command.occurredAtEpochMs, command.notes)
+            OutbreakEvent(
+                command.id,
+                command.outbreakDescriptor,
+                command.bodyLocation,
+                command.occurredAtEpochMs,
+                command.notes
+                ,
+                command.intensityLevel
+            )
         )
     }
 

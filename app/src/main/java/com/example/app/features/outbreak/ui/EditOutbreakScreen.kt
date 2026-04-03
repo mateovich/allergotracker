@@ -16,6 +16,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -214,6 +215,31 @@ fun EditOutbreakScreen(
                 onClearSelection = { viewModel.onIntent(EditOutbreakUiIntent.ClearBodyLocationCatalogSelection) },
                 onEditSelection = { viewModel.onIntent(EditOutbreakUiIntent.EditSelectedBodyLocationCatalog) }
             )
+            if (state.formMessage.isNotBlank()) {
+                Text(text = state.formMessage, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("edit-outbreak-form-message"))
+            }
+            Button(
+                onClick = {
+                    focusManager.clearFocus(force = true)
+                    viewModel.onIntent(EditOutbreakUiIntent.Save)
+                },
+                enabled = state.canSave && !state.isSaving && !state.isDeleting,
+                modifier = Modifier.fillMaxWidth().testTag("edit-outbreak-save")
+            ) {
+                Text(if (state.isSaving) "Saving..." else "Save changes")
+            }
+            OutlinedButton(
+                onClick = {
+                    focusManager.clearFocus(force = true)
+                    viewModel.onIntent(EditOutbreakUiIntent.ShowDeleteConfirmation)
+                },
+                enabled = state.canDelete && !state.isSaving && !state.isDeleting,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(if (state.isDeleteConfirmationVisible) "edit-outbreak-delete-button" else "edit-outbreak-delete")
+            ) {
+                Text(if (state.isDeleting) "Deleting..." else "Delete record", color = MaterialTheme.colorScheme.error)
+            }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = "When did it happen?", style = MaterialTheme.typography.titleSmall)
                 OutlinedTextField(
@@ -239,30 +265,19 @@ fun EditOutbreakScreen(
                     }
                 }
             }
-            if (state.formMessage.isNotBlank()) {
-                Text(text = state.formMessage, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("edit-outbreak-form-message"))
-            }
-            Button(
-                onClick = {
-                    focusManager.clearFocus(force = true)
-                    viewModel.onIntent(EditOutbreakUiIntent.Save)
-                },
-                enabled = state.canSave && !state.isSaving && !state.isDeleting,
-                modifier = Modifier.fillMaxWidth().testTag("edit-outbreak-save")
-            ) {
-                Text(if (state.isSaving) "Saving..." else "Save changes")
-            }
-            OutlinedButton(
-                onClick = {
-                    focusManager.clearFocus(force = true)
-                    viewModel.onIntent(EditOutbreakUiIntent.ShowDeleteConfirmation)
-                },
-                enabled = state.canDelete && !state.isSaving && !state.isDeleting,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(if (state.isDeleteConfirmationVisible) "edit-outbreak-delete-button" else "edit-outbreak-delete")
-            ) {
-                Text(if (state.isDeleting) "Deleting..." else "Delete record", color = MaterialTheme.colorScheme.error)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = "How intense was it?", style = MaterialTheme.typography.titleSmall)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.intensityOptions.forEach { option ->
+                        FilterChip(
+                            selected = state.selectedIntensityLevel == option.level,
+                            onClick = { viewModel.onIntent(EditOutbreakUiIntent.SelectIntensityLevel(option.level)) },
+                            label = { Text(option.label) },
+                            modifier = Modifier.testTag("edit-outbreak-intensity-${option.level}")
+                        )
+                    }
+                }
+                state.intensityError?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
             }
             OutlinedTextField(
                 value = state.notes,

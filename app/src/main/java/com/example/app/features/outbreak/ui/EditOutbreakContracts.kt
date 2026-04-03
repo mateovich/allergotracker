@@ -23,8 +23,11 @@ data class EditOutbreakUiState(
     val availableBodyLocations: List<ReusableEventCatalogOptionUiModel> = emptyList(),
     val filteredBodyLocations: List<ReusableEventCatalogOptionUiModel> = emptyList(),
     val showCreateBodyLocationOption: Boolean = false,
+    val intensityOptions: List<OutbreakIntensityOptionUiModel> = emptyList(),
+    val selectedIntensityLevel: Int = 0,
     val outbreakDescriptorError: String? = null,
     val bodyLocationError: String? = null,
+    val intensityError: String? = null,
     val occurredAtError: String? = null,
     val formMessage: String = "",
     val isLoading: Boolean = true,
@@ -49,6 +52,7 @@ sealed interface EditOutbreakUiIntent {
     data object ClearBodyLocationCatalogSelection : EditOutbreakUiIntent
     data object ClearRetiredBodyLocationCatalogSelection : EditOutbreakUiIntent
     data object EditSelectedBodyLocationCatalog : EditOutbreakUiIntent
+    data class SelectIntensityLevel(val level: Int) : EditOutbreakUiIntent
     data class UpdateNotes(val value: String) : EditOutbreakUiIntent
     data class UpdateOccurredAtInput(val value: String) : EditOutbreakUiIntent
     data class SelectTimePreset(val preset: OutbreakTimePreset) : EditOutbreakUiIntent

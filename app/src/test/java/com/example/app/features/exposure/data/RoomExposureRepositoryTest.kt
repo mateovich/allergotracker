@@ -33,13 +33,15 @@ class RoomExposureRepositoryTest {
             CreateExposureEventCommand(
                 exposureType = "Pollen",
                 occurredAtEpochMs = 1_700_000_000_000L,
-                notes = "outside"
+                notes = "outside",
+                intensityLevel = 4
             )
         )
 
         val savedEntity = dao.inserted.single()
         assertTrue(result is AppResult.Success)
         assertEquals("Pollen", savedEntity.exposureType)
+        assertEquals(4, savedEntity.intensityLevel)
         assertEquals(1_700_000_123_000L, savedEntity.createdAtEpochMs)
         assertEquals(1L, savedEntity.exposureTypeCatalogId)
         assertEquals(listOf("Pollen"), catalogRepository.ensureRequests)
@@ -47,7 +49,7 @@ class RoomExposureRepositoryTest {
 
     @Test
     fun update_rewrites_existing_local_exposure_record_without_network_dependency() = runBlocking {
-        val existing = ExposureEventEntity(5L, "Pollen", 1_700_000_000_000L, null, 1_700_000_100_000L)
+        val existing = ExposureEventEntity(5L, "Pollen", 1_700_000_000_000L, null, 1_700_000_100_000L, intensityLevel = 2)
         val dao = FakeExposureEventDaoForRepository(getByIdResult = existing)
         val repository = RoomExposureRepository(
             exposureEventDao = dao,
@@ -59,18 +61,27 @@ class RoomExposureRepositoryTest {
                 id = 5L,
                 exposureType = "Dust",
                 occurredAtEpochMs = 1_700_000_200_000L,
-                notes = "indoors"
+                notes = "indoors",
+                intensityLevel = 5
             )
         )
 
         assertEquals("Dust", dao.updated.single().exposureType)
         assertEquals(1_700_000_200_000L, dao.updated.single().occurredAtEpochMs)
         assertEquals("indoors", dao.updated.single().notes)
+        assertEquals(5, dao.updated.single().intensityLevel)
     }
 
     @Test
     fun update_selected_catalog_reference_refreshes_usage_metrics() = runBlocking {
-        val existing = ExposureEventEntity(5L, "Pollen", 1_700_000_000_000L, null, 1_700_000_100_000L, 9L)
+        val existing = ExposureEventEntity(
+            id = 5L,
+            exposureType = "Pollen",
+            occurredAtEpochMs = 1_700_000_000_000L,
+            notes = null,
+            createdAtEpochMs = 1_700_000_100_000L,
+            exposureTypeCatalogId = 9L
+        )
         val catalogRepository = FakeExposureCatalogRepository()
         val repository = RoomExposureRepository(
             exposureEventDao = FakeExposureEventDaoForRepository(getByIdResult = existing),
@@ -93,7 +104,14 @@ class RoomExposureRepositoryTest {
 
     @Test
     fun update_missing_selected_catalog_reference_returns_integrity_error() = runBlocking {
-        val existing = ExposureEventEntity(5L, "Pollen", 1_700_000_000_000L, null, 1_700_000_100_000L, 9L)
+        val existing = ExposureEventEntity(
+            id = 5L,
+            exposureType = "Pollen",
+            occurredAtEpochMs = 1_700_000_000_000L,
+            notes = null,
+            createdAtEpochMs = 1_700_000_100_000L,
+            exposureTypeCatalogId = 9L
+        )
         val repository = RoomExposureRepository(
             exposureEventDao = FakeExposureEventDaoForRepository(getByIdResult = existing),
             currentTimeProvider = CurrentTimeProvider { 1_700_000_123_000L },

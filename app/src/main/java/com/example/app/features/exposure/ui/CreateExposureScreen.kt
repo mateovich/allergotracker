@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -179,6 +180,27 @@ fun CreateExposureScreen(
                             modifier = Modifier.testTag("exposure-time-${preset.name.lowercase()}")
                         )
                     }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = "How intense was it?", style = MaterialTheme.typography.titleSmall)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.intensityOptions.forEach { option ->
+                        FilterChip(
+                            selected = state.selectedIntensityLevel == option.level,
+                            onClick = { viewModel.onIntent(CreateExposureUiIntent.SelectIntensityLevel(option.level)) },
+                            label = { Text(option.label) },
+                            modifier = Modifier.testTag("exposure-intensity-${option.level}")
+                        )
+                    }
+                }
+                state.intensityLevelError?.let {
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag("exposure-intensity-error")
+                    )
                 }
             }
 

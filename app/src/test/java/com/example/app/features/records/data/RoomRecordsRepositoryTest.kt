@@ -92,7 +92,7 @@ class RoomRecordsRepositoryTest {
     }
 
     @Test
-    fun intensity_filter_excludes_non_ingestion_records_and_reset_restores_full_timeline() = runBlocking {
+    fun intensity_filter_applies_to_matching_records_and_reset_restores_full_timeline() = runBlocking {
         val timestamp = 1_700_000_000_000L
         val repository = RoomRecordsRepository(
             ingestionEventDao = FakeIngestionEventDao(
@@ -116,7 +116,8 @@ class RoomRecordsRepositoryTest {
                         exposureType = "Pollen",
                         occurredAtEpochMs = timestamp - 1_000L,
                         notes = null,
-                        createdAtEpochMs = timestamp - 1_000L
+                        createdAtEpochMs = timestamp - 1_000L,
+                        intensityLevel = 4
                     )
                 )
             ),
@@ -133,7 +134,7 @@ class RoomRecordsRepositoryTest {
     }
 
     @Test
-    fun outbreak_records_keep_body_location_visible_when_notes_exist() = runBlocking {
+    fun outbreak_records_include_intensity_body_location_and_notes() = runBlocking {
         val repository = RoomRecordsRepository(
             ingestionEventDao = FakeIngestionEventDao(),
             exposureEventDao = FakeExposureEventDao(),
@@ -145,7 +146,8 @@ class RoomRecordsRepositoryTest {
                         bodyLocation = "Left arm",
                         occurredAtEpochMs = 1_700_000_000_000L,
                         notes = "after workout",
-                        createdAtEpochMs = 1_700_000_000_100L
+                        createdAtEpochMs = 1_700_000_000_100L,
+                        intensityLevel = 4
                     )
                 )
             )
@@ -153,8 +155,44 @@ class RoomRecordsRepositoryTest {
 
         val record = repository.observeRecords().first().single()
 
-        assertEquals("Left arm - after workout", record.detailLabel)
+        assertEquals("Intensity 4 - Left arm - after workout", record.detailLabel)
         assertEquals(4L, record.sourceId)
+    }
+
+    @Test
+    fun exposure_records_include_intensity_in_projection_and_filtering() = runBlocking {
+        val timestamp = 1_700_000_000_000L
+        val repository = RoomRecordsRepository(
+            ingestionEventDao = FakeIngestionEventDao(),
+            exposureEventDao = FakeExposureEventDao(
+                events = listOf(
+                    ExposureEventEntity(
+                        id = 2L,
+                        exposureType = "Pollen",
+                        occurredAtEpochMs = timestamp,
+                        notes = "outside",
+                        createdAtEpochMs = timestamp,
+                        intensityLevel = 2
+                    ),
+                    ExposureEventEntity(
+                        id = 3L,
+                        exposureType = "Dust",
+                        occurredAtEpochMs = timestamp - 1L,
+                        notes = null,
+                        createdAtEpochMs = timestamp - 1L,
+                        intensityLevel = 5
+                    )
+                )
+            ),
+            outbreakEventDao = FakeOutbreakEventDao()
+        )
+
+        val filtered = repository.observeRecords(
+            flowOf(RecordsFilter(intensityLevels = setOf(IngestionQuantityOption.LIGHT_SNACK)))
+        ).first()
+
+        assertEquals(listOf("exposure-2"), filtered.map { it.id })
+        assertEquals("Intensity 2 - outside", filtered.single().detailLabel)
     }
 
     @Test
@@ -505,7 +543,8 @@ class RoomRecordsRepositoryTest {
                         exposureType = "Pollen",
                         occurredAtEpochMs = 1_700_000_100_000L,
                         notes = "outside",
-                        createdAtEpochMs = 1_700_000_100_000L
+                        createdAtEpochMs = 1_700_000_100_000L,
+                        intensityLevel = 2
                     )
                 )
             ),
@@ -517,7 +556,8 @@ class RoomRecordsRepositoryTest {
                         bodyLocation = "Arm",
                         occurredAtEpochMs = 1_700_000_200_000L,
                         notes = "after workout",
-                        createdAtEpochMs = 1_700_000_200_000L
+                        createdAtEpochMs = 1_700_000_200_000L,
+                        intensityLevel = 4
                     )
                 )
             )
@@ -535,9 +575,11 @@ class RoomRecordsRepositoryTest {
         assertEquals("2 Light snack", ingestionValue.quantityLabel)
         assertEquals("with honey", ingestionValue.notes)
         assertEquals("Pollen", exposureValue.exposureType)
+        assertEquals("Intensity 2", exposureValue.intensityLabel)
         assertEquals("outside", exposureValue.notes)
         assertEquals("Skin flare", outbreakValue.outbreakDescriptor)
         assertEquals("Arm", outbreakValue.bodyLocation)
+        assertEquals("Intensity 4", outbreakValue.intensityLabel)
         assertEquals("after workout", outbreakValue.notes)
     }
 

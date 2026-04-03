@@ -43,6 +43,7 @@ class RoomOutbreakRepositoryTest {
         assertEquals("Skin flare", savedEntity.outbreakDescriptor)
         assertEquals("Arm", savedEntity.bodyLocation)
         assertEquals(1_700_000_123_000L, savedEntity.createdAtEpochMs)
+        assertEquals(3, savedEntity.intensityLevel)
         assertEquals(101L, savedEntity.outbreakDescriptorCatalogId)
         assertEquals(102L, savedEntity.bodyLocationCatalogId)
     }
@@ -62,18 +63,29 @@ class RoomOutbreakRepositoryTest {
                 outbreakDescriptor = "Skin flare updated",
                 bodyLocation = "Left arm",
                 occurredAtEpochMs = 1_700_000_200_000L,
-                notes = "settling"
+                notes = "settling",
+                intensityLevel = 4
             )
         )
 
         assertEquals("Skin flare updated", dao.updated.single().outbreakDescriptor)
         assertEquals("Left arm", dao.updated.single().bodyLocation)
         assertEquals("settling", dao.updated.single().notes)
+        assertEquals(4, dao.updated.single().intensityLevel)
     }
 
     @Test
     fun update_selected_catalog_references_refresh_usage_metrics() = runBlocking {
-        val existing = OutbreakEventEntity(9L, "Skin flare", "Arm", 1_700_000_000_000L, null, 1_700_000_100_000L, 11L, 12L)
+        val existing = OutbreakEventEntity(
+            id = 9L,
+            outbreakDescriptor = "Skin flare",
+            bodyLocation = "Arm",
+            occurredAtEpochMs = 1_700_000_000_000L,
+            notes = null,
+            createdAtEpochMs = 1_700_000_100_000L,
+            outbreakDescriptorCatalogId = 11L,
+            bodyLocationCatalogId = 12L
+        )
         val catalogRepository = FakeOutbreakCatalogRepository()
         val repository = RoomOutbreakRepository(
             outbreakEventDao = FakeOutbreakEventDaoForRepository(getByIdResult = existing),
@@ -98,7 +110,16 @@ class RoomOutbreakRepositoryTest {
 
     @Test
     fun update_missing_selected_catalog_reference_returns_integrity_error() = runBlocking {
-        val existing = OutbreakEventEntity(9L, "Skin flare", "Arm", 1_700_000_000_000L, null, 1_700_000_100_000L, 11L, 12L)
+        val existing = OutbreakEventEntity(
+            id = 9L,
+            outbreakDescriptor = "Skin flare",
+            bodyLocation = "Arm",
+            occurredAtEpochMs = 1_700_000_000_000L,
+            notes = null,
+            createdAtEpochMs = 1_700_000_100_000L,
+            outbreakDescriptorCatalogId = 11L,
+            bodyLocationCatalogId = 12L
+        )
         val repository = RoomOutbreakRepository(
             outbreakEventDao = FakeOutbreakEventDaoForRepository(getByIdResult = existing),
             currentTimeProvider = CurrentTimeProvider { 1_700_000_123_000L },

@@ -106,12 +106,14 @@ class RecordDetailViewModel(
 
             is RecordDetail.Exposure -> listOf(
                 RecordDetailFieldUiModel(label = "Exposure", value = exposureType),
+                RecordDetailFieldUiModel(label = "Intensity", value = intensityLabel),
                 RecordDetailFieldUiModel(label = "Notes", value = notes.orEmpty().ifBlank { "None" })
             )
 
             is RecordDetail.Outbreak -> listOf(
                 RecordDetailFieldUiModel(label = "Descriptor", value = outbreakDescriptor),
                 RecordDetailFieldUiModel(label = "Body location", value = bodyLocation),
+                RecordDetailFieldUiModel(label = "Intensity", value = intensityLabel),
                 RecordDetailFieldUiModel(label = "Notes", value = notes.orEmpty().ifBlank { "None" })
             )
         }

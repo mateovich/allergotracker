@@ -43,8 +43,50 @@ class CreateOutbreakViewModelTest {
 
         assertEquals(expectedTimeLabel, viewModel.state.value.occurredAtLabel)
         assertEquals(OutbreakTimePreset.NOW, viewModel.state.value.selectedTimePreset)
+        assertEquals(3, viewModel.state.value.selectedIntensityLevel)
         assertTrue(viewModel.state.value.occurredAtInput.isNotBlank())
         assertFalse(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun selecting_intensity_updates_state_and_save_command() = runBlocking {
+        var savedCommand: CreateOutbreakEventCommand? = null
+        val timeProvider = object : CurrentTimeProvider {
+            override fun nowEpochMillis(): Long = fixedNow
+        }
+        val viewModel = CreateOutbreakViewModel(
+            createOutbreakDefaultsUseCase = CreateOutbreakDefaultsUseCase(timeProvider),
+            createOutbreakEventUseCase = CreateOutbreakEventUseCase(
+                repository = object : OutbreakRepository {
+                    override suspend fun createOutbreak(command: CreateOutbreakEventCommand): AppResult<OutbreakEvent> {
+                        savedCommand = command
+                        return AppResult.Success(
+                            OutbreakEvent(
+                                id = 17L,
+                                outbreakDescriptor = command.outbreakDescriptor,
+                                bodyLocation = command.bodyLocation,
+                                occurredAtEpochMs = command.occurredAtEpochMs,
+                                notes = command.notes,
+                                intensityLevel = command.intensityLevel
+                            )
+                        )
+                    }
+
+                    override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> = error("unused")
+                    override suspend fun updateOutbreak(command: com.example.app.features.outbreak.domain.UpdateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
+                    override suspend fun deleteOutbreak(id: Long): AppResult<Unit> = error("unused")
+                },
+                currentTimeProvider = timeProvider
+            )
+        )
+
+        viewModel.onIntent(CreateOutbreakUiIntent.UpdateOutbreakDescriptor("Skin flare"))
+        viewModel.onIntent(CreateOutbreakUiIntent.UpdateBodyLocation("Left arm"))
+        viewModel.onIntent(CreateOutbreakUiIntent.SelectIntensityLevel(5))
+        viewModel.onIntent(CreateOutbreakUiIntent.Save)
+
+        assertEquals(5, viewModel.state.value.selectedIntensityLevel)
+        assertEquals(5, savedCommand?.intensityLevel)
     }
 
     @Test

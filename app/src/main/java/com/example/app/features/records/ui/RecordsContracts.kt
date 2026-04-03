@@ -47,7 +47,7 @@ data class RecordsUiState(
     val emptyStateTitle: String = "No records yet",
     val emptyStateMessage: String = "Use + to create your first record.",
     val emptyStateActionLabel: String? = null,
-    val intensityHint: String = "Intensity applies to ingestion quantity only."
+    val intensityHint: String = "Intensity applies to ingestion, exposure, and outbreak records."
 )
 
 enum class EventType(val label: String, val route: String) {
@@ -97,7 +97,7 @@ internal fun RecordsFilter.toActiveUiModel(): ActiveRecordsFilterUiModel {
             add(eventTypes.sortedBy { it.name }.joinToString(prefix = "Types: ") { it.label })
         }
         if (intensityLevels.isNotEmpty()) {
-            add(intensityLevels.sortedBy { it.level }.joinToString(prefix = "Intensity: ") { it.label })
+            add(intensityLevels.sortedBy { it.level }.joinToString(prefix = "Intensity: ") { it.level.toString() })
         }
     }
     return ActiveRecordsFilterUiModel(summaryLabels = labels)

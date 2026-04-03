@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -143,6 +144,27 @@ fun CreateOutbreakScreen(
                 onEditSelection = { viewModel.onIntent(CreateOutbreakUiIntent.EditSelectedBodyLocationCatalog) }
             )
 
+            if (state.formMessage.isNotBlank()) {
+                Text(
+                    text = state.formMessage,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("outbreak-form-message")
+                )
+            }
+
+            Button(
+                onClick = {
+                    focusManager.clearFocus(force = true)
+                    viewModel.onIntent(CreateOutbreakUiIntent.Save)
+                },
+                enabled = !state.isSaving,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("outbreak-save")
+            ) {
+                Text(if (state.isSaving) "Saving..." else "Save outbreak")
+            }
+
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = "When did it happen?", style = MaterialTheme.typography.titleSmall)
                 OutlinedTextField(
@@ -176,25 +198,19 @@ fun CreateOutbreakScreen(
                 }
             }
 
-            if (state.formMessage.isNotBlank()) {
-                Text(
-                    text = state.formMessage,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.testTag("outbreak-form-message")
-                )
-            }
-
-            Button(
-                onClick = {
-                    focusManager.clearFocus(force = true)
-                    viewModel.onIntent(CreateOutbreakUiIntent.Save)
-                },
-                enabled = !state.isSaving,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("outbreak-save")
-            ) {
-                Text(if (state.isSaving) "Saving..." else "Save outbreak")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = "How intense was it?", style = MaterialTheme.typography.titleSmall)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.intensityOptions.forEach { option ->
+                        FilterChip(
+                            selected = state.selectedIntensityLevel == option.level,
+                            onClick = { viewModel.onIntent(CreateOutbreakUiIntent.SelectIntensityLevel(option.level)) },
+                            label = { Text(option.label) },
+                            modifier = Modifier.testTag("outbreak-intensity-${option.level}")
+                        )
+                    }
+                }
+                state.intensityError?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
             }
 
             OutlinedTextField(
