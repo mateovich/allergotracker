@@ -17,46 +17,49 @@ import kotlinx.coroutines.flow.map
 
 class RoomReusableCompoundRepository(
     private val compoundDao: ReusableCompoundDao,
+    private val ingredientExists: suspend (Long) -> Boolean,
+    private val compoundExists: suspend (Long) -> Boolean,
     private val nowEpochMillis: () -> Long
 ) : ReusableCompoundRepository {
     override suspend fun createCompound(command: CreateReusableCompoundCommand): AppResult<ReusableCompound> {
         return try {
             val canonicalName = command.name.normalizeReusableName()
             val normalizedName = canonicalName.normalizedKey()
-            compoundDao.findByNormalizedName(normalizedName)?.let { existing ->
-                return AppResult.Success(
-                    ReusableCompound(
-                        id = existing.id,
-                        name = existing.name,
-                        notes = existing.notes,
-                        compositionStatus = CompoundCompositionStatus.fromStorageValue(existing.compositionStatus),
-                        components = emptyList(),
-                        createdAtEpochMs = existing.createdAtEpochMs,
-                        updatedAtEpochMs = existing.updatedAtEpochMs
+            compoundDao.findByNormalizedName(normalizedName)?.let {
+                return AppResult.Error(
+                    DomainError.ValidationError(
+                        message = "Please fix the highlighted fields.",
+                        fieldErrors = mapOf("name" to "A compound with this name already exists.")
                     )
                 )
+            }
+            val validationError = validateComponents(command)
+            if (validationError != null) {
+                return AppResult.Error(validationError)
             }
             val now = nowEpochMillis()
             val entity = ReusableCompoundEntity(
                 name = canonicalName,
                 normalizedName = normalizedName,
                 notes = command.notes,
-                compositionStatus = CompoundCompositionStatus.DRAFT.storageValue,
+                compositionStatus = CompoundCompositionStatus.COMPLETE.storageValue,
                 createdAtEpochMs = now,
                 updatedAtEpochMs = now
             )
-            val id = compoundDao.insertCompound(entity)
-            AppResult.Success(
-                ReusableCompound(
-                    id = id,
-                    name = entity.name,
-                    notes = entity.notes,
-                    compositionStatus = CompoundCompositionStatus.DRAFT,
-                    components = emptyList(),
-                    createdAtEpochMs = entity.createdAtEpochMs,
-                    updatedAtEpochMs = entity.updatedAtEpochMs
+            val components = command.components.mapIndexed { index, component ->
+                ReusableCompoundComponentEntity(
+                    compoundId = 0L,
+                    position = index,
+                    componentKind = component.kind.storageValue,
+                    ingredientId = component.reusableEntityId.takeIf { component.kind == CompoundComponentKind.INGREDIENT },
+                    childCompoundId = component.reusableEntityId.takeIf { component.kind == CompoundComponentKind.COMPOUND },
+                    proportionBasisPoints = component.proportionBasisPoints
                 )
-            )
+            }
+            val id = compoundDao.insertCompoundWithComponents(entity, components)
+            val savedCompound = compoundDao.findCompoundWithComponentsById(id)
+                ?: return AppResult.Error(DomainError.IntegrityError("Saved compound is no longer available."))
+            AppResult.Success(savedCompound.toDomain())
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (_: Exception) {
@@ -141,6 +144,34 @@ class RoomReusableCompoundRepository(
 
     override fun observeCompounds(): Flow<List<ReusableCompound>> {
         return compoundDao.observeAll().map { rows -> rows.map(ReusableCompoundWithComponents::toDomain) }
+    }
+
+    private suspend fun validateComponents(command: CreateReusableCompoundCommand): DomainError? {
+        val fieldErrors = linkedMapOf<String, String>()
+        command.components.forEachIndexed { index, component ->
+            val reusableId = component.reusableEntityId
+            val targetKey = "components[$index].target"
+            val proportionKey = "components[$index].proportion"
+            when {
+                reusableId == null || reusableId <= 0L -> fieldErrors[targetKey] = "Choose a saved ingredient or compound."
+                component.kind == CompoundComponentKind.INGREDIENT && !ingredientExists(reusableId) -> {
+                    fieldErrors[targetKey] = "Selected ingredient is no longer available."
+                }
+                component.kind == CompoundComponentKind.COMPOUND && !compoundExists(reusableId) -> {
+                    fieldErrors[targetKey] = "Selected compound is no longer available."
+                }
+            }
+            if (component.proportionBasisPoints == null || component.proportionBasisPoints !in 1..10_000) {
+                fieldErrors[proportionKey] = "Enter a proportion greater than 0%."
+            }
+        }
+        if (fieldErrors.isNotEmpty()) {
+            return DomainError.ValidationError(
+                message = "Please fix the highlighted fields.",
+                fieldErrors = fieldErrors
+            )
+        }
+        return null
     }
 }
 

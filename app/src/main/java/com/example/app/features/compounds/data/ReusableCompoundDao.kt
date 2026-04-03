@@ -13,6 +13,9 @@ interface ReusableCompoundDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertCompound(entity: ReusableCompoundEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertComponents(entities: List<ReusableCompoundComponentEntity>)
+
     @Query("SELECT * FROM reusable_compounds WHERE normalized_name = :normalizedName LIMIT 1")
     suspend fun findByNormalizedName(normalizedName: String): ReusableCompoundEntity?
 
@@ -25,6 +28,9 @@ interface ReusableCompoundDao {
 
     @Update
     suspend fun updateCompound(entity: ReusableCompoundEntity): Int
+
+    @Query("DELETE FROM reusable_compound_components WHERE compound_id = :compoundId")
+    suspend fun deleteComponentsByCompoundId(compoundId: Long): Int
 
     @Query("DELETE FROM reusable_compounds WHERE id = :id")
     suspend fun deleteCompoundById(id: Long): Int
@@ -44,4 +50,27 @@ interface ReusableCompoundDao {
     @Transaction
     @Query("SELECT * FROM reusable_compounds ORDER BY name COLLATE NOCASE ASC, id ASC")
     fun observeAll(): Flow<List<ReusableCompoundWithComponents>>
+
+    @Transaction
+    suspend fun insertCompoundWithComponents(
+        entity: ReusableCompoundEntity,
+        components: List<ReusableCompoundComponentEntity>
+    ): Long {
+        val compoundId = insertCompound(entity)
+        if (components.isNotEmpty()) {
+            insertComponents(components.map { it.copy(compoundId = compoundId) })
+        }
+        return compoundId
+    }
+
+    @Transaction
+    suspend fun replaceCompoundComponents(
+        compoundId: Long,
+        components: List<ReusableCompoundComponentEntity>
+    ) {
+        deleteComponentsByCompoundId(compoundId)
+        if (components.isNotEmpty()) {
+            insertComponents(components.map { it.copy(compoundId = compoundId) })
+        }
+    }
 }

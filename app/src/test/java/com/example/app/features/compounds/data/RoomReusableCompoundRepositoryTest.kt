@@ -6,6 +6,7 @@ import com.example.app.core.common.result.AppResult
 import com.example.app.features.compounds.domain.CompoundComponentKind
 import com.example.app.features.compounds.domain.CompoundCompositionStatus
 import com.example.app.features.compounds.domain.CreateReusableCompoundCommand
+import com.example.app.features.compounds.domain.CreateReusableCompoundComponentCommand
 import com.example.app.features.compounds.domain.ReusableCompound
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -17,50 +18,102 @@ import org.junit.Test
 class RoomReusableCompoundRepositoryTest {
 
     @Test
-    fun create_persists_draft_compound_locally() = runBlocking {
+    fun create_persists_complete_compound_with_ordered_components_locally() = runBlocking {
         val dao = FakeReusableCompoundDao()
-        val repository = RoomReusableCompoundRepository(dao) { 1_700_000_123_000L }
+        val repository = RoomReusableCompoundRepository(
+            compoundDao = dao,
+            ingredientExists = { it == 7L },
+            compoundExists = { it == 9L },
+            nowEpochMillis = { 1_700_000_123_000L }
+        )
 
         val result = repository.createCompound(
-            CreateReusableCompoundCommand(name = "  Breakfast   mix  ", notes = "Base")
+            CreateReusableCompoundCommand(
+                name = "  Breakfast   mix  ",
+                notes = "Base",
+                components = listOf(
+                    CreateReusableCompoundComponentCommand(
+                        kind = CompoundComponentKind.INGREDIENT,
+                        reusableEntityId = 7L,
+                        proportionBasisPoints = 6_000
+                    ),
+                    CreateReusableCompoundComponentCommand(
+                        kind = CompoundComponentKind.COMPOUND,
+                        reusableEntityId = 9L,
+                        proportionBasisPoints = 4_000
+                    )
+                )
+            )
         )
 
         val saved = dao.inserted.single()
         assertTrue(result is AppResult.Success<ReusableCompound>)
         assertEquals("Breakfast mix", saved.name)
-        assertEquals(CompoundCompositionStatus.DRAFT.storageValue, saved.compositionStatus)
+        assertEquals(CompoundCompositionStatus.COMPLETE.storageValue, saved.compositionStatus)
+        assertEquals(2, dao.insertedComponents.size)
+        assertEquals(0, dao.insertedComponents[0].position)
+        assertEquals(7L, dao.insertedComponents[0].ingredientId)
+        assertEquals(1, dao.insertedComponents[1].position)
+        assertEquals(9L, dao.insertedComponents[1].childCompoundId)
     }
 
     @Test
-    fun create_reuses_existing_compound_when_name_matches_ignoring_case() = runBlocking {
+    fun create_rejects_duplicate_name_instead_of_reusing_existing_compound() = runBlocking {
         val dao = FakeReusableCompoundDao(
             existing = ReusableCompoundEntity(
                 id = 4L,
                 name = "Breakfast mix",
                 normalizedName = "breakfast mix",
                 notes = null,
-                compositionStatus = CompoundCompositionStatus.DRAFT.storageValue,
+                compositionStatus = CompoundCompositionStatus.COMPLETE.storageValue,
                 createdAtEpochMs = 1L,
                 updatedAtEpochMs = 1L
             )
         )
-        val repository = RoomReusableCompoundRepository(dao) { 1_700_000_123_000L }
+        val repository = RoomReusableCompoundRepository(
+            compoundDao = dao,
+            ingredientExists = { true },
+            compoundExists = { true },
+            nowEpochMillis = { 1_700_000_123_000L }
+        )
 
-        val result = repository.createCompound(CreateReusableCompoundCommand(name = "breakfast mix", notes = null))
+        val result = repository.createCompound(
+            CreateReusableCompoundCommand(
+                name = "breakfast mix",
+                notes = null,
+                components = listOf(validIngredientComponent())
+            )
+        )
 
-        val success = result as AppResult.Success<ReusableCompound>
-        assertEquals(4L, success.value.id)
+        val error = result as AppResult.Error
+        assertEquals("A compound with this name already exists.", (error.error as DomainError.ValidationError).fieldErrors["name"])
         assertTrue(dao.inserted.isEmpty())
     }
 
     @Test
-    fun create_stores_normalized_name_for_db_uniqueness() = runBlocking {
+    fun create_returns_validation_error_when_component_target_is_missing() = runBlocking {
         val dao = FakeReusableCompoundDao()
-        val repository = RoomReusableCompoundRepository(dao) { 1_700_000_123_000L }
+        val repository = RoomReusableCompoundRepository(
+            compoundDao = dao,
+            ingredientExists = { false },
+            compoundExists = { false },
+            nowEpochMillis = { 1_700_000_123_000L }
+        )
 
-        repository.createCompound(CreateReusableCompoundCommand(name = "Breakfast mix", notes = null))
+        val result = repository.createCompound(
+            CreateReusableCompoundCommand(
+                name = "Breakfast mix",
+                notes = null,
+                components = listOf(validIngredientComponent())
+            )
+        )
 
-        assertEquals("breakfast mix", dao.inserted.single().normalizedName)
+        val error = result as AppResult.Error
+        assertEquals(
+            "Selected ingredient is no longer available.",
+            (error.error as DomainError.ValidationError).fieldErrors["components[0].target"]
+        )
+        assertTrue(dao.inserted.isEmpty())
     }
 
     @Test
@@ -76,7 +129,12 @@ class RoomReusableCompoundRepositoryTest {
                 updatedAtEpochMs = 1L
             )
         )
-        val repository = RoomReusableCompoundRepository(dao) { 2_000L }
+        val repository = RoomReusableCompoundRepository(
+            compoundDao = dao,
+            ingredientExists = { true },
+            compoundExists = { true },
+            nowEpochMillis = { 2_000L }
+        )
 
         val result = repository.updateCompound(
             com.example.app.features.compounds.domain.UpdateReusableCompoundCommand(
@@ -116,7 +174,12 @@ class RoomReusableCompoundRepositoryTest {
                 )
             )
         )
-        val repository = RoomReusableCompoundRepository(dao) { 2_000L }
+        val repository = RoomReusableCompoundRepository(
+            compoundDao = dao,
+            ingredientExists = { true },
+            compoundExists = { true },
+            nowEpochMillis = { 2_000L }
+        )
 
         val result = repository.getCompound(4L)
 
@@ -140,7 +203,12 @@ class RoomReusableCompoundRepositoryTest {
             ),
             deleteFailure = SQLiteConstraintException("fk")
         )
-        val repository = RoomReusableCompoundRepository(dao) { 2_000L }
+        val repository = RoomReusableCompoundRepository(
+            compoundDao = dao,
+            ingredientExists = { true },
+            compoundExists = { true },
+            nowEpochMillis = { 2_000L }
+        )
 
         val result = repository.deleteCompound(4L)
 
@@ -154,12 +222,21 @@ class RoomReusableCompoundRepositoryTest {
     }
 }
 
+private fun validIngredientComponent(): CreateReusableCompoundComponentCommand {
+    return CreateReusableCompoundComponentCommand(
+        kind = CompoundComponentKind.INGREDIENT,
+        reusableEntityId = 7L,
+        proportionBasisPoints = 10_000
+    )
+}
+
 private class FakeReusableCompoundDao(
     private val existing: ReusableCompoundEntity? = null,
     private val existingComponents: List<ReusableCompoundComponentEntity> = emptyList(),
     private val deleteFailure: Exception? = null
 ) : ReusableCompoundDao {
     val inserted = mutableListOf<ReusableCompoundEntity>()
+    val insertedComponents = mutableListOf<ReusableCompoundComponentEntity>()
     val updated = mutableListOf<ReusableCompoundEntity>()
 
     override suspend fun insertCompound(entity: ReusableCompoundEntity): Long {
@@ -167,13 +244,28 @@ private class FakeReusableCompoundDao(
         return 1L
     }
 
+    override suspend fun insertComponents(entities: List<ReusableCompoundComponentEntity>) {
+        insertedComponents += entities
+    }
+
     override suspend fun findByNormalizedName(normalizedName: String): ReusableCompoundEntity? = existing
 
     override suspend fun findById(id: Long): ReusableCompoundEntity? = existing?.takeIf { it.id == id }
 
     override suspend fun findCompoundWithComponentsById(id: Long): ReusableCompoundWithComponents? {
-        val compound = existing?.takeIf { it.id == id } ?: return null
-        return ReusableCompoundWithComponents(compound = compound, components = existingComponents)
+        val compound = when {
+            existing?.id == id -> existing
+            inserted.isNotEmpty() && id == 1L -> inserted.single().copy(id = 1L)
+            else -> null
+        } ?: return null
+        val components = when {
+            existing?.id == id -> existingComponents
+            insertedComponents.isNotEmpty() && id == 1L -> insertedComponents.mapIndexed { index, component ->
+                component.copy(id = index + 1L, compoundId = id)
+            }
+            else -> emptyList()
+        }
+        return ReusableCompoundWithComponents(compound = compound, components = components)
     }
 
     override suspend fun updateCompound(entity: ReusableCompoundEntity): Int {
@@ -184,12 +276,18 @@ private class FakeReusableCompoundDao(
         return 0
     }
 
+    override suspend fun deleteComponentsByCompoundId(compoundId: Long): Int {
+        val removed = insertedComponents.count { it.compoundId == compoundId }
+        insertedComponents.removeAll { it.compoundId == compoundId }
+        return removed
+    }
+
     override suspend fun deleteCompoundById(id: Long): Int {
         deleteFailure?.let { throw it }
         return if (existing?.id == id) 1 else 0
     }
 
-    override suspend fun existsById(id: Long): Boolean = existing?.id == id
+    override suspend fun existsById(id: Long): Boolean = existing?.id == id || id == 1L
 
     override suspend fun countIngredientComponentReferences(ingredientId: Long): Int {
         return existingComponents.count { it.ingredientId == ingredientId }

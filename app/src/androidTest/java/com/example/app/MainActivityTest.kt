@@ -121,14 +121,34 @@ class MainActivityTest {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()
 
-        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
-        composeRule.onNodeWithTag("create-compound-form-screen").assertIsDisplayed()
-        composeRule.onNodeWithTag("compound-name").performTextInput("Breakfast mix")
-        composeRule.onNodeWithTag("compound-save").performClick()
+        createReusableCompoundInline("Breakfast mix", "Oat milk")
 
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("ingestion-item-name").assertTextContains("Breakfast mix")
         composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable compound selected: Breakfast mix")
+    }
+
+    @Test
+    fun create_compound_flow_shows_inline_validation_and_accessible_total_feedback() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+        composeRule.onNodeWithTag("ingestion-create-ingredient").performClick()
+        composeRule.onNodeWithTag("ingredient-name").performTextInput("Oat milk")
+        composeRule.onNodeWithTag("ingredient-save").performClick()
+
+        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
+        composeRule.onNodeWithTag("compound-save").performClick()
+        composeRule.onNodeWithText("Enter a compound name.").assertIsDisplayed()
+        composeRule.onNodeWithText("Add at least one component.").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("compound-name").performTextInput("Breakfast mix")
+        composeRule.onNodeWithText("Oat milk - Ingredient").performClick()
+        composeRule.onNodeWithTag("compound-total-label").assertTextContains("0% total")
+        composeRule.onNodeWithTag("compound-save").performClick()
+        composeRule.onNodeWithText("Enter a proportion greater than 0%.").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("compound-component-proportion-0").performTextInput("100")
+        composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
     }
 
     @Test
@@ -138,9 +158,7 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("ingestion-notes").performTextInput("Post workout")
         composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
-        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
-        composeRule.onNodeWithTag("compound-name").performTextInput("Breakfast mix")
-        composeRule.onNodeWithTag("compound-save").performClick()
+        createReusableCompoundInline("Breakfast mix", "Oat milk")
 
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("ingestion-item-name").assertTextContains("Breakfast mix")
@@ -420,9 +438,7 @@ class MainActivityTest {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()
 
-        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
-        composeRule.onNodeWithTag("compound-name").performTextInput("Breakfast mix")
-        composeRule.onNodeWithTag("compound-save").performClick()
+        createReusableCompoundInline("Breakfast mix", "Oat milk")
 
         composeRule.onNodeWithTag("ingestion-reusable-edit").assertIsDisplayed().performClick()
         composeRule.onNodeWithTag("edit-compound-form-screen").assertIsDisplayed()
@@ -456,9 +472,7 @@ class MainActivityTest {
         pressBack()
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("ingestion-reusable-clear").performClick()
-        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
-        composeRule.onNodeWithTag("compound-name").performTextInput("Breakfast mix")
-        composeRule.onNodeWithTag("compound-save").performClick()
+        createReusableCompoundInline("Breakfast mix", "Oat milk")
         composeRule.onNodeWithTag("ingestion-reusable-edit").performClick()
 
         composeRule.onNodeWithText("Edit Compound").assertIsDisplayed()
@@ -511,9 +525,7 @@ class MainActivityTest {
     fun compound_retirement_confirm_flow_clears_reusable_selection_after_return() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()
-        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
-        composeRule.onNodeWithTag("compound-name").performTextInput("Breakfast mix")
-        composeRule.onNodeWithTag("compound-save").performClick()
+        createReusableCompoundInline("Breakfast mix", "Oat milk")
         composeRule.onNodeWithTag("ingestion-reusable-edit").performClick()
 
         composeRule.onNodeWithTag("edit-compound-retire").performClick()
@@ -720,6 +732,20 @@ class MainActivityTest {
             destinationTag.startsWith("edit-exposure") -> composeRule.onAllNodesWithText("Couldn't update exposure locally. Try again.").assertCountEquals(0)
             destinationTag.startsWith("edit-outbreak") -> composeRule.onAllNodesWithText("Couldn't update outbreak locally. Try again.").assertCountEquals(0)
         }
+    }
+
+    private fun createReusableCompoundInline(compoundName: String, ingredientName: String) {
+        composeRule.onNodeWithTag("ingestion-create-ingredient").performClick()
+        composeRule.onNodeWithTag("ingredient-name").performTextInput(ingredientName)
+        composeRule.onNodeWithTag("ingredient-save").performClick()
+
+        composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
+        composeRule.onNodeWithTag("create-compound-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("compound-name").performTextInput(compoundName)
+        composeRule.onNodeWithText("$ingredientName - Ingredient").performClick()
+        composeRule.onNodeWithTag("compound-component-proportion-0").performTextInput("100")
+        composeRule.onNodeWithTag("compound-save").performClick()
     }
 
     private fun waitForTag(tag: String) {

@@ -22,7 +22,9 @@ import com.example.app.features.ingestion.domain.CurrentTimeProvider
 import com.example.app.features.ingestion.domain.ReusableEntityKind
 import com.example.app.features.ingestion.domain.UpdateIngestionEventCommand
 import com.example.app.features.compounds.data.RoomReusableCompoundRepository
+import com.example.app.features.compounds.domain.CompoundComponentKind
 import com.example.app.features.compounds.domain.CreateReusableCompoundCommand
+import com.example.app.features.compounds.domain.CreateReusableCompoundComponentCommand
 import com.example.app.features.compounds.domain.GetReusableCompoundRetirementImpactUseCase
 import com.example.app.features.compounds.domain.RetireReusableCompoundUseCase
 import com.example.app.features.compounds.domain.UpdateReusableCompoundCommand
@@ -120,25 +122,23 @@ class RoomOfflinePersistenceTest {
     fun reusable_catalogs_persist_and_reload_locally() = runBlocking {
         val now = 1_700_000_123_000L
         val ingredientRepository = RoomReusableIngredientRepository(database.reusableIngredientDao()) { now }
-        val compoundRepository = RoomReusableCompoundRepository(database.reusableCompoundDao()) { now }
+        val compoundRepository = buildCompoundRepository(now)
 
         ingredientRepository.createIngredient(
             CreateReusableIngredientCommand(name = "Oat milk", notes = "Staple")
         ).requireSuccess()
-        compoundRepository.createCompound(
-            CreateReusableCompoundCommand(name = "Breakfast mix", notes = "Draft")
-        ).requireSuccess()
+        createReusableCompoundForTest(compoundRepository, now, "Breakfast mix")
 
         database.close()
         database = buildDatabase()
 
         val reopenedIngredientRepository = RoomReusableIngredientRepository(database.reusableIngredientDao()) { now }
-        val reopenedCompoundRepository = RoomReusableCompoundRepository(database.reusableCompoundDao()) { now }
+        val reopenedCompoundRepository = buildCompoundRepository(now)
 
-        assertEquals("Oat milk", reopenedIngredientRepository.observeIngredients().first().single().name)
+        assertTrue(reopenedIngredientRepository.observeIngredients().first().any { it.name == "Oat milk" })
         val compound = reopenedCompoundRepository.observeCompounds().first().single()
         assertEquals("Breakfast mix", compound.name)
-        assertTrue(compound.components.isEmpty())
+        assertEquals(1, compound.components.size)
     }
 
     @Test
@@ -193,10 +193,8 @@ class RoomOfflinePersistenceTest {
     @Test
     fun compound_reuse_reference_survives_database_reopen_and_records_mapping() = runBlocking {
         val now = 1_700_000_123_000L
-        val compoundRepository = RoomReusableCompoundRepository(database.reusableCompoundDao()) { now }
-        val reusableCompound = compoundRepository.createCompound(
-            CreateReusableCompoundCommand(name = "Breakfast mix", notes = "Draft")
-        ).requireSuccess()
+        val compoundRepository = buildCompoundRepository(now)
+        val reusableCompound = createReusableCompoundForTest(compoundRepository, now, "Breakfast mix")
         val ingestionRepository = RoomIngestionRepository(
             database.ingestionEventDao(),
             CurrentTimeProvider { now },
@@ -341,15 +339,13 @@ class RoomOfflinePersistenceTest {
     fun editing_reusable_entities_updates_linked_records_after_database_reopen() = runBlocking {
         val now = 1_700_000_123_000L
         val ingredientRepository = RoomReusableIngredientRepository(database.reusableIngredientDao()) { now }
-        val compoundRepository = RoomReusableCompoundRepository(database.reusableCompoundDao()) { now }
+        val compoundRepository = buildCompoundRepository(now)
         val eventCatalogRepository = RoomReusableEventCatalogRepository(database.reusableEventCatalogDao()) { now }
 
         val reusableIngredient = ingredientRepository.createIngredient(
             CreateReusableIngredientCommand(name = "Oat milk", notes = "Staple")
         ).requireSuccess()
-        val reusableCompound = compoundRepository.createCompound(
-            CreateReusableCompoundCommand(name = "Breakfast mix", notes = "Draft")
-        ).requireSuccess()
+        val reusableCompound = createReusableCompoundForTest(compoundRepository, now, "Breakfast mix")
         val exposureCatalog = eventCatalogRepository.ensureCatalogEntry(ReusableEventCatalogKind.EXPOSURE_TYPE, "Pollen")
         val descriptorCatalog = eventCatalogRepository.ensureCatalogEntry(ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR, "Skin flare")
         val bodyLocationCatalog = eventCatalogRepository.ensureCatalogEntry(ReusableEventCatalogKind.BODY_LOCATION, "Left arm")
@@ -530,10 +526,8 @@ class RoomOfflinePersistenceTest {
     @Test
     fun failed_compound_edit_sync_rolls_back_canonical_and_linked_labels() = runBlocking {
         val now = 1_700_000_123_000L
-        val compoundRepository = RoomReusableCompoundRepository(database.reusableCompoundDao()) { now }
-        val reusableCompound = compoundRepository.createCompound(
-            CreateReusableCompoundCommand(name = "Breakfast mix", notes = "Draft")
-        ).requireSuccess()
+        val compoundRepository = buildCompoundRepository(now)
+        val reusableCompound = createReusableCompoundForTest(compoundRepository, now, "Breakfast mix")
         val ingestionRepository = RoomIngestionRepository(
             database.ingestionEventDao(),
             CurrentTimeProvider { now },
@@ -783,12 +777,12 @@ class RoomOfflinePersistenceTest {
     @Test
     fun retiring_nested_reusable_compound_is_blocked() = runBlocking {
         val now = 1_700_000_123_000L
-        val compoundRepository = RoomReusableCompoundRepository(database.reusableCompoundDao()) { now }
-        val parent = compoundRepository.createCompound(CreateReusableCompoundCommand(name = "Parent", notes = null)).requireSuccess()
-        val child = compoundRepository.createCompound(CreateReusableCompoundCommand(name = "Child", notes = null)).requireSuccess()
+        val compoundRepository = buildCompoundRepository(now)
+        val parent = createReusableCompoundForTest(compoundRepository, now, "Parent")
+        val child = createReusableCompoundForTest(compoundRepository, now, "Child")
         database.openHelper.writableDatabase.execSQL(
             "INSERT INTO reusable_compound_components (compound_id, position, component_kind, ingredient_id, child_compound_id, proportion_basis_points) VALUES (?, ?, ?, ?, ?, ?)",
-            arrayOf<Any?>(parent.id, 0, "compound", null, child.id, 10_000)
+            arrayOf<Any?>(parent.id, 1, "compound", null, child.id, 10_000)
         )
 
         val result = RetireReusableCompoundUseCase(
@@ -854,6 +848,39 @@ class RoomOfflinePersistenceTest {
     private fun <T> AppResult<T>.requireSuccess(): T {
         assertTrue(this is AppResult.Success)
         return (this as AppResult.Success).value
+    }
+
+    private fun buildCompoundRepository(now: Long): RoomReusableCompoundRepository {
+        return RoomReusableCompoundRepository(
+            compoundDao = database.reusableCompoundDao(),
+            ingredientExists = database.reusableIngredientDao()::existsById,
+            compoundExists = database.reusableCompoundDao()::existsById,
+            nowEpochMillis = { now }
+        )
+    }
+
+    private suspend fun createReusableCompoundForTest(
+        repository: RoomReusableCompoundRepository,
+        now: Long,
+        name: String
+    ): com.example.app.features.compounds.domain.ReusableCompound {
+        val ingredientRepository = RoomReusableIngredientRepository(database.reusableIngredientDao()) { now }
+        val ingredient = ingredientRepository.createIngredient(
+            CreateReusableIngredientCommand(name = "$name base", notes = null)
+        ).requireSuccess()
+        return repository.createCompound(
+            CreateReusableCompoundCommand(
+                name = name,
+                notes = "Draft",
+                components = listOf(
+                    CreateReusableCompoundComponentCommand(
+                        kind = CompoundComponentKind.INGREDIENT,
+                        reusableEntityId = ingredient.id,
+                        proportionBasisPoints = 10_000
+                    )
+                )
+            )
+        ).requireSuccess()
     }
 
     private fun buildDatabase(): AppDatabase {

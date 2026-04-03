@@ -2,7 +2,14 @@ package com.example.app.features.compounds.domain
 
 data class CreateReusableCompoundCommand(
     val name: String,
-    val notes: String?
+    val notes: String?,
+    val components: List<CreateReusableCompoundComponentCommand>
+)
+
+data class CreateReusableCompoundComponentCommand(
+    val kind: CompoundComponentKind,
+    val reusableEntityId: Long?,
+    val proportionBasisPoints: Int?
 )
 
 data class UpdateReusableCompoundCommand(

@@ -124,7 +124,12 @@ class AppContainer(appContext: Context) {
     private val exposureRepository = RoomExposureRepository(exposureEventDao, systemCurrentTimeProvider, reusableEventCatalogRepository)
     private val outbreakRepository = RoomOutbreakRepository(outbreakEventDao, systemCurrentTimeProvider, reusableEventCatalogRepository)
     private val reusableIngredientRepository = RoomReusableIngredientRepository(reusableIngredientDao, systemCurrentTimeProvider::nowEpochMillis)
-    private val reusableCompoundRepository = RoomReusableCompoundRepository(reusableCompoundDao, systemCurrentTimeProvider::nowEpochMillis)
+    private val reusableCompoundRepository = RoomReusableCompoundRepository(
+        compoundDao = reusableCompoundDao,
+        ingredientExists = reusableIngredientDao::existsById,
+        compoundExists = reusableCompoundDao::existsById,
+        nowEpochMillis = systemCurrentTimeProvider::nowEpochMillis
+    )
     private val createIngestionDefaultsUseCase = CreateIngestionDefaultsUseCase(systemCurrentTimeProvider)
     private val createIngestionEventUseCase = CreateIngestionEventUseCase(
         repository = ingestionRepository,
@@ -341,7 +346,11 @@ class AppContainer(appContext: Context) {
     val createIngredientViewModelFactory: CreateIngredientViewModelFactory =
         CreateIngredientViewModelFactory(createReusableIngredientUseCase)
     val createCompoundViewModelFactory: CreateCompoundViewModelFactory =
-        CreateCompoundViewModelFactory(createReusableCompoundUseCase)
+        CreateCompoundViewModelFactory(
+            createReusableCompoundUseCase,
+            observeReusableIngredientsUseCase,
+            observeReusableCompoundsUseCase
+        )
 
     fun createEditIngredientViewModelFactory(reusableId: Long): EditIngredientViewModelFactory {
         return EditIngredientViewModelFactory(
