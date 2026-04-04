@@ -161,7 +161,8 @@ class CreateExposureViewModelTest {
 
     @Test
     fun save_after_clearing_retired_catalog_selection_still_navigates_with_plain_text_value() = runBlocking {
-        val viewModel = buildViewModel()
+        var savedCommand: CreateExposureEventCommand? = null
+        val viewModel = buildViewModel(onCreateExposure = { savedCommand = it })
         val effect = async { viewModel.effects.first() }
 
         viewModel.onIntent(CreateExposureUiIntent.SelectExposureCatalogOption(5L, "Pollen"))
@@ -169,6 +170,8 @@ class CreateExposureViewModelTest {
         viewModel.onIntent(CreateExposureUiIntent.Save)
 
         assertEquals(CreateExposureUiEffect.NavigateToRecords, effect.await())
+        assertEquals("Pollen", savedCommand?.exposureType)
+        assertEquals(null, savedCommand?.exposureTypeCatalogId)
     }
 
     @Test
@@ -253,7 +256,8 @@ class CreateExposureViewModelTest {
     }
 
     private fun buildViewModel(
-        availableCatalog: List<ReusableEventCatalog> = emptyList()
+        availableCatalog: List<ReusableEventCatalog> = emptyList(),
+        onCreateExposure: (CreateExposureEventCommand) -> Unit = {}
     ): CreateExposureViewModel {
         val timeProvider = object : CurrentTimeProvider {
             override fun nowEpochMillis(): Long = fixedNow
@@ -263,6 +267,7 @@ class CreateExposureViewModelTest {
             createExposureEventUseCase = CreateExposureEventUseCase(
                 repository = object : ExposureRepository {
                     override suspend fun createExposure(command: CreateExposureEventCommand): AppResult<ExposureEvent> {
+                        onCreateExposure(command)
                         return AppResult.Success(
                             ExposureEvent(
                                 id = 11L,

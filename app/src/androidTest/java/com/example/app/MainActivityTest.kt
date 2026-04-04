@@ -179,6 +179,22 @@ class MainActivityTest {
     }
 
     @Test
+    fun create_compound_flow_empty_preset_keeps_user_in_context_with_actionable_feedback() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
+        composeRule.onNodeWithTag("create-compound-form-screen").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("compound-preset-uniform").performClick()
+
+        composeRule.onNodeWithTag("compound-components-error")
+            .assertTextContains("Add at least one component before applying a preset.")
+        composeRule.onNodeWithTag("compound-form-message")
+            .assertTextContains("Couldn't apply uniform preset to an empty composition.")
+    }
+
+    @Test
     fun ingestion_flow_can_create_reusable_compound_inline_save_and_render_reused_record() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()
@@ -660,7 +676,17 @@ class MainActivityTest {
             .assertTextContains("Saved exposure type was retired. Review the text value before saving.")
         composeRule.onNodeWithTag("exposure-type").assertTextContains("Pollen")
 
-        composeRule.onNodeWithTag("exposure-save").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
+
+        waitForTag("records-list")
+        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+        composeRule.onNodeWithText("Pollen").performClick()
+        waitForTag("record-detail-edit")
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        composeRule.onNodeWithTag("edit-exposure-form-screen").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("edit-exposure-type-summary").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("edit-exposure-type-edit").assertCountEquals(0)
+        composeRule.onNodeWithTag("edit-exposure-type").assertTextContains("Pollen")
     }
 
     @Test

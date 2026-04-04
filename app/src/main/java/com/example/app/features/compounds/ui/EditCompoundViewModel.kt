@@ -80,16 +80,40 @@ class EditCompoundViewModel(
             EditCompoundUiIntent.Load -> loadIfNeeded()
             is EditCompoundUiIntent.UpdateName -> updateState {
                 val hasName = intent.value.trim().isNotBlank()
-                it.copy(
-                    name = intent.value,
-                    nameError = if (hasName) null else "Enter a compound name.",
-                    formMessage = ""
-                ).withDerivedFields()
+                if (it.isFormMessageSticky) {
+                    it.copy(
+                        name = intent.value,
+                        nameError = if (hasName) null else "Enter a compound name."
+                    ).withDerivedFields()
+                } else {
+                    it.copy(
+                        name = intent.value,
+                        nameError = if (hasName) null else "Enter a compound name.",
+                        formMessage = "",
+                        isFormMessageError = false,
+                        isFormMessageSticky = false
+                    ).withDerivedFields()
+                }
             }
 
-            is EditCompoundUiIntent.UpdateNotes -> updateState { it.copy(notes = intent.value) }
+            is EditCompoundUiIntent.UpdateNotes -> updateState {
+                if (it.isFormMessageSticky) {
+                    it.copy(notes = intent.value)
+                } else {
+                    it.copy(notes = intent.value, formMessage = "", isFormMessageError = false, isFormMessageSticky = false)
+                }
+            }
             is EditCompoundUiIntent.UpdateComponentSearchQuery -> updateState {
-                it.copy(componentSearchQuery = intent.value, formMessage = "").withDerivedFields()
+                if (it.isFormMessageSticky) {
+                    it.copy(componentSearchQuery = intent.value).withDerivedFields()
+                } else {
+                    it.copy(
+                        componentSearchQuery = intent.value,
+                        formMessage = "",
+                        isFormMessageError = false,
+                        isFormMessageSticky = false
+                    ).withDerivedFields()
+                }
             }
 
             is EditCompoundUiIntent.AddIngredientComponent -> addComponent(CompoundComponentKind.INGREDIENT, intent.reusableId)
@@ -112,7 +136,7 @@ class EditCompoundViewModel(
         if (!mutableState.value.isLoading && mutableState.value.name.isNotBlank()) {
             return
         }
-        updateState { it.copy(isLoading = true, formMessage = "") }
+        updateState { it.copy(isLoading = true, formMessage = "", isFormMessageError = false, isFormMessageSticky = false) }
         viewModelScope.launch {
             when (val result = getReusableCompoundUseCase(compoundId)) {
                 is AppResult.Success -> updateState { current ->
@@ -133,11 +157,20 @@ class EditCompoundViewModel(
                         },
                         selectedPreset = null,
                         isLoading = false,
-                        formMessage = ""
+                        formMessage = "",
+                        isFormMessageError = false,
+                        isFormMessageSticky = false
                     ).withDerivedFields()
                 }
 
-                is AppResult.Error -> updateState { it.copy(isLoading = false, formMessage = result.error.message) }
+                is AppResult.Error -> updateState {
+                    it.copy(
+                        isLoading = false,
+                        formMessage = result.error.message,
+                        isFormMessageError = true,
+                        isFormMessageSticky = false
+                    )
+                }
             }
         }
     }
@@ -155,7 +188,9 @@ class EditCompoundViewModel(
                 ),
                 selectedPreset = null,
                 componentsError = null,
-                formMessage = ""
+                formMessage = "",
+                isFormMessageError = false,
+                isFormMessageSticky = false
             ).withDerivedFields()
         }
     }
@@ -183,7 +218,9 @@ class EditCompoundViewModel(
                     },
                     selectedPreset = null,
                     totalError = null,
-                    formMessage = ""
+                    formMessage = "",
+                    isFormMessageError = false,
+                    isFormMessageSticky = false
                 ).withDerivedFields()
             } else {
                 current.applyAdjustedProportion(index, requestedBasisPoints)
@@ -193,6 +230,16 @@ class EditCompoundViewModel(
 
     private fun applyPreset(preset: CompoundCompositionPreset) {
         updateState { current ->
+            if (current.components.isEmpty()) {
+                return@updateState current.copy(
+                    selectedPreset = null,
+                    componentsError = "Add at least one component before applying a preset.",
+                    formMessage = "Couldn't apply ${preset.label.lowercase()} preset to an empty composition.",
+                    isFormMessageError = true,
+                    isFormMessageSticky = true,
+                    totalError = null
+                ).withDerivedFields()
+            }
             val allocation = CompoundPresetAllocationEngine.allocate(
                 preset = preset,
                 componentCount = current.components.size
@@ -200,6 +247,8 @@ class EditCompoundViewModel(
                 selectedPreset = null,
                 componentsError = "Add no more than 10000 components before applying a preset.",
                 formMessage = "Couldn't apply ${preset.label.lowercase()} preset to the current composition.",
+                isFormMessageError = true,
+                isFormMessageSticky = false,
                 totalError = null
             ).withDerivedFields()
             current.applyPreset(allocation)
@@ -217,7 +266,11 @@ class EditCompoundViewModel(
             }
             val basisPoints = current.components[index].proportionBasisPoints ?: 0
             if (current.components.size > 1 && basisPoints != 0) {
-                return@updateState current.copy(formMessage = "Set the component to 0% before removing it.")
+                return@updateState current.copy(
+                    formMessage = "Set the component to 0% before removing it.",
+                    isFormMessageError = true,
+                    isFormMessageSticky = false
+                )
             }
             current.copy(
                 components = current.components.filterIndexed { componentIndex, _ -> componentIndex != index },
@@ -225,7 +278,9 @@ class EditCompoundViewModel(
                     .filter { it != index }
                     .map { touchedIndex -> if (touchedIndex > index) touchedIndex - 1 else touchedIndex },
                 selectedPreset = null,
-                formMessage = ""
+                formMessage = "",
+                isFormMessageError = false,
+                isFormMessageSticky = false
             ).withDerivedFields()
         }
     }
@@ -235,7 +290,7 @@ class EditCompoundViewModel(
         if (!currentState.canSave || currentState.isLoading || currentState.isSaving) {
             return
         }
-        updateState { it.copy(isSaving = true, formMessage = "") }
+        updateState { it.copy(isSaving = true, formMessage = "", isFormMessageError = false, isFormMessageSticky = false) }
         viewModelScope.launch {
             when (
                 val result = updateReusableCompoundUseCase(
@@ -274,7 +329,9 @@ class EditCompoundViewModel(
                                 proportionError = result.error.fieldError("components[$index].proportion")
                             )
                         },
-                        formMessage = result.error.message
+                        formMessage = result.error.message,
+                        isFormMessageError = true,
+                        isFormMessageSticky = false
                     ).withDerivedFields()
                 }
             }
@@ -284,14 +341,22 @@ class EditCompoundViewModel(
     private fun loadRetirementPreview() {
         val currentState = mutableState.value
         if (currentState.isLoading || currentState.isSaving || currentState.isRetiring) return
-        updateState { it.copy(formMessage = "") }
+        updateState { it.copy(formMessage = "", isFormMessageError = false, isFormMessageSticky = false) }
         viewModelScope.launch {
             when (val result = getReusableCompoundRetirementImpactUseCase(compoundId)) {
                 is AppResult.Success -> updateState {
-                    it.copy(retirementImpact = result.value, isRetirementDialogVisible = true, formMessage = "")
+                    it.copy(
+                        retirementImpact = result.value,
+                        isRetirementDialogVisible = true,
+                        formMessage = "",
+                        isFormMessageError = false,
+                        isFormMessageSticky = false
+                    )
                 }
 
-                is AppResult.Error -> updateState { it.copy(formMessage = result.error.message) }
+                is AppResult.Error -> updateState {
+                    it.copy(formMessage = result.error.message, isFormMessageError = true, isFormMessageSticky = false)
+                }
             }
         }
     }
@@ -300,7 +365,7 @@ class EditCompoundViewModel(
         val currentState = mutableState.value
         val impact = currentState.retirementImpact ?: return
         if (currentState.isLoading || currentState.isSaving || currentState.isRetiring || impact.isBlocked) return
-        updateState { it.copy(isRetiring = true, formMessage = "") }
+        updateState { it.copy(isRetiring = true, formMessage = "", isFormMessageError = false, isFormMessageSticky = false) }
         viewModelScope.launch {
             when (val result = retireReusableCompoundUseCase(compoundId)) {
                 is AppResult.Success -> {
@@ -309,20 +374,24 @@ class EditCompoundViewModel(
                             isRetiring = false,
                             isRetirementDialogVisible = false,
                             retirementImpact = result.value,
-                            formMessage = ""
+                            formMessage = "",
+                            isFormMessageError = false,
+                            isFormMessageSticky = false
                         )
                     }
                     effectChannel.trySend(EditCompoundUiEffect.NavigateBackAfterRetirement)
                 }
 
                 is AppResult.Error -> updateState {
-                    it.copy(
-                        isRetiring = false,
-                        isRetirementDialogVisible = true,
-                        formMessage = result.error.message
-                    )
+                        it.copy(
+                            isRetiring = false,
+                            isRetirementDialogVisible = true,
+                            formMessage = result.error.message,
+                            isFormMessageError = true,
+                            isFormMessageSticky = false
+                        )
+                    }
                 }
-            }
         }
     }
 
@@ -379,7 +448,9 @@ class EditCompoundViewModel(
             touchedComponentOrder = adjustment.touchedOrder,
             totalError = null,
             componentsError = null,
-            formMessage = ""
+            formMessage = "",
+            isFormMessageError = false,
+            isFormMessageSticky = false
         ).withDerivedFields()
     }
 
@@ -401,7 +472,9 @@ class EditCompoundViewModel(
             selectedPreset = allocation.preset,
             totalError = null,
             componentsError = null,
-            formMessage = "Applied ${allocation.preset.label.lowercase()} preset. ${COMPOUND_TOTAL_BASIS_POINTS.toPercentLabel()} total remains valid."
+            formMessage = "Applied ${allocation.preset.label.lowercase()} preset. ${COMPOUND_TOTAL_BASIS_POINTS.toPercentLabel()} total remains valid.",
+            isFormMessageError = false,
+            isFormMessageSticky = false
         ).withDerivedFields()
     }
 

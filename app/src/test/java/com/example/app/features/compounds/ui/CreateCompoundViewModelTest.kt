@@ -121,7 +121,20 @@ class CreateCompoundViewModelTest {
         assertEquals(emptyList<Int>(), viewModel.state.value.touchedComponentOrder)
         assertEquals(CompoundCompositionPreset.UNIFORM, viewModel.state.value.selectedPreset)
         assertEquals("100% total", viewModel.state.value.totalPercentLabel)
+        assertFalse(viewModel.state.value.isFormMessageError)
         assertTrue(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun applying_preset_without_components_surfaces_actionable_error() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.ApplyPreset(CompoundCompositionPreset.UNIFORM))
+
+        assertEquals("Add at least one component before applying a preset.", viewModel.state.value.componentsError)
+        assertEquals("Couldn't apply uniform preset to an empty composition.", viewModel.state.value.formMessage)
+        assertTrue(viewModel.state.value.isFormMessageError)
+        assertNull(viewModel.state.value.selectedPreset)
     }
 
     @Test
@@ -138,6 +151,51 @@ class CreateCompoundViewModelTest {
         assertNull(viewModel.state.value.totalError)
         assertTrue(viewModel.state.value.components.all { it.proportionError == null && it.targetError == null })
         assertEquals(listOf("66.67", "33.33"), viewModel.state.value.components.map { it.proportionPercent })
+    }
+
+    @Test
+    fun updating_notes_clears_stale_form_message_state() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.ApplyPreset(CompoundCompositionPreset.UNIFORM))
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateNotes("Fresh batch"))
+
+        assertEquals("", viewModel.state.value.formMessage)
+        assertFalse(viewModel.state.value.isFormMessageError)
+    }
+
+    @Test
+    fun updating_notes_preserves_actionable_error_message() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.ApplyPreset(CompoundCompositionPreset.UNIFORM))
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateNotes("Fresh batch"))
+
+        assertEquals("Couldn't apply uniform preset to an empty composition.", viewModel.state.value.formMessage)
+        assertTrue(viewModel.state.value.isFormMessageError)
+    }
+
+    @Test
+    fun updating_name_preserves_actionable_error_message() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.ApplyPreset(CompoundCompositionPreset.UNIFORM))
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateName("Breakfast mix"))
+
+        assertEquals("Couldn't apply uniform preset to an empty composition.", viewModel.state.value.formMessage)
+        assertTrue(viewModel.state.value.isFormMessageError)
+    }
+
+    @Test
+    fun updating_name_clears_non_sticky_validation_message() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.Save)
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateName("Breakfast mix"))
+
+        assertEquals("", viewModel.state.value.formMessage)
+        assertFalse(viewModel.state.value.isFormMessageError)
     }
 
     private fun buildViewModel(): CreateCompoundViewModel {

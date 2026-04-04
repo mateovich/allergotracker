@@ -116,7 +116,22 @@ class EditCompoundViewModelTest {
         assertEquals(listOf("66.67", "33.33"), viewModel.state.value.components.map { it.proportionPercent })
         assertEquals(emptyList<Int>(), viewModel.state.value.touchedComponentOrder)
         assertEquals(CompoundCompositionPreset.DECREASING, viewModel.state.value.selectedPreset)
+        assertFalse(viewModel.state.value.isFormMessageError)
         assertTrue(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun applying_preset_without_components_surfaces_actionable_error() = runBlocking {
+        val repository = FakeEditCompoundRepository(withComponents = false)
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.ApplyPreset(CompoundCompositionPreset.UNIFORM))
+
+        assertEquals("Add at least one component before applying a preset.", viewModel.state.value.componentsError)
+        assertEquals("Couldn't apply uniform preset to an empty composition.", viewModel.state.value.formMessage)
+        assertTrue(viewModel.state.value.isFormMessageError)
+        assertEquals(emptyList<CompoundComponentRowUiModel>(), viewModel.state.value.components)
     }
 
     @Test
@@ -143,6 +158,65 @@ class EditCompoundViewModelTest {
         assertEquals("100% total", viewModel.state.value.totalPercentLabel)
         assertTrue(viewModel.state.value.components.all { it.proportionError == null && it.targetError == null })
         assertEquals(listOf("50", "50"), viewModel.state.value.components.map { it.proportionPercent })
+    }
+
+    @Test
+    fun updating_notes_clears_stale_form_message_state() = runBlocking {
+        val repository = FakeEditCompoundRepository()
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.ApplyPreset(CompoundCompositionPreset.UNIFORM))
+        viewModel.onIntent(EditCompoundUiIntent.UpdateNotes("Fresh batch"))
+
+        assertEquals("", viewModel.state.value.formMessage)
+        assertFalse(viewModel.state.value.isFormMessageError)
+    }
+
+    @Test
+    fun updating_notes_preserves_actionable_error_message() = runBlocking {
+        val repository = FakeEditCompoundRepository(withComponents = false)
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.ApplyPreset(CompoundCompositionPreset.UNIFORM))
+        viewModel.onIntent(EditCompoundUiIntent.UpdateNotes("Fresh batch"))
+
+        assertEquals("Couldn't apply uniform preset to an empty composition.", viewModel.state.value.formMessage)
+        assertTrue(viewModel.state.value.isFormMessageError)
+    }
+
+    @Test
+    fun updating_search_query_preserves_actionable_error_message() = runBlocking {
+        val repository = FakeEditCompoundRepository(withComponents = false)
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.ApplyPreset(CompoundCompositionPreset.UNIFORM))
+        viewModel.onIntent(EditCompoundUiIntent.UpdateComponentSearchQuery("oat"))
+
+        assertEquals("Couldn't apply uniform preset to an empty composition.", viewModel.state.value.formMessage)
+        assertTrue(viewModel.state.value.isFormMessageError)
+    }
+
+    @Test
+    fun updating_notes_clears_non_sticky_validation_message() = runBlocking {
+        val repository = FakeEditCompoundRepository(
+            updateResult = AppResult.Error(
+                DomainError.ValidationError(
+                    "Please fix the highlighted fields.",
+                    mapOf("name" to "A compound with this name already exists.")
+                )
+            )
+        )
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.Save)
+        viewModel.onIntent(EditCompoundUiIntent.UpdateNotes("Fresh batch"))
+
+        assertEquals("", viewModel.state.value.formMessage)
+        assertFalse(viewModel.state.value.isFormMessageError)
     }
 
     @Test
@@ -240,7 +314,8 @@ class EditCompoundViewModelTest {
 
 private class FakeEditCompoundRepository(
     private val updateResult: AppResult<ReusableCompound>? = null,
-    private val deleteResult: AppResult<Unit> = AppResult.Success(Unit)
+    private val deleteResult: AppResult<Unit> = AppResult.Success(Unit),
+    private val withComponents: Boolean = true
 ) : ReusableCompoundRepository {
     var updatedCommand: UpdateReusableCompoundCommand? = null
 
@@ -255,24 +330,28 @@ private class FakeEditCompoundRepository(
                 name = "Breakfast mix",
                 notes = "Draft",
                 compositionStatus = CompoundCompositionStatus.DRAFT,
-                components = listOf(
-                    ReusableCompoundComponent(
-                        id = 1L,
-                        position = 0,
-                        kind = CompoundComponentKind.INGREDIENT,
-                        ingredientId = 7L,
-                        childCompoundId = null,
-                        proportionBasisPoints = 6_000
-                    ),
-                    ReusableCompoundComponent(
-                        id = 2L,
-                        position = 1,
-                        kind = CompoundComponentKind.COMPOUND,
-                        ingredientId = null,
-                        childCompoundId = 11L,
-                        proportionBasisPoints = 4_000
+                components = if (withComponents) {
+                    listOf(
+                        ReusableCompoundComponent(
+                            id = 1L,
+                            position = 0,
+                            kind = CompoundComponentKind.INGREDIENT,
+                            ingredientId = 7L,
+                            childCompoundId = null,
+                            proportionBasisPoints = 6_000
+                        ),
+                        ReusableCompoundComponent(
+                            id = 2L,
+                            position = 1,
+                            kind = CompoundComponentKind.COMPOUND,
+                            ingredientId = null,
+                            childCompoundId = 11L,
+                            proportionBasisPoints = 4_000
+                        )
                     )
-                ),
+                } else {
+                    emptyList()
+                },
                 createdAtEpochMs = 1L,
                 updatedAtEpochMs = 1L
             )

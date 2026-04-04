@@ -19,6 +19,8 @@ data class EditCompoundUiState(
     val totalError: String? = null,
     val nameError: String? = null,
     val formMessage: String = "",
+    val isFormMessageError: Boolean = false,
+    val isFormMessageSticky: Boolean = false,
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val canSave: Boolean = false,

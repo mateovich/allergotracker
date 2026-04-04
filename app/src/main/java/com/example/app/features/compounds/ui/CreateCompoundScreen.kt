@@ -111,7 +111,11 @@ fun CreateCompoundScreen(
             if (state.formMessage.isNotBlank()) {
                 Text(
                     text = state.formMessage,
-                    color = MaterialTheme.colorScheme.error,
+                    color = if (state.isFormMessageError) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
                     modifier = Modifier.testTag("compound-form-message")
                 )
             }

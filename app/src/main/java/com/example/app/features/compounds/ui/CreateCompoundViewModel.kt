@@ -68,12 +68,37 @@ class CreateCompoundViewModel(
     fun onIntent(intent: CreateCompoundUiIntent) {
         when (intent) {
             is CreateCompoundUiIntent.UpdateName -> updateState {
-                it.copy(name = intent.value, nameError = null, formMessage = "").withDerivedFields()
+                if (it.isFormMessageSticky) {
+                    it.copy(name = intent.value, nameError = null).withDerivedFields()
+                } else {
+                    it.copy(
+                        name = intent.value,
+                        nameError = null,
+                        formMessage = "",
+                        isFormMessageError = false,
+                        isFormMessageSticky = false
+                    ).withDerivedFields()
+                }
             }
 
-            is CreateCompoundUiIntent.UpdateNotes -> updateState { it.copy(notes = intent.value) }
+            is CreateCompoundUiIntent.UpdateNotes -> updateState {
+                if (it.isFormMessageSticky) {
+                    it.copy(notes = intent.value)
+                } else {
+                    it.copy(notes = intent.value, formMessage = "", isFormMessageError = false, isFormMessageSticky = false)
+                }
+            }
             is CreateCompoundUiIntent.UpdateComponentSearchQuery -> updateState {
-                it.copy(componentSearchQuery = intent.value, formMessage = "").withDerivedFields()
+                if (it.isFormMessageSticky) {
+                    it.copy(componentSearchQuery = intent.value).withDerivedFields()
+                } else {
+                    it.copy(
+                        componentSearchQuery = intent.value,
+                        formMessage = "",
+                        isFormMessageError = false,
+                        isFormMessageSticky = false
+                    ).withDerivedFields()
+                }
             }
 
             is CreateCompoundUiIntent.AddIngredientComponent -> addComponent(CompoundComponentKind.INGREDIENT, intent.reusableId)
@@ -99,7 +124,9 @@ class CreateCompoundViewModel(
                 ),
                 selectedPreset = null,
                 componentsError = null,
-                formMessage = ""
+                formMessage = "",
+                isFormMessageError = false,
+                isFormMessageSticky = false
             ).withDerivedFields()
         }
     }
@@ -127,7 +154,9 @@ class CreateCompoundViewModel(
                     },
                     selectedPreset = null,
                     totalError = null,
-                    formMessage = ""
+                    formMessage = "",
+                    isFormMessageError = false,
+                    isFormMessageSticky = false
                 ).withDerivedFields()
             } else {
                 current.applyAdjustedProportion(index, requestedBasisPoints)
@@ -137,6 +166,16 @@ class CreateCompoundViewModel(
 
     private fun applyPreset(preset: CompoundCompositionPreset) {
         updateState { current ->
+            if (current.components.isEmpty()) {
+                return@updateState current.copy(
+                    selectedPreset = null,
+                    componentsError = "Add at least one component before applying a preset.",
+                    formMessage = "Couldn't apply ${preset.label.lowercase()} preset to an empty composition.",
+                    isFormMessageError = true,
+                    isFormMessageSticky = true,
+                    totalError = null
+                ).withDerivedFields()
+            }
             val allocation = CompoundPresetAllocationEngine.allocate(
                 preset = preset,
                 componentCount = current.components.size
@@ -144,6 +183,8 @@ class CreateCompoundViewModel(
                 selectedPreset = null,
                 componentsError = "Add no more than 10000 components before applying a preset.",
                 formMessage = "Couldn't apply ${preset.label.lowercase()} preset to the current composition.",
+                isFormMessageError = true,
+                isFormMessageSticky = false,
                 totalError = null
             ).withDerivedFields()
             current.applyPreset(allocation)
@@ -161,7 +202,11 @@ class CreateCompoundViewModel(
             }
             val basisPoints = current.components[index].proportionBasisPoints ?: 0
             if (current.components.size > 1 && basisPoints != 0) {
-                return@updateState current.copy(formMessage = "Set the component to 0% before removing it.")
+                return@updateState current.copy(
+                    formMessage = "Set the component to 0% before removing it.",
+                    isFormMessageError = true,
+                    isFormMessageSticky = false
+                )
             }
             current.copy(
                 components = current.components.filterIndexed { componentIndex, _ -> componentIndex != index },
@@ -169,14 +214,16 @@ class CreateCompoundViewModel(
                     .filter { it != index }
                     .map { touchedIndex -> if (touchedIndex > index) touchedIndex - 1 else touchedIndex },
                 selectedPreset = null,
-                formMessage = ""
+                formMessage = "",
+                isFormMessageError = false,
+                isFormMessageSticky = false
             ).withDerivedFields()
         }
     }
 
     private fun save() {
         val currentState = mutableState.value
-        updateState { it.copy(isSaving = true, formMessage = "") }
+        updateState { it.copy(isSaving = true, formMessage = "", isFormMessageError = false, isFormMessageSticky = false) }
         viewModelScope.launch {
             when (
                 val result = createReusableCompoundUseCase(
@@ -219,7 +266,9 @@ class CreateCompoundViewModel(
                                     proportionError = result.error.fieldError("components[$index].proportion")
                                 )
                             },
-                            formMessage = result.error.message
+                            formMessage = result.error.message,
+                            isFormMessageError = true,
+                            isFormMessageSticky = false
                         ).withDerivedFields()
                     }
                 }
@@ -276,7 +325,9 @@ class CreateCompoundViewModel(
             touchedComponentOrder = adjustment.touchedOrder,
             totalError = null,
             componentsError = null,
-            formMessage = ""
+            formMessage = "",
+            isFormMessageError = false,
+            isFormMessageSticky = false
         ).withDerivedFields()
     }
 
@@ -298,7 +349,9 @@ class CreateCompoundViewModel(
             selectedPreset = allocation.preset,
             totalError = null,
             componentsError = null,
-            formMessage = "Applied ${allocation.preset.label.lowercase()} preset. ${COMPOUND_TOTAL_BASIS_POINTS.toPercentLabel()} total remains valid."
+            formMessage = "Applied ${allocation.preset.label.lowercase()} preset. ${COMPOUND_TOTAL_BASIS_POINTS.toPercentLabel()} total remains valid.",
+            isFormMessageError = false,
+            isFormMessageSticky = false
         ).withDerivedFields()
     }
 
