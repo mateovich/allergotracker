@@ -79,4 +79,41 @@ class CompoundProportionAdjustmentEngineTest {
         assertEquals(listOf(1, 2, 0), second.touchedOrder)
         assertEquals(10_000, second.values.sum())
     }
+
+    @Test
+    fun uniform_preset_distributes_remainder_deterministically_and_keeps_exact_total() {
+        val result = CompoundPresetAllocationEngine.allocate(
+            preset = CompoundCompositionPreset.UNIFORM,
+            componentCount = 3
+        )
+
+        assertEquals(listOf(3_333, 3_333, 3_334), result?.values)
+        assertEquals(10_000, result?.values?.sum())
+    }
+
+    @Test
+    fun decreasing_preset_keeps_descending_weights_with_all_positive_rows() {
+        val result = CompoundPresetAllocationEngine.allocate(
+            preset = CompoundCompositionPreset.DECREASING,
+            componentCount = 4
+        )
+
+        assertEquals(listOf(4_000, 3_000, 2_000, 1_000), result?.values)
+        assertEquals(10_000, result?.values?.sum())
+    }
+
+    @Test
+    fun decreasing_preset_is_deterministic_across_repeated_calls() {
+        val first = CompoundPresetAllocationEngine.allocate(
+            preset = CompoundCompositionPreset.DECREASING,
+            componentCount = 6
+        )
+        val second = CompoundPresetAllocationEngine.allocate(
+            preset = CompoundCompositionPreset.DECREASING,
+            componentCount = 6
+        )
+
+        assertEquals(first?.values, second?.values)
+        assertEquals(10_000, first?.values?.sum())
+    }
 }

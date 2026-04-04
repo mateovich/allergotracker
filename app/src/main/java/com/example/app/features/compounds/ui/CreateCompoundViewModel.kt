@@ -78,6 +78,7 @@ class CreateCompoundViewModel(
 
             is CreateCompoundUiIntent.AddIngredientComponent -> addComponent(CompoundComponentKind.INGREDIENT, intent.reusableId)
             is CreateCompoundUiIntent.AddCompoundComponent -> addComponent(CompoundComponentKind.COMPOUND, intent.reusableId)
+            is CreateCompoundUiIntent.ApplyPreset -> applyPreset(intent.preset)
             is CreateCompoundUiIntent.UpdateComponentProportion -> updateComponentProportion(intent.index, intent.value)
             is CreateCompoundUiIntent.AdjustComponentProportion -> applyAdjustedProportion(intent.index, intent.basisPoints)
             is CreateCompoundUiIntent.RemoveComponent -> removeComponent(intent.index)
@@ -96,6 +97,7 @@ class CreateCompoundViewModel(
                     reusableEntityId = reusableId,
                     name = option.name
                 ),
+                selectedPreset = null,
                 componentsError = null,
                 formMessage = ""
             ).withDerivedFields()
@@ -123,12 +125,28 @@ class CreateCompoundViewModel(
                             component
                         }
                     },
+                    selectedPreset = null,
                     totalError = null,
                     formMessage = ""
                 ).withDerivedFields()
             } else {
                 current.applyAdjustedProportion(index, requestedBasisPoints)
             }
+        }
+    }
+
+    private fun applyPreset(preset: CompoundCompositionPreset) {
+        updateState { current ->
+            val allocation = CompoundPresetAllocationEngine.allocate(
+                preset = preset,
+                componentCount = current.components.size
+            ) ?: return@updateState current.copy(
+                selectedPreset = null,
+                componentsError = "Add no more than 10000 components before applying a preset.",
+                formMessage = "Couldn't apply ${preset.label.lowercase()} preset to the current composition.",
+                totalError = null
+            ).withDerivedFields()
+            current.applyPreset(allocation)
         }
     }
 
@@ -150,6 +168,7 @@ class CreateCompoundViewModel(
                 touchedComponentOrder = current.touchedComponentOrder
                     .filter { it != index }
                     .map { touchedIndex -> if (touchedIndex > index) touchedIndex - 1 else touchedIndex },
+                selectedPreset = null,
                 formMessage = ""
             ).withDerivedFields()
         }
@@ -253,10 +272,33 @@ class CreateCompoundViewModel(
                     isTouched = componentIndex in adjustment.touchedOrder
                 )
             },
+            selectedPreset = null,
             touchedComponentOrder = adjustment.touchedOrder,
             totalError = null,
             componentsError = null,
             formMessage = ""
+        ).withDerivedFields()
+    }
+
+    private fun CreateCompoundUiState.applyPreset(
+        allocation: CompoundPresetAllocationResult
+    ): CreateCompoundUiState {
+        return copy(
+            components = components.mapIndexed { index, component ->
+                val basisPoints = allocation.values[index]
+                component.copy(
+                    proportionBasisPoints = basisPoints,
+                    proportionPercent = basisPoints.toPercentInput(),
+                    proportionError = null,
+                    targetError = null,
+                    isTouched = false
+                )
+            },
+            touchedComponentOrder = emptyList(),
+            selectedPreset = allocation.preset,
+            totalError = null,
+            componentsError = null,
+            formMessage = "Applied ${allocation.preset.label.lowercase()} preset. ${COMPOUND_TOTAL_BASIS_POINTS.toPercentLabel()} total remains valid."
         ).withDerivedFields()
     }
 

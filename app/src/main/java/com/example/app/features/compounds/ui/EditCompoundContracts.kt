@@ -13,6 +13,7 @@ data class EditCompoundUiState(
     val filteredComponents: List<CompoundComponentCatalogOptionUiModel> = emptyList(),
     val components: List<CompoundComponentRowUiModel> = emptyList(),
     val touchedComponentOrder: List<Int> = emptyList(),
+    val selectedPreset: CompoundCompositionPreset? = null,
     val totalPercentLabel: String = "0% total",
     val componentsError: String? = null,
     val totalError: String? = null,
@@ -33,6 +34,7 @@ sealed interface EditCompoundUiIntent {
     data class UpdateComponentSearchQuery(val value: String) : EditCompoundUiIntent
     data class AddIngredientComponent(val reusableId: Long) : EditCompoundUiIntent
     data class AddCompoundComponent(val reusableId: Long) : EditCompoundUiIntent
+    data class ApplyPreset(val preset: CompoundCompositionPreset) : EditCompoundUiIntent
     data class UpdateComponentProportion(val index: Int, val value: String) : EditCompoundUiIntent
     data class AdjustComponentProportion(val index: Int, val basisPoints: Int) : EditCompoundUiIntent
     data class RemoveComponent(val index: Int) : EditCompoundUiIntent

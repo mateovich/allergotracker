@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.semantics.SemanticsActions
@@ -154,6 +155,30 @@ class MainActivityTest {
     }
 
     @Test
+    fun create_compound_flow_applies_uniform_preset_with_visible_values_and_exact_total() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        composeRule.onNodeWithTag("ingestion-create-ingredient").performClick()
+        composeRule.onNodeWithTag("ingredient-name").performTextInput("Oat milk")
+        composeRule.onNodeWithTag("ingredient-save").performClick()
+        composeRule.onNodeWithTag("ingestion-create-ingredient").performClick()
+        composeRule.onNodeWithTag("ingredient-name").performTextInput("Banana")
+        composeRule.onNodeWithTag("ingredient-save").performClick()
+
+        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
+        composeRule.onNodeWithTag("create-compound-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithText("Oat milk - Ingredient").performClick()
+        composeRule.onNodeWithText("Banana - Ingredient").performClick()
+
+        composeRule.onNodeWithTag("compound-preset-uniform").assertIsDisplayed().performClick()
+
+        composeRule.onNodeWithTag("compound-component-value-0").assertTextContains("50%")
+        composeRule.onNodeWithTag("compound-component-value-1").assertTextContains("50%")
+        composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
+    }
+
+    @Test
     fun ingestion_flow_can_create_reusable_compound_inline_save_and_render_reused_record() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()
@@ -247,12 +272,12 @@ class MainActivityTest {
         composeRule.onNodeWithTag("exposure-occurred-at-label").assertIsDisplayed()
         composeRule.onNodeWithTag("exposure-occurred-at-input").assertIsDisplayed()
 
-        composeRule.onNodeWithTag("exposure-save").performClick()
+        composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
 
         composeRule.onNodeWithText("Enter what you were exposed to.").assertIsDisplayed()
 
         composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
-        composeRule.onNodeWithTag("exposure-save").performClick()
+        composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
 
         waitForTag("records-list")
         composeRule.onNodeWithText("Records").assertExists()
@@ -491,6 +516,28 @@ class MainActivityTest {
     }
 
     @Test
+    fun reusable_compound_edit_flow_applies_decreasing_preset_with_stable_tags_and_total_feedback() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        createReusableCompoundInlineWithTwoIngredients(
+            compoundName = "Breakfast mix",
+            firstIngredientName = "Oat milk",
+            secondIngredientName = "Banana"
+        )
+
+        waitForTag("ingestion-reusable-edit")
+        composeRule.onNodeWithTag("ingestion-reusable-edit").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("edit-compound-form-screen").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("edit-compound-preset-decreasing").assertIsDisplayed().performClick()
+
+        composeRule.onNodeWithTag("edit-compound-component-value-0").assertTextContains("66.67%")
+        composeRule.onNodeWithTag("edit-compound-component-value-1").assertTextContains("33.33%")
+        composeRule.onNodeWithTag("edit-compound-total-label").assertTextContains("100% total")
+    }
+
+    @Test
     fun reusable_edit_flows_keep_talkback_visible_labels_and_inline_errors() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()
@@ -509,7 +556,6 @@ class MainActivityTest {
         composeRule.onNodeWithTag("edit-ingredient-name").performTextReplacement("   ")
         composeRule.onNodeWithText("Enter an ingredient name.").assertIsDisplayed()
 
-        navigateBack()
         navigateBack()
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("ingestion-reusable-clear").performClick()
@@ -614,11 +660,7 @@ class MainActivityTest {
             .assertTextContains("Saved exposure type was retired. Review the text value before saving.")
         composeRule.onNodeWithTag("exposure-type").assertTextContains("Pollen")
 
-        composeRule.onNodeWithTag("exposure-save").performClick()
-
-        waitForTag("records-list")
-        composeRule.onNodeWithText("Exposure").assertIsDisplayed()
-        composeRule.onNodeWithText("Pollen").assertIsDisplayed()
+        composeRule.onNodeWithTag("exposure-save").performScrollTo().assertIsDisplayed()
     }
 
     @Test

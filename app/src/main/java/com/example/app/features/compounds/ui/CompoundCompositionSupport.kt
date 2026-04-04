@@ -5,6 +5,14 @@ import java.math.RoundingMode
 
 internal const val COMPOUND_TOTAL_BASIS_POINTS: Int = 10_000
 
+enum class CompoundCompositionPreset(
+    val wireValue: String,
+    val label: String
+) {
+    UNIFORM(wireValue = "uniform", label = "Uniform"),
+    DECREASING(wireValue = "decreasing", label = "Decreasing")
+}
+
 data class CompoundComponentCatalogOptionUiModel(
     val id: Long,
     val name: String,
@@ -27,6 +35,11 @@ data class CompoundComponentRowUiModel(
 data class CompoundProportionAdjustmentResult(
     val values: List<Int>,
     val touchedOrder: List<Int>
+)
+
+data class CompoundPresetAllocationResult(
+    val values: List<Int>,
+    val preset: CompoundCompositionPreset
 )
 
 object CompoundProportionAdjustmentEngine {
@@ -156,6 +169,63 @@ object CompoundProportionAdjustmentEngine {
             this > 0 -> 1
             this < 0 -> -1
             else -> 0
+        }
+    }
+}
+
+object CompoundPresetAllocationEngine {
+    fun allocate(
+        preset: CompoundCompositionPreset,
+        componentCount: Int
+    ): CompoundPresetAllocationResult? {
+        if (componentCount <= 0 || componentCount > COMPOUND_TOTAL_BASIS_POINTS) {
+            return null
+        }
+        val values = when (preset) {
+            CompoundCompositionPreset.UNIFORM -> allocateUniform(componentCount)
+            CompoundCompositionPreset.DECREASING -> allocateDecreasing(componentCount)
+        }
+        if (values.size != componentCount || values.any { it !in 1..COMPOUND_TOTAL_BASIS_POINTS } || values.sum() != COMPOUND_TOTAL_BASIS_POINTS) {
+            return null
+        }
+        return CompoundPresetAllocationResult(values = values, preset = preset)
+    }
+
+    private fun allocateUniform(componentCount: Int): List<Int> {
+        val equalShare = COMPOUND_TOTAL_BASIS_POINTS / componentCount
+        val remainder = COMPOUND_TOTAL_BASIS_POINTS % componentCount
+        return List(componentCount) { index ->
+            equalShare + if (index >= componentCount - remainder) 1 else 0
+        }
+    }
+
+    private fun allocateDecreasing(componentCount: Int): List<Int> {
+        val totalWeight = componentCount * (componentCount + 1) / 2
+        val rawValues = (componentCount downTo 1).map { weight ->
+            COMPOUND_TOTAL_BASIS_POINTS.toLong() * weight / totalWeight
+        }
+        val values = rawValues.map { it.toInt().coerceAtLeast(1) }.toMutableList()
+        normalizePresetTotal(values)
+        return values.toList()
+    }
+
+    private fun normalizePresetTotal(values: MutableList<Int>) {
+        var difference = COMPOUND_TOTAL_BASIS_POINTS - values.sum()
+        var cursor = 0
+        while (difference != 0) {
+            if (difference > 0) {
+                val index = values.indices.firstOrNull { it >= cursor } ?: values.indices.firstOrNull() ?: return
+                values[index] += 1
+                difference -= 1
+                cursor = index + 1
+            } else {
+                val index = values.indices.firstOrNull { it >= cursor && values[it] > 1 }
+                    ?: values.indices.firstOrNull { values[it] > 1 }
+                    ?: return
+                values[index] -= 1
+                difference += 1
+                cursor = index + 1
+            }
         }
     }
 }

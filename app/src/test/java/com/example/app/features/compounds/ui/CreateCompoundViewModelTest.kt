@@ -107,6 +107,39 @@ class CreateCompoundViewModelTest {
         assertFalse(viewModel.state.value.canSave)
     }
 
+    @Test
+    fun applying_uniform_preset_rewrites_percentages_and_preserves_saveability() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateName("Breakfast mix"))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.ApplyPreset(CompoundCompositionPreset.UNIFORM))
+
+        assertEquals(listOf("33.33", "33.33", "33.34"), viewModel.state.value.components.map { it.proportionPercent })
+        assertEquals(emptyList<Int>(), viewModel.state.value.touchedComponentOrder)
+        assertEquals(CompoundCompositionPreset.UNIFORM, viewModel.state.value.selectedPreset)
+        assertEquals("100% total", viewModel.state.value.totalPercentLabel)
+        assertTrue(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun applying_preset_clears_stale_component_errors() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.Save)
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateName("Breakfast mix"))
+        viewModel.onIntent(CreateCompoundUiIntent.ApplyPreset(CompoundCompositionPreset.DECREASING))
+
+        assertNull(viewModel.state.value.componentsError)
+        assertNull(viewModel.state.value.totalError)
+        assertTrue(viewModel.state.value.components.all { it.proportionError == null && it.targetError == null })
+        assertEquals(listOf("66.67", "33.33"), viewModel.state.value.components.map { it.proportionPercent })
+    }
+
     private fun buildViewModel(): CreateCompoundViewModel {
         val ingredients = MutableStateFlow(
             listOf(

@@ -106,6 +106,46 @@ class EditCompoundViewModelTest {
     }
 
     @Test
+    fun applying_decreasing_preset_rewrites_loaded_percentages_and_keeps_save_enabled() = runBlocking {
+        val repository = FakeEditCompoundRepository()
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.ApplyPreset(CompoundCompositionPreset.DECREASING))
+
+        assertEquals(listOf("66.67", "33.33"), viewModel.state.value.components.map { it.proportionPercent })
+        assertEquals(emptyList<Int>(), viewModel.state.value.touchedComponentOrder)
+        assertEquals(CompoundCompositionPreset.DECREASING, viewModel.state.value.selectedPreset)
+        assertTrue(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun applying_preset_clears_stale_validation_errors_after_failed_save() = runBlocking {
+        val repository = FakeEditCompoundRepository(
+            updateResult = AppResult.Error(
+                DomainError.ValidationError(
+                    "Please fix the highlighted fields.",
+                    mapOf(
+                        "components" to "Add at least one component.",
+                        "componentsTotal" to "Keep the total at 100%.",
+                        "components[0].proportion" to "Enter a proportion greater than 0%."
+                    )
+                )
+            )
+        )
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.Save)
+        viewModel.onIntent(EditCompoundUiIntent.ApplyPreset(CompoundCompositionPreset.UNIFORM))
+
+        assertEquals(CompoundCompositionPreset.UNIFORM, viewModel.state.value.selectedPreset)
+        assertEquals("100% total", viewModel.state.value.totalPercentLabel)
+        assertTrue(viewModel.state.value.components.all { it.proportionError == null && it.targetError == null })
+        assertEquals(listOf("50", "50"), viewModel.state.value.components.map { it.proportionPercent })
+    }
+
+    @Test
     fun retirement_preview_shows_blocking_nested_reference_count() = runBlocking {
         val repository = FakeEditCompoundRepository()
         val viewModel = buildViewModel(

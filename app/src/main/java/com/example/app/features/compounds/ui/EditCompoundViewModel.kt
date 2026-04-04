@@ -94,6 +94,7 @@ class EditCompoundViewModel(
 
             is EditCompoundUiIntent.AddIngredientComponent -> addComponent(CompoundComponentKind.INGREDIENT, intent.reusableId)
             is EditCompoundUiIntent.AddCompoundComponent -> addComponent(CompoundComponentKind.COMPOUND, intent.reusableId)
+            is EditCompoundUiIntent.ApplyPreset -> applyPreset(intent.preset)
             is EditCompoundUiIntent.UpdateComponentProportion -> updateComponentProportion(intent.index, intent.value)
             is EditCompoundUiIntent.AdjustComponentProportion -> applyAdjustedProportion(intent.index, intent.basisPoints)
             is EditCompoundUiIntent.RemoveComponent -> removeComponent(intent.index)
@@ -130,6 +131,7 @@ class EditCompoundViewModel(
                                 proportionPercent = basisPoints?.toPercentInput().orEmpty()
                             )
                         },
+                        selectedPreset = null,
                         isLoading = false,
                         formMessage = ""
                     ).withDerivedFields()
@@ -151,6 +153,7 @@ class EditCompoundViewModel(
                     reusableEntityId = reusableId,
                     name = option.name
                 ),
+                selectedPreset = null,
                 componentsError = null,
                 formMessage = ""
             ).withDerivedFields()
@@ -178,12 +181,28 @@ class EditCompoundViewModel(
                             component
                         }
                     },
+                    selectedPreset = null,
                     totalError = null,
                     formMessage = ""
                 ).withDerivedFields()
             } else {
                 current.applyAdjustedProportion(index, requestedBasisPoints)
             }
+        }
+    }
+
+    private fun applyPreset(preset: CompoundCompositionPreset) {
+        updateState { current ->
+            val allocation = CompoundPresetAllocationEngine.allocate(
+                preset = preset,
+                componentCount = current.components.size
+            ) ?: return@updateState current.copy(
+                selectedPreset = null,
+                componentsError = "Add no more than 10000 components before applying a preset.",
+                formMessage = "Couldn't apply ${preset.label.lowercase()} preset to the current composition.",
+                totalError = null
+            ).withDerivedFields()
+            current.applyPreset(allocation)
         }
     }
 
@@ -205,6 +224,7 @@ class EditCompoundViewModel(
                 touchedComponentOrder = current.touchedComponentOrder
                     .filter { it != index }
                     .map { touchedIndex -> if (touchedIndex > index) touchedIndex - 1 else touchedIndex },
+                selectedPreset = null,
                 formMessage = ""
             ).withDerivedFields()
         }
@@ -355,10 +375,33 @@ class EditCompoundViewModel(
                     isTouched = componentIndex in adjustment.touchedOrder
                 )
             },
+            selectedPreset = null,
             touchedComponentOrder = adjustment.touchedOrder,
             totalError = null,
             componentsError = null,
             formMessage = ""
+        ).withDerivedFields()
+    }
+
+    private fun EditCompoundUiState.applyPreset(
+        allocation: CompoundPresetAllocationResult
+    ): EditCompoundUiState {
+        return copy(
+            components = components.mapIndexed { index, component ->
+                val basisPoints = allocation.values[index]
+                component.copy(
+                    proportionBasisPoints = basisPoints,
+                    proportionPercent = basisPoints.toPercentInput(),
+                    proportionError = null,
+                    targetError = null,
+                    isTouched = false
+                )
+            },
+            touchedComponentOrder = emptyList(),
+            selectedPreset = allocation.preset,
+            totalError = null,
+            componentsError = null,
+            formMessage = "Applied ${allocation.preset.label.lowercase()} preset. ${COMPOUND_TOTAL_BASIS_POINTS.toPercentLabel()} total remains valid."
         ).withDerivedFields()
     }
 

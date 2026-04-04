@@ -160,6 +160,18 @@ class CreateExposureViewModelTest {
     }
 
     @Test
+    fun save_after_clearing_retired_catalog_selection_still_navigates_with_plain_text_value() = runBlocking {
+        val viewModel = buildViewModel()
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.onIntent(CreateExposureUiIntent.SelectExposureCatalogOption(5L, "Pollen"))
+        viewModel.onIntent(CreateExposureUiIntent.ClearRetiredExposureCatalogSelection)
+        viewModel.onIntent(CreateExposureUiIntent.Save)
+
+        assertEquals(CreateExposureUiEffect.NavigateToRecords, effect.await())
+    }
+
+    @Test
     fun second_save_while_first_is_in_flight_is_ignored() = runBlocking {
         var createCalls = 0
         val saveGate = CompletableDeferred<Unit>()

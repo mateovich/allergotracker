@@ -81,12 +81,14 @@ fun CreateCompoundScreen(
                 componentSearchQuery = state.componentSearchQuery,
                 filteredComponents = state.filteredComponents,
                 components = state.components,
+                selectedPreset = state.selectedPreset,
                 totalPercentLabel = state.totalPercentLabel,
                 componentsError = state.componentsError,
                 totalError = state.totalError,
                 onSearchQueryChange = { viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentSearchQuery(it)) },
                 onAddIngredient = { viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(it)) },
                 onAddCompound = { viewModel.onIntent(CreateCompoundUiIntent.AddCompoundComponent(it)) },
+                onApplyPreset = { viewModel.onIntent(CreateCompoundUiIntent.ApplyPreset(it)) },
                 onProportionTextChange = { index, value ->
                     viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index, value))
                 },

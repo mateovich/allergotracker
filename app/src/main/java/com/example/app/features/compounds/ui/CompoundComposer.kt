@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
@@ -25,12 +26,14 @@ fun CompoundComposer(
     componentSearchQuery: String,
     filteredComponents: List<CompoundComponentCatalogOptionUiModel>,
     components: List<CompoundComponentRowUiModel>,
+    selectedPreset: CompoundCompositionPreset?,
     totalPercentLabel: String,
     componentsError: String?,
     totalError: String?,
     onSearchQueryChange: (String) -> Unit,
     onAddIngredient: (Long) -> Unit,
     onAddCompound: (Long) -> Unit,
+    onApplyPreset: (CompoundCompositionPreset) -> Unit,
     onProportionTextChange: (Int, String) -> Unit,
     onProportionSliderChange: (Int, Int) -> Unit,
     onRemoveComponent: (Int) -> Unit
@@ -73,6 +76,30 @@ fun CompoundComposer(
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(text = "Components", style = MaterialTheme.typography.titleSmall)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.testTag("$prefix-preset-actions")
+        ) {
+            CompoundCompositionPreset.entries.forEach { preset ->
+                val isSelected = selectedPreset == preset
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onApplyPreset(preset) },
+                    label = { Text(preset.label) },
+                    modifier = Modifier
+                        .testTag("$prefix-preset-${preset.wireValue}")
+                        .semantics {
+                            contentDescription = "Apply ${preset.label.lowercase()} preset"
+                            stateDescription = buildString {
+                                append(if (isSelected) "Selected" else "Not selected")
+                                append(". ")
+                                append(totalPercentLabel)
+                            }
+                        }
+                )
+            }
+        }
         components.forEachIndexed { index, component ->
             Column(
                 modifier = Modifier
