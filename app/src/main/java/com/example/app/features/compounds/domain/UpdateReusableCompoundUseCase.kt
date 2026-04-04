@@ -32,6 +32,9 @@ class UpdateReusableCompoundUseCase(
         }
 
         val fieldErrors = linkedMapOf<String, String>()
+        val duplicateIndexes = CompoundCompositionIntegrity.findDuplicateComponentIndexes(
+            sanitizedCommand.components.map { it.kind to it.reusableEntityId }
+        )
         if (sanitizedCommand.components.isEmpty()) {
             fieldErrors["components"] = "Add at least one component."
         }
@@ -41,6 +44,12 @@ class UpdateReusableCompoundUseCase(
             val proportionKey = "components[$index].proportion"
             when {
                 reusableId == null || reusableId <= 0L -> fieldErrors[targetKey] = "Choose a saved ingredient or compound."
+                index in duplicateIndexes && component.kind == CompoundComponentKind.INGREDIENT -> {
+                    fieldErrors[targetKey] = "This ingredient is already in the composition. Edit the existing row instead."
+                }
+                index in duplicateIndexes && component.kind == CompoundComponentKind.COMPOUND -> {
+                    fieldErrors[targetKey] = "This compound is already in the composition. Edit the existing row instead."
+                }
                 component.kind == CompoundComponentKind.INGREDIENT && !ingredientExists(reusableId) -> {
                     fieldErrors[targetKey] = "Selected ingredient is no longer available."
                 }

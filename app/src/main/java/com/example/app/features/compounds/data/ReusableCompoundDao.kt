@@ -44,6 +44,15 @@ interface ReusableCompoundDao {
     @Query("SELECT COUNT(*) FROM reusable_compound_components WHERE child_compound_id = :compoundId")
     suspend fun countChildCompoundReferences(compoundId: Long): Int
 
+    @Query(
+        """
+        SELECT compound_id AS parentCompoundId, child_compound_id AS childCompoundId
+        FROM reusable_compound_components
+        WHERE child_compound_id IS NOT NULL
+        """
+    )
+    suspend fun findAllChildCompoundEdges(): List<ReusableCompoundChildEdge>
+
     @Query("UPDATE reusable_compounds SET updated_at_epoch_ms = :updatedAtEpochMs WHERE id = :id")
     suspend fun touchById(id: Long, updatedAtEpochMs: Long): Int
 
@@ -74,3 +83,8 @@ interface ReusableCompoundDao {
         }
     }
 }
+
+data class ReusableCompoundChildEdge(
+    val parentCompoundId: Long,
+    val childCompoundId: Long
+)

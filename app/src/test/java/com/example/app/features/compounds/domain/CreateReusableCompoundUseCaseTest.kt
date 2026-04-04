@@ -95,6 +95,30 @@ class CreateReusableCompoundUseCaseTest {
     }
 
     @Test
+    fun returns_field_error_when_component_is_duplicated() = runBlocking {
+        val repository = FakeReusableCompoundRepository()
+        val useCase = CreateReusableCompoundUseCase(repository)
+
+        val result = useCase(
+            CreateReusableCompoundCommand(
+                name = "Breakfast mix",
+                notes = null,
+                components = listOf(
+                    validIngredientComponent(proportionBasisPoints = 5_000),
+                    validIngredientComponent(proportionBasisPoints = 5_000)
+                )
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals(
+            "This ingredient is already in the composition. Edit the existing row instead.",
+            error.fieldErrors["components[1].target"]
+        )
+        assertTrue(repository.createdCommands.isEmpty())
+    }
+
+    @Test
     fun creates_complete_compound_with_normalized_name_and_ordered_components() = runBlocking {
         val repository = FakeReusableCompoundRepository()
         val useCase = CreateReusableCompoundUseCase(repository)

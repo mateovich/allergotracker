@@ -5,9 +5,11 @@ import androidx.lifecycle.viewModelScope
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.compounds.domain.CompoundComponentKind
+import com.example.app.features.compounds.domain.CompoundCompositionIntegrity
 import com.example.app.features.compounds.domain.GetReusableCompoundRetirementImpactUseCase
 import com.example.app.features.compounds.domain.GetReusableCompoundUseCase
 import com.example.app.features.compounds.domain.ObserveReusableCompoundsUseCase
+import com.example.app.features.compounds.domain.ReusableCompound
 import com.example.app.features.compounds.domain.RetireReusableCompoundUseCase
 import com.example.app.features.compounds.domain.UpdateReusableCompoundCommand
 import com.example.app.features.compounds.domain.UpdateReusableCompoundComponentCommand
@@ -31,6 +33,10 @@ class EditCompoundViewModel(
     private val getReusableCompoundRetirementImpactUseCase: GetReusableCompoundRetirementImpactUseCase,
     private val retireReusableCompoundUseCase: RetireReusableCompoundUseCase
 ) : ViewModel() {
+    private var ingredientCatalogOptions: List<CompoundComponentCatalogOptionUiModel> = emptyList()
+    private var compoundCatalogOptions: List<CompoundComponentCatalogOptionUiModel> = emptyList()
+    private var observedCompounds: List<ReusableCompound> = emptyList()
+
     private val mutableState = MutableStateFlow(EditCompoundUiState())
     val state: StateFlow<EditCompoundUiState> = mutableState.asStateFlow()
 
@@ -40,8 +46,7 @@ class EditCompoundViewModel(
     init {
         viewModelScope.launch {
             observeReusableIngredients().collect { ingredients ->
-                updateCatalogOptions(
-                    ingredientOptions = ingredients.map { ingredient ->
+                ingredientCatalogOptions = ingredients.map { ingredient ->
                         CompoundComponentCatalogOptionUiModel(
                             id = ingredient.id,
                             name = ingredient.name,
@@ -50,18 +55,18 @@ class EditCompoundViewModel(
                             updatedAtEpochMs = ingredient.updatedAtEpochMs
                         )
                     }
-                )
+                refreshCatalogOptions()
             }
         }
         viewModelScope.launch {
             observeReusableCompounds().collect { compounds ->
-                updateCatalogOptions(
-                    compoundOptions = compounds
-                        .filter {
-                            it.id != compoundId &&
-                                it.compositionStatus == com.example.app.features.compounds.domain.CompoundCompositionStatus.COMPLETE
-                        }
-                        .map { compound ->
+                observedCompounds = compounds
+                compoundCatalogOptions = compounds
+                    .filter {
+                        it.id != compoundId &&
+                            it.compositionStatus == com.example.app.features.compounds.domain.CompoundCompositionStatus.COMPLETE
+                    }
+                    .map { compound ->
                             CompoundComponentCatalogOptionUiModel(
                                 id = compound.id,
                                 name = compound.name,
@@ -70,7 +75,7 @@ class EditCompoundViewModel(
                                 updatedAtEpochMs = compound.updatedAtEpochMs
                             )
                         }
-                )
+                refreshCatalogOptions()
             }
         }
     }
@@ -160,7 +165,7 @@ class EditCompoundViewModel(
                         formMessage = "",
                         isFormMessageError = false,
                         isFormMessageSticky = false
-                    ).withDerivedFields()
+                    ).withDerivedFields().refreshAvailableComponents()
                 }
 
                 is AppResult.Error -> updateState {
@@ -177,9 +182,17 @@ class EditCompoundViewModel(
 
     private fun addComponent(kind: CompoundComponentKind, reusableId: Long) {
         updateState { current ->
-            val option = current.availableComponents.firstOrNull {
+            val option = allCatalogOptions().firstOrNull {
                 it.kind == kind.storageValue && it.id == reusableId
             } ?: return@updateState current
+            val addError = blockedAddMessage(current, kind, reusableId)
+            if (addError != null) {
+                return@updateState current.copy(
+                    formMessage = addError,
+                    isFormMessageError = true,
+                    isFormMessageSticky = false
+                )
+            }
             current.copy(
                 components = current.components + CompoundComponentRowUiModel(
                     kind = kind.storageValue,
@@ -191,7 +204,7 @@ class EditCompoundViewModel(
                 formMessage = "",
                 isFormMessageError = false,
                 isFormMessageSticky = false
-            ).withDerivedFields()
+            ).withDerivedFields().refreshAvailableComponents()
         }
     }
 
@@ -281,7 +294,7 @@ class EditCompoundViewModel(
                 formMessage = "",
                 isFormMessageError = false,
                 isFormMessageSticky = false
-            ).withDerivedFields()
+            ).withDerivedFields().refreshAvailableComponents()
         }
     }
 
@@ -395,30 +408,9 @@ class EditCompoundViewModel(
         }
     }
 
-    private fun updateCatalogOptions(
-        ingredientOptions: List<CompoundComponentCatalogOptionUiModel>? = null,
-        compoundOptions: List<CompoundComponentCatalogOptionUiModel>? = null
-    ) {
+    private fun refreshCatalogOptions() {
         updateState { current ->
-            val ingredients = ingredientOptions ?: current.availableComponents.filter {
-                it.kind == CompoundComponentKind.INGREDIENT.storageValue
-            }
-            val compounds = compoundOptions ?: current.availableComponents.filter {
-                it.kind == CompoundComponentKind.COMPOUND.storageValue
-            }
-            val availableComponents = (ingredients + compounds)
-                .sortedWith(
-                    compareByDescending<CompoundComponentCatalogOptionUiModel> { it.updatedAtEpochMs }
-                        .thenBy { it.name.lowercase() }
-                        .thenBy { it.kind }
-                        .thenBy { it.id }
-                )
-            current.copy(
-                availableComponents = availableComponents,
-                components = current.components.map { component ->
-                    component.copy(name = component.resolveName(availableComponents))
-                }
-            ).withDerivedFields()
+            current.refreshAvailableComponents()
         }
     }
 
@@ -451,7 +443,7 @@ class EditCompoundViewModel(
             formMessage = "",
             isFormMessageError = false,
             isFormMessageSticky = false
-        ).withDerivedFields()
+        ).withDerivedFields().refreshAvailableComponents()
     }
 
     private fun EditCompoundUiState.applyPreset(
@@ -475,7 +467,7 @@ class EditCompoundViewModel(
             formMessage = "Applied ${allocation.preset.label.lowercase()} preset. ${COMPOUND_TOTAL_BASIS_POINTS.toPercentLabel()} total remains valid.",
             isFormMessageError = false,
             isFormMessageSticky = false
-        ).withDerivedFields()
+        ).withDerivedFields().refreshAvailableComponents()
     }
 
     private fun EditCompoundUiState.resolveComponentName(kind: String, reusableId: Long): String {
@@ -499,6 +491,60 @@ class EditCompoundViewModel(
             canSave = !isLoading && name.isNotBlank() && components.hasCompleteValidComposition(),
             filteredComponents = availableComponents.filterByQuery(componentSearchQuery)
         )
+    }
+
+    private fun EditCompoundUiState.refreshAvailableComponents(): EditCompoundUiState {
+        val selectedKeys = components.map { it.kind to it.reusableEntityId }.toSet()
+        val cycleChildCompoundIds = CompoundCompositionIntegrity.invalidChildCompoundIds(
+            parentCompoundId = compoundId,
+            candidateIds = observedCompounds.map { it.id },
+            childEdges = CompoundCompositionIntegrity.childEdgesFromCompounds(observedCompounds)
+        )
+        val availableComponents = allCatalogOptions()
+            .filterNot { option ->
+                (option.kind to option.id) in selectedKeys ||
+                    (option.kind == CompoundComponentKind.COMPOUND.storageValue && option.id in cycleChildCompoundIds)
+            }
+            .sortedWith(
+                compareByDescending<CompoundComponentCatalogOptionUiModel> { it.updatedAtEpochMs }
+                    .thenBy { it.name.lowercase() }
+                    .thenBy { it.kind }
+                    .thenBy { it.id }
+            )
+        return copy(
+            availableComponents = availableComponents,
+            components = components.map { component ->
+                component.copy(name = component.resolveName(allCatalogOptions()))
+            }
+        ).withDerivedFields()
+    }
+
+    private fun blockedAddMessage(
+        current: EditCompoundUiState,
+        kind: CompoundComponentKind,
+        reusableId: Long
+    ): String? {
+        if (current.components.any { it.kind == kind.storageValue && it.reusableEntityId == reusableId }) {
+            return when (kind) {
+                CompoundComponentKind.INGREDIENT -> "This ingredient is already in the composition. Edit the existing row instead."
+                CompoundComponentKind.COMPOUND -> "This compound is already in the composition. Edit the existing row instead."
+            }
+        }
+        if (
+            kind == CompoundComponentKind.COMPOUND &&
+            reusableId in CompoundCompositionIntegrity.invalidChildCompoundIds(
+                parentCompoundId = compoundId,
+                candidateIds = listOf(reusableId),
+                childEdges = CompoundCompositionIntegrity.childEdgesFromCompounds(observedCompounds)
+            )
+        ) {
+            return "This compound would create a recursive composition."
+        }
+        return null
+    }
+
+    private fun allCatalogOptions(): List<CompoundComponentCatalogOptionUiModel> {
+        return ingredientCatalogOptions + compoundCatalogOptions
     }
 
     private fun DomainError.fieldError(key: String): String? {

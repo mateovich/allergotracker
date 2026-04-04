@@ -176,6 +176,35 @@ class RoomReusableCompoundRepositoryTest {
     }
 
     @Test
+    fun create_returns_validation_error_when_components_repeat_same_ingredient() = runBlocking {
+        val dao = FakeReusableCompoundDao()
+        val repository = RoomReusableCompoundRepository(
+            compoundDao = dao,
+            ingredientExists = { true },
+            compoundExists = { true },
+            nowEpochMillis = { 1_700_000_123_000L }
+        )
+
+        val result = repository.createCompound(
+            CreateReusableCompoundCommand(
+                name = "Breakfast mix",
+                notes = null,
+                components = listOf(
+                    validIngredientComponent(proportionBasisPoints = 5_000),
+                    validIngredientComponent(proportionBasisPoints = 5_000)
+                )
+            )
+        )
+
+        val error = result as AppResult.Error
+        assertEquals(
+            "This ingredient is already in the composition. Edit the existing row instead.",
+            (error.error as DomainError.ValidationError).fieldErrors["components[1].target"]
+        )
+        assertTrue(dao.inserted.isEmpty())
+    }
+
+    @Test
     fun update_persists_trimmed_name_and_notes() = runBlocking {
         val dao = FakeReusableCompoundDao(
             existing = ReusableCompoundEntity(
@@ -221,6 +250,95 @@ class RoomReusableCompoundRepositoryTest {
         assertEquals("Updated", dao.updated.single().notes)
         assertEquals(2, dao.replacedComponents.single().size)
         assertEquals(7_500, success.value.components.first().proportionBasisPoints)
+    }
+
+    @Test
+    fun update_returns_validation_error_when_child_compound_creates_indirect_cycle() = runBlocking {
+        val dao = FakeReusableCompoundDao(
+            existing = ReusableCompoundEntity(
+                id = 4L,
+                name = "Breakfast mix",
+                normalizedName = "breakfast mix",
+                notes = null,
+                compositionStatus = CompoundCompositionStatus.COMPLETE.storageValue,
+                createdAtEpochMs = 1L,
+                updatedAtEpochMs = 1L
+            ),
+            childEdges = listOf(
+                ReusableCompoundChildEdge(parentCompoundId = 9L, childCompoundId = 12L),
+                ReusableCompoundChildEdge(parentCompoundId = 12L, childCompoundId = 4L)
+            )
+        )
+        val repository = RoomReusableCompoundRepository(
+            compoundDao = dao,
+            ingredientExists = { true },
+            compoundExists = { true },
+            nowEpochMillis = { 2_000L }
+        )
+
+        val result = repository.updateCompound(
+            com.example.app.features.compounds.domain.UpdateReusableCompoundCommand(
+                id = 4L,
+                name = "Breakfast mix plus",
+                notes = "Updated",
+                components = listOf(
+                    com.example.app.features.compounds.domain.UpdateReusableCompoundComponentCommand(
+                        kind = CompoundComponentKind.COMPOUND,
+                        reusableEntityId = 9L,
+                        proportionBasisPoints = 10_000
+                    )
+                )
+            )
+        )
+
+        val error = result as AppResult.Error
+        assertEquals(
+            "This compound would create a recursive composition.",
+            (error.error as DomainError.ValidationError).fieldErrors["components[0].target"]
+        )
+        assertTrue(dao.updated.isEmpty())
+    }
+
+    @Test
+    fun update_allows_valid_acyclic_nested_compound() = runBlocking {
+        val dao = FakeReusableCompoundDao(
+            existing = ReusableCompoundEntity(
+                id = 4L,
+                name = "Breakfast mix",
+                normalizedName = "breakfast mix",
+                notes = "Draft",
+                compositionStatus = CompoundCompositionStatus.DRAFT.storageValue,
+                createdAtEpochMs = 1L,
+                updatedAtEpochMs = 1L
+            ),
+            childEdges = listOf(
+                ReusableCompoundChildEdge(parentCompoundId = 9L, childCompoundId = 12L)
+            )
+        )
+        val repository = RoomReusableCompoundRepository(
+            compoundDao = dao,
+            ingredientExists = { true },
+            compoundExists = { true },
+            nowEpochMillis = { 2_000L }
+        )
+
+        val result = repository.updateCompound(
+            com.example.app.features.compounds.domain.UpdateReusableCompoundCommand(
+                id = 4L,
+                name = "Breakfast mix plus",
+                notes = "Updated",
+                components = listOf(
+                    com.example.app.features.compounds.domain.UpdateReusableCompoundComponentCommand(
+                        kind = CompoundComponentKind.COMPOUND,
+                        reusableEntityId = 9L,
+                        proportionBasisPoints = 10_000
+                    )
+                )
+            )
+        )
+
+        assertTrue(result is AppResult.Success<ReusableCompound>)
+        assertEquals(1, dao.replacedComponents.single().size)
     }
 
     @Test
@@ -308,6 +426,7 @@ private fun validIngredientComponent(
 private class FakeReusableCompoundDao(
     private val existing: ReusableCompoundEntity? = null,
     private val existingComponents: List<ReusableCompoundComponentEntity> = emptyList(),
+    private val childEdges: List<ReusableCompoundChildEdge> = emptyList(),
     private val deleteFailure: Exception? = null
 ) : ReusableCompoundDao {
     val inserted = mutableListOf<ReusableCompoundEntity>()
@@ -385,6 +504,8 @@ private class FakeReusableCompoundDao(
     override suspend fun countChildCompoundReferences(compoundId: Long): Int {
         return existingComponents.count { it.childCompoundId == compoundId }
     }
+
+    override suspend fun findAllChildCompoundEdges(): List<ReusableCompoundChildEdge> = childEdges
 
     override suspend fun touchById(id: Long, updatedAtEpochMs: Long): Int = if (existing?.id == id) 1 else 0
 

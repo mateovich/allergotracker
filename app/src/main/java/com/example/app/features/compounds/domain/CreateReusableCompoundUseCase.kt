@@ -14,6 +14,9 @@ class CreateReusableCompoundUseCase(
         )
 
         val fieldErrors = linkedMapOf<String, String>()
+        val duplicateIndexes = CompoundCompositionIntegrity.findDuplicateComponentIndexes(
+            sanitizedCommand.components.map { it.kind to it.reusableEntityId }
+        )
 
         if (sanitizedCommand.name.isBlank()) {
             fieldErrors["name"] = "Enter a compound name."
@@ -28,6 +31,11 @@ class CreateReusableCompoundUseCase(
             val proportionKey = "components[$index].proportion"
             if (component.reusableEntityId == null || component.reusableEntityId <= 0L) {
                 fieldErrors[targetKey] = "Choose a saved ingredient or compound."
+            } else if (index in duplicateIndexes) {
+                fieldErrors[targetKey] = when (component.kind) {
+                    CompoundComponentKind.INGREDIENT -> "This ingredient is already in the composition. Edit the existing row instead."
+                    CompoundComponentKind.COMPOUND -> "This compound is already in the composition. Edit the existing row instead."
+                }
             }
             val proportionBasisPoints = component.proportionBasisPoints
             if (proportionBasisPoints == null || proportionBasisPoints !in 1..10_000) {

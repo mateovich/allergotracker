@@ -1,6 +1,7 @@
 package com.example.app.features.compounds.ui
 
 import com.example.app.MainDispatcherRule
+import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.compounds.domain.CompoundComponentKind
 import com.example.app.features.compounds.domain.CompoundCompositionStatus
@@ -61,11 +62,11 @@ class CreateCompoundViewModelTest {
     }
 
     @Test
-    fun selecting_component_and_updating_proportion_keeps_inline_state_in_sync() {
+    fun selecting_distinct_components_and_updating_proportion_keeps_inline_state_in_sync() {
         val viewModel = buildViewModel()
 
         viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
-        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(8L))
         viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 0, value = "60"))
 
         val firstRow = viewModel.state.value.components[0]
@@ -78,12 +79,51 @@ class CreateCompoundViewModelTest {
     }
 
     @Test
-    fun decimal_proportions_keep_precise_total_label() {
+    fun duplicate_component_is_hidden_after_selection_and_stale_add_shows_feedback() {
         val viewModel = buildViewModel()
 
         viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
         viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+
+        assertEquals(1, viewModel.state.value.components.size)
+        assertTrue(viewModel.state.value.filteredComponents.none { it.kind == "ingredient" && it.id == 7L })
+        assertEquals(
+            "This ingredient is already in the composition. Edit the existing row instead.",
+            viewModel.state.value.formMessage
+        )
+    }
+
+    @Test
+    fun save_time_validation_maps_component_target_error_inline() {
+        val viewModel = buildViewModel(
+            createResult = AppResult.Error(
+                DomainError.ValidationError(
+                    message = "Please fix the highlighted fields.",
+                    fieldErrors = mapOf(
+                        "components[0].target" to "This ingredient is already in the composition. Edit the existing row instead."
+                    )
+                )
+            )
+        )
+
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateName("Breakfast mix"))
         viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 0, value = "100"))
+        viewModel.onIntent(CreateCompoundUiIntent.Save)
+
+        assertEquals(
+            "This ingredient is already in the composition. Edit the existing row instead.",
+            viewModel.state.value.components.first().targetError
+        )
+    }
+
+    @Test
+    fun decimal_proportions_keep_precise_total_label() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(8L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddCompoundComponent(9L))
         viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 0, value = "33.34"))
         viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 1, value = "33.34"))
         viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 2, value = "33.34"))
@@ -94,12 +134,25 @@ class CreateCompoundViewModelTest {
     }
 
     @Test
+    fun removed_component_returns_to_picker_after_deletion() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(8L))
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 0, value = "100"))
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 1, value = "0"))
+        viewModel.onIntent(CreateCompoundUiIntent.RemoveComponent(1))
+
+        assertTrue(viewModel.state.value.filteredComponents.any { it.kind == "ingredient" && it.id == 8L })
+    }
+
+    @Test
     fun zero_percent_component_disables_save_until_removed() {
         val viewModel = buildViewModel()
 
         viewModel.onIntent(CreateCompoundUiIntent.UpdateName("Breakfast mix"))
         viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
-        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(8L))
         viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 0, value = "100"))
         viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index = 1, value = "0"))
 
@@ -113,8 +166,8 @@ class CreateCompoundViewModelTest {
 
         viewModel.onIntent(CreateCompoundUiIntent.UpdateName("Breakfast mix"))
         viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
-        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
-        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(8L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddCompoundComponent(9L))
         viewModel.onIntent(CreateCompoundUiIntent.ApplyPreset(CompoundCompositionPreset.UNIFORM))
 
         assertEquals(listOf("33.33", "33.33", "33.34"), viewModel.state.value.components.map { it.proportionPercent })
@@ -143,7 +196,7 @@ class CreateCompoundViewModelTest {
 
         viewModel.onIntent(CreateCompoundUiIntent.Save)
         viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
-        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(8L))
         viewModel.onIntent(CreateCompoundUiIntent.UpdateName("Breakfast mix"))
         viewModel.onIntent(CreateCompoundUiIntent.ApplyPreset(CompoundCompositionPreset.DECREASING))
 
@@ -198,7 +251,9 @@ class CreateCompoundViewModelTest {
         assertFalse(viewModel.state.value.isFormMessageError)
     }
 
-    private fun buildViewModel(): CreateCompoundViewModel {
+    private fun buildViewModel(
+        createResult: AppResult<ReusableCompound>? = null
+    ): CreateCompoundViewModel {
         val ingredients = MutableStateFlow(
             listOf(
                 ReusableIngredient(
@@ -207,6 +262,13 @@ class CreateCompoundViewModelTest {
                     notes = null,
                     createdAtEpochMs = 1L,
                     updatedAtEpochMs = 2L
+                ),
+                ReusableIngredient(
+                    id = 8L,
+                    name = "Banana",
+                    notes = null,
+                    createdAtEpochMs = 3L,
+                    updatedAtEpochMs = 4L
                 )
             )
         )
@@ -214,7 +276,7 @@ class CreateCompoundViewModelTest {
             createReusableCompoundUseCase = CreateReusableCompoundUseCase(
                 repository = object : ReusableCompoundRepository {
                     override suspend fun createCompound(command: CreateReusableCompoundCommand): AppResult<ReusableCompound> {
-                        return AppResult.Success(
+                        return createResult ?: AppResult.Success(
                             ReusableCompound(
                                 id = 1L,
                                 name = command.name,
@@ -244,7 +306,21 @@ class CreateCompoundViewModelTest {
                 }
             ),
             observeReusableIngredients = { ingredients },
-            observeReusableCompounds = { emptyFlow() }
+            observeReusableCompounds = {
+                MutableStateFlow(
+                    listOf(
+                        ReusableCompound(
+                            id = 9L,
+                            name = "Granola",
+                            notes = null,
+                            compositionStatus = CompoundCompositionStatus.COMPLETE,
+                            components = emptyList(),
+                            createdAtEpochMs = 1L,
+                            updatedAtEpochMs = 1L
+                        )
+                    )
+                )
+            }
         )
     }
 }

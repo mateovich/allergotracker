@@ -155,6 +155,24 @@ class MainActivityTest {
     }
 
     @Test
+    fun create_compound_flow_hides_duplicate_component_options_after_selection() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+        composeRule.onNodeWithTag("ingestion-create-ingredient").performClick()
+        composeRule.onNodeWithTag("ingredient-name").performTextInput("Oat milk")
+        composeRule.onNodeWithTag("ingredient-save").performClick()
+
+        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
+        composeRule.onNodeWithTag("create-compound-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("compound-name").performTextInput("Breakfast mix")
+        composeRule.onNodeWithText("Oat milk - Ingredient").performClick()
+
+        composeRule.onAllNodesWithText("Oat milk - Ingredient").assertCountEquals(0)
+        composeRule.onNodeWithTag("compound-component-proportion-0").performTextReplacement("100")
+        composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
+    }
+
+    @Test
     fun create_compound_flow_applies_uniform_preset_with_visible_values_and_exact_total() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()
@@ -532,6 +550,25 @@ class MainActivityTest {
     }
 
     @Test
+    fun reusable_compound_edit_flow_hides_recursive_targets_from_component_picker() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        createReusableCompoundInline("Base mix", "Oat milk")
+        composeRule.onNodeWithTag("ingestion-reusable-clear").performClick()
+        createReusableCompoundInlineFromCompoundOption("Recursive mix", "Base mix")
+        composeRule.onNodeWithTag("ingestion-reusable-clear").performClick()
+
+        composeRule.onNodeWithText("Base mix - Compound").performClick()
+        waitForTag("ingestion-reusable-edit")
+        composeRule.onNodeWithTag("ingestion-reusable-edit").performClick()
+        composeRule.onNodeWithTag("edit-compound-form-screen").assertIsDisplayed()
+
+        composeRule.onAllNodesWithText("Recursive mix - Compound").assertCountEquals(0)
+        composeRule.onNodeWithTag("edit-compound-total-label").assertTextContains("100% total")
+    }
+
+    @Test
     fun reusable_compound_edit_flow_applies_decreasing_preset_with_stable_tags_and_total_feedback() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()
@@ -880,6 +917,20 @@ class MainActivityTest {
         composeRule.onNodeWithText("$firstIngredientName - Ingredient").performClick()
         composeRule.onNodeWithText("$secondIngredientName - Ingredient").performClick()
         composeRule.onNodeWithTag("compound-component-proportion-0").performTextReplacement("60")
+        composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
+        composeRule.onNodeWithTag("compound-save").performClick()
+        waitForTag("create-ingestion-form-screen")
+    }
+
+    private fun createReusableCompoundInlineFromCompoundOption(
+        compoundName: String,
+        childCompoundName: String
+    ) {
+        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
+        composeRule.onNodeWithTag("create-compound-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("compound-name").performTextInput(compoundName)
+        composeRule.onNodeWithText("$childCompoundName - Compound").performClick()
+        composeRule.onNodeWithTag("compound-component-proportion-0").performTextReplacement("100")
         composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
         composeRule.onNodeWithTag("compound-save").performClick()
         waitForTag("create-ingestion-form-screen")

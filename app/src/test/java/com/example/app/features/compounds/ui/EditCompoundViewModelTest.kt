@@ -17,6 +17,7 @@ import com.example.app.features.compounds.domain.UpdateReusableCompoundUseCase
 import com.example.app.features.ingredients.domain.ObserveReusableIngredientsUseCase
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -93,6 +94,54 @@ class EditCompoundViewModelTest {
     }
 
     @Test
+    fun load_filters_duplicate_and_recursive_compound_options() = runBlocking {
+        val repository = FakeEditCompoundRepository()
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+
+        assertTrue(viewModel.state.value.filteredComponents.none { it.kind == "compound" && it.id == 11L })
+        assertTrue(viewModel.state.value.filteredComponents.none { it.kind == "compound" && it.id == 12L })
+        assertTrue(viewModel.state.value.filteredComponents.any { it.kind == "compound" && it.id == 13L })
+    }
+
+    @Test
+    fun stale_recursive_add_keeps_user_in_context_with_actionable_feedback() = runBlocking {
+        val repository = FakeEditCompoundRepository()
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.AddCompoundComponent(12L))
+
+        assertEquals(2, viewModel.state.value.components.size)
+        assertEquals("This compound would create a recursive composition.", viewModel.state.value.formMessage)
+        assertTrue(viewModel.state.value.isFormMessageError)
+    }
+
+    @Test
+    fun save_time_cycle_error_maps_component_target_inline() = runBlocking {
+        val repository = FakeEditCompoundRepository(
+            updateResult = AppResult.Error(
+                DomainError.ValidationError(
+                    message = "Please fix the highlighted fields.",
+                    fieldErrors = mapOf(
+                        "components[1].target" to "This compound would create a recursive composition."
+                    )
+                )
+            )
+        )
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.Save)
+
+        assertEquals(
+            "This compound would create a recursive composition.",
+            viewModel.state.value.components[1].targetError
+        )
+    }
+
+    @Test
     fun zero_percent_component_disables_save_until_removed() = runBlocking {
         val repository = FakeEditCompoundRepository()
         val viewModel = buildViewModel(repository)
@@ -103,6 +152,19 @@ class EditCompoundViewModelTest {
 
         assertEquals("100% total", viewModel.state.value.totalPercentLabel)
         assertFalse(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun removed_component_returns_to_picker_after_deletion() = runBlocking {
+        val repository = FakeEditCompoundRepository()
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.UpdateComponentProportion(index = 0, value = "100"))
+        viewModel.onIntent(EditCompoundUiIntent.UpdateComponentProportion(index = 1, value = "0"))
+        viewModel.onIntent(EditCompoundUiIntent.RemoveComponent(1))
+
+        assertTrue(viewModel.state.value.filteredComponents.any { it.kind == "compound" && it.id == 11L })
     }
 
     @Test
@@ -384,7 +446,66 @@ private class FakeEditCompoundRepository(
 
     override suspend fun deleteCompound(id: Long): AppResult<Unit> = deleteResult
 
-    override fun observeCompounds(): Flow<List<ReusableCompound>> = emptyFlow()
+    override fun observeCompounds(): Flow<List<ReusableCompound>> {
+        return MutableStateFlow(
+            listOf(
+                ReusableCompound(
+                    id = 9L,
+                    name = "Breakfast mix",
+                    notes = null,
+                    compositionStatus = CompoundCompositionStatus.COMPLETE,
+                    components = listOf(
+                        ReusableCompoundComponent(
+                            id = 1L,
+                            position = 0,
+                            kind = CompoundComponentKind.COMPOUND,
+                            ingredientId = null,
+                            childCompoundId = 11L,
+                            proportionBasisPoints = 10_000
+                        )
+                    ),
+                    createdAtEpochMs = 1L,
+                    updatedAtEpochMs = 1L
+                ),
+                ReusableCompound(
+                    id = 11L,
+                    name = "Berry base",
+                    notes = null,
+                    compositionStatus = CompoundCompositionStatus.COMPLETE,
+                    components = emptyList(),
+                    createdAtEpochMs = 1L,
+                    updatedAtEpochMs = 3L
+                ),
+                ReusableCompound(
+                    id = 12L,
+                    name = "Recursive base",
+                    notes = null,
+                    compositionStatus = CompoundCompositionStatus.COMPLETE,
+                    components = listOf(
+                        ReusableCompoundComponent(
+                            id = 2L,
+                            position = 0,
+                            kind = CompoundComponentKind.COMPOUND,
+                            ingredientId = null,
+                            childCompoundId = 9L,
+                            proportionBasisPoints = 10_000
+                        )
+                    ),
+                    createdAtEpochMs = 1L,
+                    updatedAtEpochMs = 4L
+                ),
+                ReusableCompound(
+                    id = 13L,
+                    name = "Safe crunch",
+                    notes = null,
+                    compositionStatus = CompoundCompositionStatus.COMPLETE,
+                    components = emptyList(),
+                    createdAtEpochMs = 1L,
+                    updatedAtEpochMs = 5L
+                )
+            )
+        )
+    }
 }
 
 private class FakeObserveIngredientsRepository : com.example.app.features.ingredients.domain.ReusableIngredientRepository {

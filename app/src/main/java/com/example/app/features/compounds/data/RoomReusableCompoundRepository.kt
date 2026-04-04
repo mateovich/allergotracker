@@ -8,6 +8,8 @@ import com.example.app.features.compounds.domain.CompoundCompositionStatus
 import com.example.app.features.compounds.domain.CreateReusableCompoundCommand
 import com.example.app.features.compounds.domain.ReusableCompound
 import com.example.app.features.compounds.domain.ReusableCompoundComponent
+import com.example.app.features.compounds.domain.CompoundChildEdge
+import com.example.app.features.compounds.domain.CompoundCompositionIntegrity
 import com.example.app.features.compounds.domain.ReusableCompoundRepository
 import com.example.app.features.compounds.domain.UpdateReusableCompoundCommand
 import com.example.app.features.compounds.domain.normalizeReusableName
@@ -182,6 +184,21 @@ class RoomReusableCompoundRepository(
         compoundId: Long? = null
     ): DomainError? {
         val fieldErrors = linkedMapOf<String, String>()
+        val duplicateIndexes = CompoundCompositionIntegrity.findDuplicateComponentIndexes(
+            components.map { it.kind to it.reusableEntityId }
+        )
+        val cycleChildCompoundIds = CompoundCompositionIntegrity.invalidChildCompoundIds(
+            parentCompoundId = compoundId,
+            candidateIds = components.mapNotNull { component ->
+                component.reusableEntityId?.takeIf { component.kind == CompoundComponentKind.COMPOUND }
+            },
+            childEdges = compoundDao.findAllChildCompoundEdges().map { edge ->
+                CompoundChildEdge(
+                    parentCompoundId = edge.parentCompoundId,
+                    childCompoundId = edge.childCompoundId
+                )
+            }
+        )
         if (components.isEmpty()) {
             fieldErrors["components"] = "Add at least one component."
         }
@@ -191,11 +208,20 @@ class RoomReusableCompoundRepository(
             val proportionKey = "components[$index].proportion"
             when {
                 reusableId == null || reusableId <= 0L -> fieldErrors[targetKey] = "Choose a saved ingredient or compound."
+                index in duplicateIndexes && component.kind == CompoundComponentKind.INGREDIENT -> {
+                    fieldErrors[targetKey] = "This ingredient is already in the composition. Edit the existing row instead."
+                }
+                index in duplicateIndexes && component.kind == CompoundComponentKind.COMPOUND -> {
+                    fieldErrors[targetKey] = "This compound is already in the composition. Edit the existing row instead."
+                }
                 component.kind == CompoundComponentKind.INGREDIENT && !ingredientExists(reusableId) -> {
                     fieldErrors[targetKey] = "Selected ingredient is no longer available."
                 }
                 component.kind == CompoundComponentKind.COMPOUND && reusableId == compoundId -> {
                     fieldErrors[targetKey] = "A compound cannot include itself."
+                }
+                component.kind == CompoundComponentKind.COMPOUND && reusableId in cycleChildCompoundIds -> {
+                    fieldErrors[targetKey] = "This compound would create a recursive composition."
                 }
                 component.kind == CompoundComponentKind.COMPOUND && !compoundExists(reusableId) -> {
                     fieldErrors[targetKey] = "Selected compound is no longer available."

@@ -63,6 +63,62 @@ class UpdateReusableCompoundUseCaseTest {
     }
 
     @Test
+    fun duplicate_component_returns_field_error_before_persistence() = runBlocking {
+        val repository = FakeUpdateReusableCompoundRepository()
+        val useCase = UpdateReusableCompoundUseCase(repository)
+
+        val result = useCase(
+            UpdateReusableCompoundCommand(
+                id = 9L,
+                name = "Breakfast mix plus",
+                notes = null,
+                components = listOf(
+                    UpdateReusableCompoundComponentCommand(
+                        kind = CompoundComponentKind.INGREDIENT,
+                        reusableEntityId = 7L,
+                        proportionBasisPoints = 5_000
+                    ),
+                    UpdateReusableCompoundComponentCommand(
+                        kind = CompoundComponentKind.INGREDIENT,
+                        reusableEntityId = 7L,
+                        proportionBasisPoints = 5_000
+                    )
+                )
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals(
+            "This ingredient is already in the composition. Edit the existing row instead.",
+            error.fieldErrors["components[1].target"]
+        )
+        assertEquals(0, repository.updatedCommands.size)
+    }
+
+    @Test
+    fun repository_cycle_validation_is_returned_without_becoming_persistence_error() = runBlocking {
+        val repository = FakeUpdateReusableCompoundRepository(
+            updateResult = AppResult.Error(
+                DomainError.ValidationError(
+                    message = "Please fix the highlighted fields.",
+                    fieldErrors = mapOf(
+                        "components[1].target" to "This compound would create a recursive composition."
+                    )
+                )
+            )
+        )
+        val useCase = UpdateReusableCompoundUseCase(repository)
+
+        val result = useCase(validUpdateCommand())
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals(
+            "This compound would create a recursive composition.",
+            error.fieldErrors["components[1].target"]
+        )
+    }
+
+    @Test
     fun mismatch_between_reference_count_and_synced_rows_returns_integrity_error() = runBlocking {
         val useCase = UpdateReusableCompoundUseCase(
             repository = FakeUpdateReusableCompoundRepository(),
@@ -107,33 +163,35 @@ class UpdateReusableCompoundUseCaseTest {
     }
 }
 
-private class FakeUpdateReusableCompoundRepository : ReusableCompoundRepository {
+private class FakeUpdateReusableCompoundRepository(
+    private val updateResult: AppResult<ReusableCompound> = AppResult.Success(
+        ReusableCompound(
+            id = 9L,
+            name = "Breakfast mix plus",
+            notes = null,
+            compositionStatus = CompoundCompositionStatus.DRAFT,
+            components = validUpdateCommand().components.mapIndexed { index, component ->
+                ReusableCompoundComponent(
+                    id = index + 1L,
+                    position = index,
+                    kind = component.kind,
+                    ingredientId = component.reusableEntityId.takeIf { component.kind == CompoundComponentKind.INGREDIENT },
+                    childCompoundId = component.reusableEntityId.takeIf { component.kind == CompoundComponentKind.COMPOUND },
+                    proportionBasisPoints = component.proportionBasisPoints
+                )
+            },
+            createdAtEpochMs = 1L,
+            updatedAtEpochMs = 2L
+        )
+    )
+) : ReusableCompoundRepository {
     val updatedCommands = mutableListOf<UpdateReusableCompoundCommand>()
 
     override suspend fun createCompound(command: CreateReusableCompoundCommand): AppResult<ReusableCompound> = error("unused")
 
     override suspend fun updateCompound(command: UpdateReusableCompoundCommand): AppResult<ReusableCompound> {
         updatedCommands += command
-        return AppResult.Success(
-            ReusableCompound(
-                id = command.id,
-                name = command.name,
-                notes = command.notes,
-                compositionStatus = CompoundCompositionStatus.DRAFT,
-                components = command.components.mapIndexed { index, component ->
-                    ReusableCompoundComponent(
-                        id = index + 1L,
-                        position = index,
-                        kind = component.kind,
-                        ingredientId = component.reusableEntityId.takeIf { component.kind == CompoundComponentKind.INGREDIENT },
-                        childCompoundId = component.reusableEntityId.takeIf { component.kind == CompoundComponentKind.COMPOUND },
-                        proportionBasisPoints = component.proportionBasisPoints
-                    )
-                },
-                createdAtEpochMs = 1L,
-                updatedAtEpochMs = 2L
-            )
-        )
+        return updateResult
     }
 
     override fun observeCompounds(): Flow<List<ReusableCompound>> = emptyFlow()
