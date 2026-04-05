@@ -843,6 +843,50 @@ class MainActivityTest {
         composeRule.onAllNodesWithText("Pollen").assertCountEquals(0)
     }
 
+    @Test
+    fun ingestion_record_detail_shows_reusable_compound_source_when_linked() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        composeRule.onNodeWithTag("ingestion-item-name").performTextInput("Breakfast mix")
+        composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
+        composeRule.onNodeWithTag("ingestion-create-ingredient").performClick()
+        composeRule.onNodeWithTag("ingredient-name").performTextInput("Oat milk")
+        composeRule.onNodeWithTag("ingredient-save").performClick()
+
+        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
+        composeRule.onNodeWithTag("compound-name").performTextInput("Breakfast mix")
+        composeRule.onNodeWithText("Oat milk - Ingredient").performClick()
+        composeRule.onNodeWithTag("compound-component-proportion-0").performTextReplacement("100")
+        composeRule.onNodeWithTag("compound-save").performClick()
+
+        waitForTag("create-ingestion-form-screen")
+        composeRule.onNodeWithTag("ingestion-save").performClick()
+
+        waitForText("Breakfast mix")
+        composeRule.onNodeWithText("Breakfast mix").performClick()
+
+        composeRule.onNodeWithTag("record-detail-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("record-detail-field-0").assertTextContains("Breakfast mix")
+        composeRule.onNodeWithTag("record-detail-field-2").assertTextContains("Reusable compound")
+    }
+
+    @Test
+    fun ingestion_record_detail_shows_manual_entry_when_no_reusable_link() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        composeRule.onNodeWithTag("ingestion-item-name").performTextInput("Random snack")
+        composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performClick()
+
+        waitForText("Random snack")
+        composeRule.onNodeWithText("Random snack").performClick()
+
+        composeRule.onNodeWithTag("record-detail-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("record-detail-field-2").assertTextContains("Manual entry")
+    }
+
     private fun assertNavigatesToForm(optionLabel: String, destinationTitle: String) {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText(optionLabel).performClick()

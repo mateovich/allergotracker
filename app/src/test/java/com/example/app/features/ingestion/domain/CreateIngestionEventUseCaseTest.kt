@@ -173,6 +173,111 @@ class CreateIngestionEventUseCaseTest {
         )
         assertTrue(repository.savedCommands.isEmpty())
     }
+
+    @Test
+    fun rejects_missing_compound_reference_before_hitting_repository() = runBlocking {
+        val repository = FakeIngestionRepository()
+        val useCase = CreateIngestionEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow),
+            reusableEntityExists = { kind, id ->
+                kind == ReusableEntityKind.COMPOUND && id == 42L
+            }
+        )
+
+        val result = useCase(
+            CreateIngestionEventCommand(
+                itemName = "Breakfast mix",
+                quantityLevel = 3,
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.COMPOUND,
+                reusableEntityId = 99L
+            )
+        )
+
+        assertEquals(
+            DomainError.IntegrityError("Selected reusable item is no longer available."),
+            (result as AppResult.Error).error
+        )
+        assertTrue(repository.savedCommands.isEmpty())
+    }
+
+    @Test
+    fun accepts_valid_compound_reference_and_passes_to_repository() = runBlocking {
+        val repository = FakeIngestionRepository()
+        val useCase = CreateIngestionEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow),
+            reusableEntityExists = { kind, id ->
+                kind == ReusableEntityKind.COMPOUND && id == 42L
+            }
+        )
+
+        val result = useCase(
+            CreateIngestionEventCommand(
+                itemName = "Breakfast mix",
+                quantityLevel = 3,
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.COMPOUND,
+                reusableEntityId = 42L
+            )
+        )
+
+        assertTrue(result is AppResult.Success)
+        val saved = repository.savedCommands.single()
+        assertEquals(ReusableEntityKind.COMPOUND, saved.reusableEntityKind)
+        assertEquals(42L, saved.reusableEntityId)
+    }
+
+    @Test
+    fun rejects_compound_id_with_no_kind() = runBlocking {
+        val repository = FakeIngestionRepository()
+        val useCase = CreateIngestionEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow)
+        )
+
+        val result = useCase(
+            CreateIngestionEventCommand(
+                itemName = "Breakfast mix",
+                quantityLevel = 3,
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                reusableEntityKind = null,
+                reusableEntityId = 42L
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Choose a valid reusable item or clear the selection.", error.fieldErrors["itemName"])
+        assertTrue(repository.savedCommands.isEmpty())
+    }
+
+    @Test
+    fun rejects_zero_compound_id() = runBlocking {
+        val repository = FakeIngestionRepository()
+        val useCase = CreateIngestionEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow)
+        )
+
+        val result = useCase(
+            CreateIngestionEventCommand(
+                itemName = "Breakfast mix",
+                quantityLevel = 3,
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.COMPOUND,
+                reusableEntityId = 0L
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Choose a valid reusable item or clear the selection.", error.fieldErrors["itemName"])
+        assertTrue(repository.savedCommands.isEmpty())
+    }
 }
 
 private class FakeIngestionRepository : IngestionRepository {
@@ -186,7 +291,9 @@ private class FakeIngestionRepository : IngestionRepository {
                 itemName = command.itemName,
                 quantityLevel = command.quantityLevel ?: 0,
                 occurredAtEpochMs = command.occurredAtEpochMs,
-                notes = command.notes
+                notes = command.notes,
+                reusableEntityKind = command.reusableEntityKind,
+                reusableEntityId = command.reusableEntityId
             )
         )
     }

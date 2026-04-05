@@ -108,6 +108,115 @@ class UpdateIngestionEventUseCaseTest {
         )
         assertTrue(repository.updatedCommands.isEmpty())
     }
+
+    @Test
+    fun rejects_stale_compound_reference_on_update() = runBlocking {
+        val repository = FakeEditableIngestionRepository()
+        val useCase = UpdateIngestionEventUseCase(
+            repository,
+            FakeEditableCurrentTimeProvider(fixedNow),
+            reusableEntityExists = { kind, id ->
+                kind == ReusableEntityKind.COMPOUND && id == 22L
+            }
+        )
+
+        val result = useCase(
+            UpdateIngestionEventCommand(
+                id = 7L,
+                itemName = "Breakfast mix",
+                quantityLevel = 2,
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.COMPOUND,
+                reusableEntityId = 99L
+            )
+        )
+
+        assertEquals(
+            DomainError.IntegrityError("Selected reusable item is no longer available."),
+            (result as AppResult.Error).error
+        )
+        assertTrue(repository.updatedCommands.isEmpty())
+    }
+
+    @Test
+    fun accepts_valid_compound_reference_on_update() = runBlocking {
+        val repository = FakeEditableIngestionRepository()
+        val useCase = UpdateIngestionEventUseCase(
+            repository,
+            FakeEditableCurrentTimeProvider(fixedNow),
+            reusableEntityExists = { kind, id ->
+                kind == ReusableEntityKind.COMPOUND && id == 22L
+            }
+        )
+
+        val result = useCase(
+            UpdateIngestionEventCommand(
+                id = 7L,
+                itemName = "Breakfast mix v2",
+                quantityLevel = 3,
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.COMPOUND,
+                reusableEntityId = 22L
+            )
+        )
+
+        assertTrue(result is AppResult.Success)
+        val saved = repository.updatedCommands.single()
+        assertEquals(ReusableEntityKind.COMPOUND, saved.reusableEntityKind)
+        assertEquals(22L, saved.reusableEntityId)
+    }
+
+    @Test
+    fun rejects_compound_id_without_kind_on_update() = runBlocking {
+        val repository = FakeEditableIngestionRepository()
+        val useCase = UpdateIngestionEventUseCase(
+            repository,
+            FakeEditableCurrentTimeProvider(fixedNow)
+        )
+
+        val result = useCase(
+            UpdateIngestionEventCommand(
+                id = 7L,
+                itemName = "Breakfast mix",
+                quantityLevel = 2,
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                reusableEntityKind = null,
+                reusableEntityId = 22L
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Choose a valid reusable item or clear the selection.", error.fieldErrors["itemName"])
+        assertTrue(repository.updatedCommands.isEmpty())
+    }
+
+    @Test
+    fun rejects_zero_compound_id_on_update() = runBlocking {
+        val repository = FakeEditableIngestionRepository()
+        val useCase = UpdateIngestionEventUseCase(
+            repository,
+            FakeEditableCurrentTimeProvider(fixedNow)
+        )
+
+        val result = useCase(
+            UpdateIngestionEventCommand(
+                id = 7L,
+                itemName = "Breakfast mix",
+                quantityLevel = 2,
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.COMPOUND,
+                reusableEntityId = 0L
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Choose a valid reusable item or clear the selection.", error.fieldErrors["itemName"])
+        assertTrue(repository.updatedCommands.isEmpty())
+    }
 }
 
 private class FakeEditableIngestionRepository : IngestionRepository {
@@ -124,7 +233,15 @@ private class FakeEditableIngestionRepository : IngestionRepository {
     override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> {
         updatedCommands += command
         return AppResult.Success(
-            IngestionEvent(command.id, command.itemName, command.quantityLevel ?: 0, command.occurredAtEpochMs, command.notes)
+            IngestionEvent(
+                command.id,
+                command.itemName,
+                command.quantityLevel ?: 0,
+                command.occurredAtEpochMs,
+                command.notes,
+                command.reusableEntityKind,
+                command.reusableEntityId
+            )
         )
     }
 

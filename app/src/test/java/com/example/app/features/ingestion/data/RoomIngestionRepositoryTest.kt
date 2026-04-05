@@ -236,6 +236,186 @@ class RoomIngestionRepositoryTest {
         assertTrue(result is AppResult.Success)
         assertEquals(listOf(ReusableEntityKind.COMPOUND to 22L), touched)
     }
+
+    @Test
+    fun update_rejects_stale_compound_reference() = runBlocking {
+        val existing = IngestionEventEntity(7L, "Breakfast mix", 2, 1_700_000_000_000L, null, ReusableEntityKind.COMPOUND.storageValue, 22L, 1_700_000_100_000L)
+        val dao = FakeIngestionEventDaoForRepository(getByIdResult = existing)
+        val repository = RoomIngestionRepository(
+            ingestionEventDao = dao,
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L },
+            reusableEntityExists = { _, _ -> false }
+        )
+
+        val result = repository.updateIngestion(
+            UpdateIngestionEventCommand(
+                id = 7L,
+                itemName = "Breakfast mix",
+                quantityLevel = 2,
+                occurredAtEpochMs = 1_700_000_200_000L,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.COMPOUND,
+                reusableEntityId = 22L
+            )
+        )
+
+        assertEquals(
+            DomainError.IntegrityError("Selected reusable item is no longer available."),
+            (result as AppResult.Error).error
+        )
+    }
+
+    @Test
+    fun create_persists_compound_reference_with_valid_target() = runBlocking {
+        val dao = FakeIngestionEventDaoForRepository(getByIdResult = null)
+        val existenceChecks = mutableListOf<Pair<ReusableEntityKind, Long>>()
+        val touched = mutableListOf<Pair<ReusableEntityKind, Long>>()
+        val repository = RoomIngestionRepository(
+            ingestionEventDao = dao,
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L },
+            reusableEntityExists = { kind, id ->
+                existenceChecks += kind to id
+                true
+            },
+            touchReusableEntity = { kind, id ->
+                touched += kind to id
+            }
+        )
+
+        val result = repository.createIngestion(
+            CreateIngestionEventCommand(
+                itemName = "Breakfast mix",
+                quantityLevel = 3,
+                occurredAtEpochMs = 1_700_000_000_000L,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.COMPOUND,
+                reusableEntityId = 42L
+            )
+        )
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(listOf(ReusableEntityKind.COMPOUND to 42L), existenceChecks)
+        assertEquals(listOf(ReusableEntityKind.COMPOUND to 42L), touched)
+        assertEquals(ReusableEntityKind.COMPOUND.storageValue, dao.inserted.single().reusableEntityKind)
+        assertEquals(42L, dao.inserted.single().reusableEntityId)
+    }
+
+    @Test
+    fun update_preserves_compound_reference_when_no_change_to_reusable_identity() = runBlocking {
+        val existing = IngestionEventEntity(7L, "Breakfast mix", 2, 1_700_000_000_000L, null, ReusableEntityKind.COMPOUND.storageValue, 22L, 1_700_000_100_000L)
+        val dao = FakeIngestionEventDaoForRepository(getByIdResult = existing)
+        val touched = mutableListOf<Pair<ReusableEntityKind, Long>>()
+        val repository = RoomIngestionRepository(
+            ingestionEventDao = dao,
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L },
+            reusableEntityExists = { _, _ -> true },
+            touchReusableEntity = { kind, id -> touched += kind to id }
+        )
+
+        val result = repository.updateIngestion(
+            UpdateIngestionEventCommand(
+                id = 7L,
+                itemName = "Breakfast mix updated",
+                quantityLevel = 3,
+                occurredAtEpochMs = 1_700_000_200_000L,
+                notes = "new notes",
+                reusableEntityKind = ReusableEntityKind.COMPOUND,
+                reusableEntityId = 22L
+            )
+        )
+
+        assertTrue(result is AppResult.Success)
+        val updated = dao.updated.single()
+        assertEquals("Breakfast mix updated", updated.itemName)
+        assertEquals(ReusableEntityKind.COMPOUND.storageValue, updated.reusableEntityKind)
+        assertEquals(22L, updated.reusableEntityId)
+        assertEquals(listOf(ReusableEntityKind.COMPOUND to 22L), touched)
+    }
+
+    @Test
+    fun update_clears_compound_reference_when_user_removes_reusable_selection() = runBlocking {
+        val existing = IngestionEventEntity(7L, "Breakfast mix", 2, 1_700_000_000_000L, null, ReusableEntityKind.COMPOUND.storageValue, 22L, 1_700_000_100_000L)
+        val dao = FakeIngestionEventDaoForRepository(getByIdResult = existing)
+        val touched = mutableListOf<Pair<ReusableEntityKind, Long>>()
+        val repository = RoomIngestionRepository(
+            ingestionEventDao = dao,
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L },
+            reusableEntityExists = { _, _ -> true },
+            touchReusableEntity = { kind, id -> touched += kind to id }
+        )
+
+        val result = repository.updateIngestion(
+            UpdateIngestionEventCommand(
+                id = 7L,
+                itemName = "Manual entry",
+                quantityLevel = 2,
+                occurredAtEpochMs = 1_700_000_200_000L,
+                notes = null,
+                reusableEntityKind = null,
+                reusableEntityId = null
+            )
+        )
+
+        assertTrue(result is AppResult.Success)
+        val updated = dao.updated.single()
+        assertEquals(null, updated.reusableEntityKind)
+        assertEquals(null, updated.reusableEntityId)
+        assertTrue(touched.isEmpty())
+    }
+
+    @Test
+    fun create_returns_persistence_error_when_entity_check_throws() = runBlocking {
+        val dao = FakeIngestionEventDaoForRepository(getByIdResult = null)
+        val repository = RoomIngestionRepository(
+            ingestionEventDao = dao,
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L },
+            reusableEntityExists = { _, _ -> throw IllegalStateException("network failure") }
+        )
+
+        val result = repository.createIngestion(
+            CreateIngestionEventCommand(
+                itemName = "Tea",
+                quantityLevel = 2,
+                occurredAtEpochMs = 1_700_000_000_000L,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.COMPOUND,
+                reusableEntityId = 42L
+            )
+        )
+
+        assertEquals(
+            DomainError.PersistenceError("Couldn't save ingestion locally. Try again."),
+            (result as AppResult.Error).error
+        )
+    }
+
+    @Test
+    fun update_returns_persistence_error_when_entity_check_throws() = runBlocking {
+        val existing = IngestionEventEntity(7L, "Breakfast mix", 2, 1_700_000_000_000L, null, ReusableEntityKind.COMPOUND.storageValue, 22L, 1_700_000_100_000L)
+        val dao = FakeIngestionEventDaoForRepository(getByIdResult = existing)
+        val repository = RoomIngestionRepository(
+            ingestionEventDao = dao,
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L },
+            reusableEntityExists = { _, _ -> throw IllegalStateException("db failure") }
+        )
+
+        val result = repository.updateIngestion(
+            UpdateIngestionEventCommand(
+                id = 7L,
+                itemName = "Breakfast mix",
+                quantityLevel = 2,
+                occurredAtEpochMs = 1_700_000_200_000L,
+                notes = null,
+                reusableEntityKind = ReusableEntityKind.COMPOUND,
+                reusableEntityId = 22L
+            )
+        )
+
+        assertEquals(
+            DomainError.PersistenceError("Couldn't update ingestion locally. Try again."),
+            (result as AppResult.Error).error
+        )
+    }
 }
 
 private class FakeIngestionEventDaoForRepository(
