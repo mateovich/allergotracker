@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
@@ -116,6 +117,26 @@ class UpdateReusableCompoundUseCaseTest {
             "This compound would create a recursive composition.",
             error.fieldErrors["components[1].target"]
         )
+    }
+
+    @Test
+    fun successful_edit_with_linked_records_syncs_name_to_all_references() = runBlocking {
+        val syncedCalls = mutableListOf<Pair<Long, String>>()
+        val useCase = UpdateReusableCompoundUseCase(
+            repository = FakeUpdateReusableCompoundRepository(),
+            syncReferences = { id, name ->
+                syncedCalls += id to name
+                3
+            },
+            countReferences = { 3 }
+        )
+
+        val result = useCase(validUpdateCommand())
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(1, syncedCalls.size)
+        assertEquals(9L, syncedCalls.first().first)
+        assertEquals("Breakfast mix plus", syncedCalls.first().second)
     }
 
     @Test

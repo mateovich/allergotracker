@@ -364,11 +364,17 @@ class CreateCompoundViewModel(
 
     private fun CreateCompoundUiState.refreshAvailableComponents(): CreateCompoundUiState {
         val selectedKeys = components.map { it.kind to it.reusableEntityId }.toSet()
-        val cycleChildCompoundIds = CompoundCompositionIntegrity.invalidChildCompoundIds(
-            parentCompoundId = null,
-            candidateIds = observedCompounds.map { it.id },
-            childEdges = CompoundCompositionIntegrity.childEdgesFromCompounds(observedCompounds)
-        )
+        val childEdges = CompoundCompositionIntegrity.childEdgesFromCompounds(observedCompounds)
+        val selectedCompoundIds = components
+            .filter { it.kind == CompoundComponentKind.COMPOUND.storageValue }
+            .mapNotNull { it.reusableEntityId }
+        val cycleChildCompoundIds = selectedCompoundIds.flatMapTo(linkedSetOf()) { selectedId ->
+            CompoundCompositionIntegrity.invalidChildCompoundIds(
+                parentCompoundId = selectedId,
+                candidateIds = observedCompounds.map { it.id },
+                childEdges = childEdges
+            )
+        }
         val availableComponents = allCatalogOptions()
             .filterNot { option ->
                 (option.kind to option.id) in selectedKeys ||
@@ -392,6 +398,18 @@ class CreateCompoundViewModel(
             return when (kind) {
                 CompoundComponentKind.INGREDIENT -> "This ingredient is already in the composition. Edit the existing row instead."
                 CompoundComponentKind.COMPOUND -> "This compound is already in the composition. Edit the existing row instead."
+            }
+        }
+        if (kind == CompoundComponentKind.COMPOUND) {
+            val childEdges = CompoundCompositionIntegrity.childEdgesFromCompounds(observedCompounds)
+            val selectedCompoundIds = current.components
+                .filter { it.kind == CompoundComponentKind.COMPOUND.storageValue }
+                .mapNotNull { it.reusableEntityId }
+            val wouldCycle = selectedCompoundIds.any { selectedId ->
+                CompoundCompositionIntegrity.wouldCreateCycle(selectedId, reusableId, childEdges)
+            }
+            if (wouldCycle) {
+                return "This compound would create a recursive composition."
             }
         }
         return null

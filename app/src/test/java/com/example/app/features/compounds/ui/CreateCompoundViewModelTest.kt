@@ -118,6 +118,31 @@ class CreateCompoundViewModelTest {
     }
 
     @Test
+    fun selecting_compound_hides_cyclic_counterpart_from_picker() {
+        val viewModel = buildViewModelWithCyclicCompounds()
+
+        viewModel.onIntent(CreateCompoundUiIntent.AddCompoundComponent(20L))
+
+        assertTrue(viewModel.state.value.filteredComponents.none { it.kind == "compound" && it.id == 21L })
+        assertTrue(viewModel.state.value.filteredComponents.any { it.kind == "compound" && it.id == 22L })
+    }
+
+    @Test
+    fun stale_cyclic_add_on_create_shows_recursive_feedback() {
+        val viewModel = buildViewModelWithCyclicCompounds()
+
+        viewModel.onIntent(CreateCompoundUiIntent.AddCompoundComponent(20L))
+        viewModel.onIntent(CreateCompoundUiIntent.AddCompoundComponent(21L))
+
+        assertEquals(1, viewModel.state.value.components.size)
+        assertEquals(
+            "This compound would create a recursive composition.",
+            viewModel.state.value.formMessage
+        )
+        assertTrue(viewModel.state.value.isFormMessageError)
+    }
+
+    @Test
     fun decimal_proportions_keep_precise_total_label() {
         val viewModel = buildViewModel()
 
@@ -321,6 +346,92 @@ class CreateCompoundViewModelTest {
                     )
                 )
             }
+        )
+    }
+
+    /**
+     * Fixture with cyclic compound graph:
+     *   id=20 ("Alpha") → id=21 ("Beta") → id=20 (cycle)
+     *   id=22 ("Gamma") — safe, no cycle
+     */
+    private fun buildViewModelWithCyclicCompounds(): CreateCompoundViewModel {
+        val ingredients = MutableStateFlow(
+            listOf(
+                ReusableIngredient(
+                    id = 7L,
+                    name = "Oat milk",
+                    notes = null,
+                    createdAtEpochMs = 1L,
+                    updatedAtEpochMs = 2L
+                )
+            )
+        )
+        val alpha = ReusableCompound(
+            id = 20L,
+            name = "Alpha",
+            notes = null,
+            compositionStatus = CompoundCompositionStatus.COMPLETE,
+            components = listOf(
+                ReusableCompoundComponent(
+                    id = 1L,
+                    position = 0,
+                    kind = CompoundComponentKind.COMPOUND,
+                    ingredientId = null,
+                    childCompoundId = 21L,
+                    proportionBasisPoints = 10_000
+                )
+            ),
+            createdAtEpochMs = 1L,
+            updatedAtEpochMs = 2L
+        )
+        val beta = ReusableCompound(
+            id = 21L,
+            name = "Beta",
+            notes = null,
+            compositionStatus = CompoundCompositionStatus.COMPLETE,
+            components = listOf(
+                ReusableCompoundComponent(
+                    id = 2L,
+                    position = 0,
+                    kind = CompoundComponentKind.COMPOUND,
+                    ingredientId = null,
+                    childCompoundId = 20L,
+                    proportionBasisPoints = 10_000
+                )
+            ),
+            createdAtEpochMs = 1L,
+            updatedAtEpochMs = 3L
+        )
+        val gamma = ReusableCompound(
+            id = 22L,
+            name = "Gamma",
+            notes = null,
+            compositionStatus = CompoundCompositionStatus.COMPLETE,
+            components = emptyList(),
+            createdAtEpochMs = 1L,
+            updatedAtEpochMs = 4L
+        )
+        return CreateCompoundViewModel(
+            createReusableCompoundUseCase = CreateReusableCompoundUseCase(
+                repository = object : ReusableCompoundRepository {
+                    override suspend fun createCompound(command: CreateReusableCompoundCommand): AppResult<ReusableCompound> =
+                        AppResult.Success(
+                            ReusableCompound(
+                                id = 99L,
+                                name = command.name,
+                                notes = command.notes,
+                                compositionStatus = CompoundCompositionStatus.COMPLETE,
+                                components = emptyList(),
+                                createdAtEpochMs = 1L,
+                                updatedAtEpochMs = 1L
+                            )
+                        )
+
+                    override fun observeCompounds(): Flow<List<ReusableCompound>> = emptyFlow()
+                }
+            ),
+            observeReusableIngredients = { ingredients },
+            observeReusableCompounds = { MutableStateFlow(listOf(alpha, beta, gamma)) }
         )
     }
 }
