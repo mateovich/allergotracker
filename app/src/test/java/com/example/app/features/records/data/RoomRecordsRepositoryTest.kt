@@ -272,6 +272,61 @@ class RoomRecordsRepositoryTest {
     }
 
     @Test
+    fun historical_edit_reorders_timeline_while_preserving_single_row_identity() = runBlocking {
+        val ingestionEventDao = FakeIngestionEventDao(
+            events = listOf(
+                IngestionEventEntity(
+                    id = 7L,
+                    itemName = "Tea",
+                    quantityLevel = 2,
+                    occurredAtEpochMs = 1_700_000_200_000L,
+                    notes = null,
+                    reusableEntityKind = null,
+                    reusableEntityId = null,
+                    createdAtEpochMs = 100L
+                )
+            )
+        )
+        val exposureEventDao = FakeExposureEventDao(
+            events = listOf(
+                ExposureEventEntity(
+                    id = 3L,
+                    exposureType = "Pollen",
+                    occurredAtEpochMs = 1_700_000_100_000L,
+                    notes = null,
+                    createdAtEpochMs = 200L,
+                    intensityLevel = 3
+                )
+            )
+        )
+        val ingestionRepository = RoomIngestionRepository(
+            ingestionEventDao = ingestionEventDao,
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_900_000L }
+        )
+        val recordsRepository = RoomRecordsRepository(
+            ingestionEventDao = ingestionEventDao,
+            exposureEventDao = exposureEventDao,
+            outbreakEventDao = FakeOutbreakEventDao()
+        )
+
+        ingestionRepository.updateIngestion(
+            UpdateIngestionEventCommand(
+                id = 7L,
+                itemName = "Tea corrected",
+                quantityLevel = 2,
+                occurredAtEpochMs = 1_700_000_050_000L,
+                notes = null
+            )
+        )
+
+        val records = recordsRepository.observeRecords().first()
+
+        assertEquals(listOf("exposure-3", "ingestion-7"), records.map { it.id })
+        assertEquals(1, records.count { it.id == "ingestion-7" })
+        assertEquals("Tea corrected", records.last().title)
+    }
+
+    @Test
     fun deleting_records_updates_timeline_and_count_without_stale_rows() = runBlocking {
         val ingestionEventDao = FakeIngestionEventDao(
             events = listOf(

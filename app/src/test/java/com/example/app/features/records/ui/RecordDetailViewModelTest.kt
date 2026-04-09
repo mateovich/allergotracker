@@ -8,7 +8,10 @@ import com.example.app.features.records.domain.RecordEventType
 import com.example.app.features.records.domain.RecordSummary
 import com.example.app.features.records.domain.RecordsRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -195,6 +198,102 @@ class RecordDetailViewModelTest {
         assertEquals("Old compound recipe", state.title)
         val reusableField = state.fields.find { it.label == "Reusable source" }
         assertEquals("Manual entry", reusableField?.value)
+    }
+
+    @Test
+    fun open_edit_reuses_existing_ingestion_route() = runBlocking {
+        val viewModel = RecordDetailViewModel(
+            recordId = 13L,
+            eventType = RecordEventType.INGESTION,
+            observeRecordDetailUseCase = ObserveRecordDetailUseCase(
+                detailRepository(
+                    AppResult.Success(
+                        RecordDetail.Ingestion(
+                            recordId = 13L,
+                            occurredAtEpochMs = 1_700_000_000_000L,
+                            itemName = "Tea",
+                            quantityLabel = "2 Light snack",
+                            reusableEntityKind = null,
+                            reusableEntityId = null,
+                            notes = null
+                        )
+                    )
+                )
+            )
+        )
+
+        viewModel.onIntent(RecordDetailUiIntent.Load)
+        val deferred = async { viewModel.effects.first() }
+        viewModel.onIntent(RecordDetailUiIntent.OpenEdit)
+        val effect = deferred.await()
+
+        assertEquals(
+            RecordDetailUiEffect.NavigateToRoute("edit/ingestion/13"),
+            effect
+        )
+    }
+
+    @Test
+    fun open_edit_reuses_existing_exposure_route() = runBlocking {
+        val viewModel = RecordDetailViewModel(
+            recordId = 5L,
+            eventType = RecordEventType.EXPOSURE,
+            observeRecordDetailUseCase = ObserveRecordDetailUseCase(
+                detailRepository(
+                    AppResult.Success(
+                        RecordDetail.Exposure(
+                            recordId = 5L,
+                            occurredAtEpochMs = 1_700_000_000_000L,
+                            exposureType = "Pollen",
+                            intensityLabel = "2 Light snack",
+                            notes = "outside"
+                        )
+                    )
+                )
+            )
+        )
+
+        viewModel.onIntent(RecordDetailUiIntent.Load)
+        val deferred = async { viewModel.effects.first() }
+        viewModel.onIntent(RecordDetailUiIntent.OpenEdit)
+        val effect = deferred.await()
+
+        assertEquals(
+            RecordDetailUiEffect.NavigateToRoute("edit/exposure/5?openDelete=false"),
+            effect
+        )
+    }
+
+    @Test
+    fun open_edit_reuses_existing_outbreak_route() = runBlocking {
+        val viewModel = RecordDetailViewModel(
+            recordId = 9L,
+            eventType = RecordEventType.OUTBREAK,
+            observeRecordDetailUseCase = ObserveRecordDetailUseCase(
+                detailRepository(
+                    AppResult.Success(
+                        RecordDetail.Outbreak(
+                            recordId = 9L,
+                            occurredAtEpochMs = 1_700_000_000_000L,
+                            outbreakDescriptor = "Skin flare",
+                            bodyLocation = "Left arm",
+                            intensityLabel = "4 Large",
+                            notes = "after workout"
+                        )
+                    )
+                )
+            )
+        )
+
+        viewModel.onIntent(RecordDetailUiIntent.Load)
+        val deferred = async { viewModel.effects.first() }
+        viewModel.onIntent(RecordDetailUiIntent.OpenEdit)
+        val effect = deferred.await()
+
+        assertEquals(
+            RecordDetailUiEffect.NavigateToRoute("edit/outbreak/9?openDelete=false"),
+            effect
+        )
     }
 
     @Test

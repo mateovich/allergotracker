@@ -149,6 +149,27 @@ class UpdateOutbreakEventUseCaseTest {
         )
         assertTrue(repository.updatedCommands.isEmpty())
     }
+
+    @Test
+    fun accepts_valid_historical_edit_timestamp() = runBlocking {
+        val repository = FakeEditableOutbreakRepository()
+        val useCase = UpdateOutbreakEventUseCase(repository, FakeOutbreakCurrentTimeProvider(fixedNow))
+
+        val historicalOccurredAt = fixedNow - 86_400_000L
+        val result = useCase(
+            UpdateOutbreakEventCommand(
+                id = 9L,
+                outbreakDescriptor = "Rash flare",
+                bodyLocation = "Left arm",
+                occurredAtEpochMs = historicalOccurredAt,
+                notes = "older record",
+                intensityLevel = 3
+            )
+        )
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(historicalOccurredAt, repository.updatedCommands.single().occurredAtEpochMs)
+    }
 }
 
 private class FakeEditableOutbreakRepository : OutbreakRepository {

@@ -17,8 +17,11 @@ import com.example.app.features.ingestion.domain.CurrentTimeProvider
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -346,7 +349,7 @@ class EditExposureViewModelTest {
     }
 
     @Test
-    fun stale_saved_catalog_reference_does_not_show_saved_summary() = runBlocking {
+    fun saved_catalog_reference_is_preserved_while_catalogs_finish_loading() = runBlocking {
         val repository = object : ExposureRepository {
             override suspend fun createExposure(command: com.example.app.features.exposure.domain.CreateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
             override suspend fun getExposure(id: Long): AppResult<ExposureEvent> = AppResult.Success(
@@ -364,6 +367,7 @@ class EditExposureViewModelTest {
             )
             override suspend fun deleteExposure(id: Long): AppResult<Unit> = AppResult.Success(Unit)
         }
+        val catalogEntries = MutableStateFlow<List<ReusableEventCatalog>>(emptyList())
         val viewModel = EditExposureViewModel(
             recordId = 5L,
             getExposureEventUseCase = GetExposureEventUseCase(repository),
@@ -371,7 +375,7 @@ class EditExposureViewModelTest {
             updateExposureEventUseCase = UpdateExposureEventUseCase(repository, CurrentTimeProvider { fixedNow }),
             currentTimeProvider = CurrentTimeProvider { fixedNow },
             observeReusableEventCatalogUseCase = ObserveReusableEventCatalogUseCase(
-                FakeEditExposureReusableEventCatalogRepository(emptyList())
+                FlowEditExposureReusableEventCatalogRepository(catalogEntries)
             )
         )
 
@@ -379,6 +383,22 @@ class EditExposureViewModelTest {
 
         assertEquals(99L, viewModel.state.value.selectedExposureTypeCatalogId)
         assertEquals(null, viewModel.state.value.selectedExposureTypeSummary)
+
+        catalogEntries.value = listOf(
+            ReusableEventCatalog(
+                id = 99L,
+                kind = ReusableEventCatalogKind.EXPOSURE_TYPE,
+                name = "Pollen",
+                usageCount = 3,
+                createdAtEpochMs = fixedNow - 1_000L,
+                lastUsedAtEpochMs = fixedNow,
+                updatedAtEpochMs = fixedNow
+            )
+        )
+
+        assertEquals(99L, viewModel.state.value.selectedExposureTypeCatalogId)
+        assertEquals("Saved exposure type selected: Pollen", viewModel.state.value.selectedExposureTypeSummary)
+        assertEquals("", viewModel.state.value.formMessage)
     }
 
     @Test
@@ -448,5 +468,29 @@ private class FakeEditExposureReusableEventCatalogRepository(
 
     override suspend fun touchCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? {
         return entries.firstOrNull { it.kind == kind && it.id == id }
+    }
+}
+
+private class FlowEditExposureReusableEventCatalogRepository(
+    private val entries: MutableStateFlow<List<ReusableEventCatalog>>
+) : ReusableEventCatalogRepository {
+    override fun observeCatalog(kind: ReusableEventCatalogKind): Flow<List<ReusableEventCatalog>> {
+        return entries.asStateFlow().map { current -> current.filter { it.kind == kind } }
+    }
+
+    override suspend fun getCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? {
+        return entries.value.firstOrNull { it.kind == kind && it.id == id }
+    }
+
+    override suspend fun existsCatalogEntry(kind: ReusableEventCatalogKind, id: Long): Boolean {
+        return entries.value.any { it.kind == kind && it.id == id }
+    }
+
+    override suspend fun ensureCatalogEntry(kind: ReusableEventCatalogKind, name: String): ReusableEventCatalog {
+        return entries.value.first { it.kind == kind && it.name == name }
+    }
+
+    override suspend fun touchCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? {
+        return entries.value.firstOrNull { it.kind == kind && it.id == id }
     }
 }

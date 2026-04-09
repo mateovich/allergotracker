@@ -8,6 +8,7 @@ import com.example.app.features.ingestion.domain.DeleteIngestionEventUseCase
 import com.example.app.features.ingestion.domain.GetIngestionEventUseCase
 import com.example.app.features.ingestion.domain.CurrentTimeProvider
 import com.example.app.features.ingestion.domain.IngestionQuantityOption
+import com.example.app.features.ingestion.domain.ReusableEntityKind
 import com.example.app.features.ingestion.domain.UpdateIngestionEventCommand
 import com.example.app.features.ingestion.domain.UpdateIngestionEventUseCase
 import java.time.Instant
@@ -25,7 +26,8 @@ class EditIngestionViewModel(
     private val getIngestionEventUseCase: GetIngestionEventUseCase,
     private val deleteIngestionEventUseCase: DeleteIngestionEventUseCase,
     private val updateIngestionEventUseCase: UpdateIngestionEventUseCase,
-    private val currentTimeProvider: CurrentTimeProvider
+    private val currentTimeProvider: CurrentTimeProvider,
+    private val reusableEntityExists: suspend (ReusableEntityKind, Long) -> Boolean = { _, _ -> true }
 ) : ViewModel() {
     private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
     private val mutableState = MutableStateFlow(
@@ -103,6 +105,9 @@ class EditIngestionViewModel(
             when (val result = getIngestionEventUseCase(recordId)) {
                 is AppResult.Success -> {
                     val event = result.value
+                    val hasRetiredReusableSelection = event.reusableEntityKind != null &&
+                        event.reusableEntityId != null &&
+                        !reusableEntityExists(event.reusableEntityKind, event.reusableEntityId)
                     updateState {
                         it.copy(
                             itemName = event.itemName,
@@ -111,12 +116,21 @@ class EditIngestionViewModel(
                             occurredAtEpochMs = event.occurredAtEpochMs,
                             occurredAtLabel = formatTime(event.occurredAtEpochMs),
                             selectedQuantityLevel = event.quantityLevel,
-                            selectedReusableEntityKind = event.reusableEntityKind,
-                            selectedReusableEntityId = event.reusableEntityId,
-                            selectedReusableEntitySummary = event.reusableEntityKind?.let { kind -> "${kind.label} selected: ${event.itemName}" },
+                            selectedReusableEntityKind = if (hasRetiredReusableSelection) null else event.reusableEntityKind,
+                            selectedReusableEntityId = if (hasRetiredReusableSelection) null else event.reusableEntityId,
+                            selectedReusableEntitySummary = if (hasRetiredReusableSelection) {
+                                null
+                            } else {
+                                event.reusableEntityKind?.let { kind -> "${kind.label} selected: ${event.itemName}" }
+                            },
                             isLoading = false,
                             canSave = canSave(event.itemName, event.quantityLevel),
-                            canDelete = event.itemName.isNotBlank()
+                            canDelete = event.itemName.isNotBlank(),
+                            formMessage = if (hasRetiredReusableSelection) {
+                                "Saved reusable item was retired. Review the text value before saving."
+                            } else {
+                                it.formMessage
+                            }
                         )
                     }
                 }

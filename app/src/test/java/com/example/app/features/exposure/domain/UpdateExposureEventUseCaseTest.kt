@@ -132,6 +132,26 @@ class UpdateExposureEventUseCaseTest {
         )
         assertTrue(repository.updatedCommands.isEmpty())
     }
+
+    @Test
+    fun accepts_valid_historical_edit_timestamp() = runBlocking {
+        val repository = FakeEditableExposureRepository()
+        val useCase = UpdateExposureEventUseCase(repository, FakeExposureCurrentTimeProvider(fixedNow))
+
+        val historicalOccurredAt = fixedNow - 86_400_000L
+        val result = useCase(
+            UpdateExposureEventCommand(
+                id = 5L,
+                exposureType = "Pollen",
+                occurredAtEpochMs = historicalOccurredAt,
+                notes = "older record",
+                intensityLevel = 3
+            )
+        )
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(historicalOccurredAt, repository.updatedCommands.single().occurredAtEpochMs)
+    }
 }
 
 private class FakeEditableExposureRepository : ExposureRepository {

@@ -401,7 +401,13 @@ class AppContainer(appContext: Context) {
             getIngestionEventUseCase,
             deleteIngestionEventUseCase,
             updateIngestionEventUseCase,
-            systemCurrentTimeProvider
+            systemCurrentTimeProvider,
+            reusableEntityExists = { kind, id ->
+                when (kind) {
+                    ReusableEntityKind.INGREDIENT -> reusableIngredientDao.existsById(id)
+                    ReusableEntityKind.COMPOUND -> reusableCompoundDao.existsById(id)
+                }
+            }
         )
     }
 

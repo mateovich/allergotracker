@@ -217,6 +217,26 @@ class UpdateIngestionEventUseCaseTest {
         assertEquals("Choose a valid reusable item or clear the selection.", error.fieldErrors["itemName"])
         assertTrue(repository.updatedCommands.isEmpty())
     }
+
+    @Test
+    fun accepts_valid_historical_edit_timestamp() = runBlocking {
+        val repository = FakeEditableIngestionRepository()
+        val useCase = UpdateIngestionEventUseCase(repository, FakeEditableCurrentTimeProvider(fixedNow))
+
+        val historicalOccurredAt = fixedNow - 86_400_000L
+        val result = useCase(
+            UpdateIngestionEventCommand(
+                id = 7L,
+                itemName = "Tea",
+                quantityLevel = 2,
+                occurredAtEpochMs = historicalOccurredAt,
+                notes = "older record"
+            )
+        )
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(historicalOccurredAt, repository.updatedCommands.single().occurredAtEpochMs)
+    }
 }
 
 private class FakeEditableIngestionRepository : IngestionRepository {

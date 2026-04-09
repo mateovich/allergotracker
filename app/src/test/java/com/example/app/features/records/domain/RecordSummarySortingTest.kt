@@ -59,6 +59,28 @@ class RecordSummarySortingTest {
         assertEquals(listOf(higherId, sameIdsDifferentType, lowerId).map { it.id }, sorted.map { it.id })
     }
 
+    @Test
+    fun preserving_created_at_keeps_longitudinal_tie_break_stable_after_historical_edit() {
+        val editedRecord = record(
+            id = "exposure-8",
+            occurredAtEpochMs = 1_700_000_000_000L,
+            createdAtEpochMs = 100L,
+            sourceId = 8L,
+            eventType = RecordEventType.EXPOSURE
+        )
+        val unchangedRecord = record(
+            id = "ingestion-4",
+            occurredAtEpochMs = 1_700_000_000_000L,
+            createdAtEpochMs = 200L,
+            sourceId = 4L,
+            eventType = RecordEventType.INGESTION
+        )
+
+        val sorted = listOf(editedRecord, unchangedRecord).sortedWith(RecordSummaryComparator)
+
+        assertEquals(listOf("ingestion-4", "exposure-8"), sorted.map { it.id })
+    }
+
     private fun record(
         id: String,
         occurredAtEpochMs: Long,

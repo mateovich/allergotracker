@@ -17,8 +17,11 @@ import com.example.app.features.outbreak.domain.UpdateOutbreakEventUseCase
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -354,7 +357,7 @@ class EditOutbreakViewModelTest {
     }
 
     @Test
-    fun stale_saved_catalog_references_do_not_show_saved_summaries() = runBlocking {
+    fun saved_catalog_references_are_preserved_while_catalogs_finish_loading() = runBlocking {
         val repository = object : OutbreakRepository {
             override suspend fun createOutbreak(command: com.example.app.features.outbreak.domain.CreateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
             override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> = AppResult.Success(
@@ -382,6 +385,7 @@ class EditOutbreakViewModelTest {
             )
             override suspend fun deleteOutbreak(id: Long): AppResult<Unit> = AppResult.Success(Unit)
         }
+        val catalogEntries = MutableStateFlow<List<ReusableEventCatalog>>(emptyList())
         val viewModel = EditOutbreakViewModel(
             recordId = 9L,
             getOutbreakEventUseCase = GetOutbreakEventUseCase(repository),
@@ -389,7 +393,7 @@ class EditOutbreakViewModelTest {
             updateOutbreakEventUseCase = UpdateOutbreakEventUseCase(repository, CurrentTimeProvider { fixedNow }),
             currentTimeProvider = CurrentTimeProvider { fixedNow },
             observeReusableEventCatalogUseCase = ObserveReusableEventCatalogUseCase(
-                FakeEditOutbreakReusableEventCatalogRepository(emptyList())
+                FlowEditOutbreakReusableEventCatalogRepository(catalogEntries)
             )
         )
 
@@ -399,6 +403,31 @@ class EditOutbreakViewModelTest {
         assertEquals(102L, viewModel.state.value.selectedBodyLocationCatalogId)
         assertEquals(null, viewModel.state.value.selectedOutbreakDescriptorSummary)
         assertEquals(null, viewModel.state.value.selectedBodyLocationSummary)
+
+        catalogEntries.value = listOf(
+            ReusableEventCatalog(
+                id = 101L,
+                kind = ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR,
+                name = "Skin flare",
+                usageCount = 4,
+                createdAtEpochMs = fixedNow - 2_000L,
+                lastUsedAtEpochMs = fixedNow,
+                updatedAtEpochMs = fixedNow
+            ),
+            ReusableEventCatalog(
+                id = 102L,
+                kind = ReusableEventCatalogKind.BODY_LOCATION,
+                name = "Left arm",
+                usageCount = 4,
+                createdAtEpochMs = fixedNow - 1_000L,
+                lastUsedAtEpochMs = fixedNow,
+                updatedAtEpochMs = fixedNow
+            )
+        )
+
+        assertEquals("Saved outbreak descriptor selected: Skin flare", viewModel.state.value.selectedOutbreakDescriptorSummary)
+        assertEquals("Saved body location selected: Left arm", viewModel.state.value.selectedBodyLocationSummary)
+        assertEquals("", viewModel.state.value.formMessage)
     }
 
     @Test
@@ -417,6 +446,7 @@ class EditOutbreakViewModelTest {
         assertEquals(null, viewModel.state.value.selectedBodyLocationCatalogId)
         assertEquals(null, viewModel.state.value.selectedOutbreakDescriptorSummary)
         assertEquals(null, viewModel.state.value.selectedBodyLocationSummary)
+        assertEquals("Saved body location was retired. Review the text value before saving.", viewModel.state.value.formMessage)
     }
 
     private fun buildViewModel(): EditOutbreakViewModel {
@@ -466,5 +496,29 @@ private class FakeEditOutbreakReusableEventCatalogRepository(
 
     override suspend fun touchCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? {
         return entries.firstOrNull { it.kind == kind && it.id == id }
+    }
+}
+
+private class FlowEditOutbreakReusableEventCatalogRepository(
+    private val entries: MutableStateFlow<List<ReusableEventCatalog>>
+) : ReusableEventCatalogRepository {
+    override fun observeCatalog(kind: ReusableEventCatalogKind): Flow<List<ReusableEventCatalog>> {
+        return entries.asStateFlow().map { current -> current.filter { it.kind == kind } }
+    }
+
+    override suspend fun getCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? {
+        return entries.value.firstOrNull { it.kind == kind && it.id == id }
+    }
+
+    override suspend fun existsCatalogEntry(kind: ReusableEventCatalogKind, id: Long): Boolean {
+        return entries.value.any { it.kind == kind && it.id == id }
+    }
+
+    override suspend fun ensureCatalogEntry(kind: ReusableEventCatalogKind, name: String): ReusableEventCatalog {
+        return entries.value.first { it.kind == kind && it.name == name }
+    }
+
+    override suspend fun touchCatalogEntry(kind: ReusableEventCatalogKind, id: Long): ReusableEventCatalog? {
+        return entries.value.firstOrNull { it.kind == kind && it.id == id }
     }
 }
