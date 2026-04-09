@@ -331,7 +331,8 @@ class AppContainer(appContext: Context) {
             createIngestionDefaultsUseCase,
             createIngestionEventUseCase,
             observeReusableIngredientsUseCase,
-            observeReusableCompoundsUseCase
+            observeReusableCompoundsUseCase,
+            createReusableIngredientUseCase
         )
     val createExposureViewModelFactory: CreateExposureViewModelFactory =
         CreateExposureViewModelFactory(

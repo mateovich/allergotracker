@@ -57,7 +57,11 @@ data class CreateIngestionUiState(
     val occurredAtError: String? = null,
     val formMessage: String = "",
     val isSaving: Boolean = false,
-    val canSave: Boolean = false
+    val canSave: Boolean = false,
+    val isCreatingInlineIngredient: Boolean = false,
+    val inlineIngredientError: String? = null,
+    val showInlineIngredientDialog: Boolean = false,
+    val inlineIngredientName: String = ""
 )
 
 sealed interface CreateIngestionUiIntent {
@@ -68,7 +72,10 @@ sealed interface CreateIngestionUiIntent {
     data class SelectTimePreset(val preset: IngestionTimePreset) : CreateIngestionUiIntent
     data class ApplyReusableSelection(val result: IngestionReusableSelectionResult) : CreateIngestionUiIntent
     data class SelectReusableEntity(val result: IngestionReusableSelectionResult) : CreateIngestionUiIntent
-    data object CreateNewIngredient : CreateIngestionUiIntent
+    data class CreateInlineIngredient(val name: String) : CreateIngestionUiIntent
+    data class UpdateInlineIngredientName(val value: String) : CreateIngestionUiIntent
+    data class ShowInlineIngredientDialog(val prefillName: String) : CreateIngestionUiIntent
+    data object CancelInlineIngredientCreation : CreateIngestionUiIntent
     data object CreateNewCompound : CreateIngestionUiIntent
     data object EditSelectedReusableEntity : CreateIngestionUiIntent
     data object ClearRetiredReusableSelection : CreateIngestionUiIntent
@@ -77,7 +84,6 @@ sealed interface CreateIngestionUiIntent {
 
 sealed interface CreateIngestionUiEffect {
     data object NavigateToRecords : CreateIngestionUiEffect
-    data object NavigateToCreateIngredient : CreateIngestionUiEffect
     data object NavigateToCreateCompound : CreateIngestionUiEffect
     data class NavigateToEditReusableEntity(val kind: ReusableEntityKind, val id: Long) : CreateIngestionUiEffect
 }

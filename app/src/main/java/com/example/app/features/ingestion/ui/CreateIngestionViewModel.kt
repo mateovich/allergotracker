@@ -10,14 +10,18 @@ import com.example.app.features.ingestion.domain.CreateIngestionEventCommand
 import com.example.app.features.ingestion.domain.CreateIngestionEventUseCase
 import com.example.app.features.ingestion.domain.IngestionQuantityOption
 import com.example.app.features.ingestion.domain.ReusableEntityKind
+import com.example.app.features.ingredients.domain.CreateReusableIngredientCommand
+import com.example.app.features.ingredients.domain.CreateReusableIngredientUseCase
 import com.example.app.features.ingredients.domain.ObserveReusableIngredientsUseCase
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
@@ -25,7 +29,8 @@ class CreateIngestionViewModel(
     private val createIngestionDefaultsUseCase: CreateIngestionDefaultsUseCase,
     private val createIngestionEventUseCase: CreateIngestionEventUseCase,
     private val observeReusableIngredientsUseCase: ObserveReusableIngredientsUseCase,
-    private val observeReusableCompoundsUseCase: ObserveReusableCompoundsUseCase
+    private val observeReusableCompoundsUseCase: ObserveReusableCompoundsUseCase,
+    private val createReusableIngredientUseCase: CreateReusableIngredientUseCase
 ) : ViewModel() {
     private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
     private val mutableState = MutableStateFlow(buildInitialState())
@@ -33,6 +38,9 @@ class CreateIngestionViewModel(
 
     private val effectChannel = Channel<CreateIngestionUiEffect>(capacity = Channel.BUFFERED)
     val effects = effectChannel.receiveAsFlow()
+
+    // Debounced search query channel: UI writes here immediately; debounced collector updates filter
+    private val searchQueryChannel = MutableStateFlow("")
 
     init {
         viewModelScope.launch {
@@ -65,12 +73,37 @@ class CreateIngestionViewModel(
                 }
             }
         }
+        // 300ms debounce: update filteredReusableEntities after typing settles
+        viewModelScope.launch {
+            @OptIn(FlowPreview::class)
+            searchQueryChannel
+                .debounce(SEARCH_DEBOUNCE_MS)
+                .collect { query ->
+                    updateState { it.copy(reusableSearchQuery = query).withFilteredReusableEntities() }
+                }
+        }
     }
 
     fun onIntent(intent: CreateIngestionUiIntent) {
         when (intent) {
-            is CreateIngestionUiIntent.UpdateReusableSearchQuery -> updateState {
-                it.copy(reusableSearchQuery = intent.value, formMessage = "").withFilteredReusableEntities()
+            is CreateIngestionUiIntent.UpdateReusableSearchQuery -> {
+                val query = intent.value
+                // Update query display and itemName immediately (no debounce on visible text)
+                updateState { current ->
+                    val base = current.copy(reusableSearchQuery = query, formMessage = "")
+                    if (current.selectedReusableEntityId == null) {
+                        // No entity selected: sync itemName with whatever is typed (blank → clear)
+                        base.copy(
+                            itemName = query.trim(),
+                            itemNameError = null,
+                            canSave = canSave(query.trim(), current.selectedQuantityLevel)
+                        )
+                    } else {
+                        base
+                    }
+                }
+                // Debounced: update filtered list after 300ms
+                searchQueryChannel.value = query
             }
 
             is CreateIngestionUiIntent.UpdateItemName -> updateState {
@@ -117,8 +150,31 @@ class CreateIngestionViewModel(
 
             is CreateIngestionUiIntent.SelectReusableEntity -> updateState { it.withReusableSelection(intent.result) }
 
-            CreateIngestionUiIntent.CreateNewIngredient -> {
-                effectChannel.trySend(CreateIngestionUiEffect.NavigateToCreateIngredient)
+            is CreateIngestionUiIntent.CreateInlineIngredient -> createInlineIngredient(intent.name)
+
+            is CreateIngestionUiIntent.UpdateInlineIngredientName -> updateState {
+                // Only update name; caller is responsible for opening the dialog via ShowInlineIngredientDialog
+                it.copy(
+                    inlineIngredientName = intent.value,
+                    inlineIngredientError = null
+                )
+            }
+
+            is CreateIngestionUiIntent.ShowInlineIngredientDialog -> updateState {
+                it.copy(
+                    showInlineIngredientDialog = true,
+                    inlineIngredientName = intent.prefillName,
+                    inlineIngredientError = null
+                )
+            }
+
+            CreateIngestionUiIntent.CancelInlineIngredientCreation -> updateState {
+                it.copy(
+                    showInlineIngredientDialog = false,
+                    inlineIngredientName = "",
+                    inlineIngredientError = null,
+                    isCreatingInlineIngredient = false
+                )
             }
 
             CreateIngestionUiIntent.CreateNewCompound -> {
@@ -132,11 +188,12 @@ class CreateIngestionViewModel(
             }
 
             CreateIngestionUiIntent.ClearRetiredReusableSelection -> updateState {
+                // Keep itemName in reusableSearchQuery so the unified field shows the name for review.
                 it.copy(
                     selectedReusableEntitySummary = null,
                     selectedReusableEntityId = null,
                     selectedReusableEntityKind = null,
-                    reusableSearchQuery = "",
+                    reusableSearchQuery = it.itemName,
                     formMessage = "Saved reusable item was retired. Review the text value before saving."
                 ).withFilteredReusableEntities()
             }
@@ -145,11 +202,58 @@ class CreateIngestionViewModel(
         }
     }
 
+    private fun createInlineIngredient(name: String) {
+        val currentState = mutableState.value
+        if (currentState.isCreatingInlineIngredient) return
+
+        updateState { it.copy(isCreatingInlineIngredient = true, inlineIngredientError = null) }
+        viewModelScope.launch {
+            when (
+                val result = createReusableIngredientUseCase(
+                    CreateReusableIngredientCommand(name = name, notes = null)
+                )
+            ) {
+                is AppResult.Success -> {
+                    val selection = IngestionReusableSelectionResult(
+                        id = result.value.id,
+                        name = result.value.name,
+                        kind = ReusableEntityKind.INGREDIENT
+                    )
+                    updateState {
+                        it.copy(
+                            isCreatingInlineIngredient = false,
+                            showInlineIngredientDialog = false,
+                            inlineIngredientName = "",
+                            inlineIngredientError = null
+                        ).withReusableSelection(selection)
+                    }
+                }
+                is AppResult.Error -> {
+                    updateState {
+                        it.copy(
+                            isCreatingInlineIngredient = false,
+                            inlineIngredientError = result.error.fieldError("name") ?: result.error.message
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     private fun save() {
         val currentState = mutableState.value
-        if (currentState.isSaving) {
+        if (currentState.isSaving) return
+
+        // If no reusable entity is selected and query text is non-blank with no exact match,
+        // create the ingredient inline first, then save on success.
+        if (currentState.selectedReusableEntityId == null &&
+            currentState.reusableSearchQuery.isNotBlank() &&
+            !currentState.hasExactMatchInAvailable()
+        ) {
+            saveWithAutoCreateIngredient(currentState.reusableSearchQuery.trim())
             return
         }
+
         if (!currentState.canSave) {
             updateState {
                 it.copy(
@@ -161,6 +265,45 @@ class CreateIngestionViewModel(
             }
             return
         }
+        dispatchSave(currentState)
+    }
+
+    private fun saveWithAutoCreateIngredient(name: String) {
+        if (mutableState.value.isCreatingInlineIngredient) return
+        updateState { it.copy(isCreatingInlineIngredient = true, inlineIngredientError = null, isSaving = true) }
+        viewModelScope.launch {
+            when (
+                val result = createReusableIngredientUseCase(
+                    CreateReusableIngredientCommand(name = name, notes = null)
+                )
+            ) {
+                is AppResult.Success -> {
+                    val selection = IngestionReusableSelectionResult(
+                        id = result.value.id,
+                        name = result.value.name,
+                        kind = ReusableEntityKind.INGREDIENT
+                    )
+                    val stateWithSelection = mutableState.value
+                        .copy(isCreatingInlineIngredient = false)
+                        .withReusableSelection(selection)
+                    mutableState.value = stateWithSelection
+                    dispatchSave(stateWithSelection)
+                }
+                is AppResult.Error -> {
+                    updateState {
+                        it.copy(
+                            isCreatingInlineIngredient = false,
+                            isSaving = false,
+                            inlineIngredientError = result.error.fieldError("name") ?: result.error.message,
+                            formMessage = result.error.fieldError("name") ?: result.error.message
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun dispatchSave(currentState: CreateIngestionUiState) {
         updateState { it.copy(isSaving = true, formMessage = "") }
         viewModelScope.launch {
             when (
@@ -286,6 +429,15 @@ class CreateIngestionViewModel(
         return copy(filteredReusableEntities = filteredOptions)
     }
 
+    // True when the available catalog (not just filtered) contains a name that normalizes to the query.
+    // Used by Save to decide whether to auto-create or save free-text.
+    private fun CreateIngestionUiState.hasExactMatchInAvailable(): Boolean {
+        val normalizedQuery = reusableSearchQuery.trim().replace(Regex("\\s+"), " ").lowercase()
+        if (normalizedQuery.isBlank()) return false
+        val allEntities = availableIngredients.map { it.name } + availableCompounds.map { it.name }
+        return allEntities.any { it.trim().replace(Regex("\\s+"), " ").lowercase() == normalizedQuery }
+    }
+
     private fun ReusableEntityPickerOptionUiModel.relevanceBucket(normalizedQuery: String): Int {
         val normalizedName = name.lowercase()
         return when {
@@ -299,5 +451,6 @@ class CreateIngestionViewModel(
 
     private companion object {
         const val MAX_RECENT_REUSABLE_SUGGESTIONS = 6
+        const val SEARCH_DEBOUNCE_MS = 300L
     }
 }

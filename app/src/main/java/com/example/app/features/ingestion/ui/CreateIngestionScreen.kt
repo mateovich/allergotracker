@@ -64,7 +64,6 @@ fun CreateIngestionScreen(
         viewModel.effects.collectLatest { effect ->
             when (effect) {
                 CreateIngestionUiEffect.NavigateToRecords -> onNavigateToRoute(AppRoutes.RECORDS)
-                CreateIngestionUiEffect.NavigateToCreateIngredient -> onNavigateToRoute(AppRoutes.CREATE_INGREDIENT)
                 CreateIngestionUiEffect.NavigateToCreateCompound -> onNavigateToRoute(AppRoutes.CREATE_COMPOUND)
                 is CreateIngestionUiEffect.NavigateToEditReusableEntity -> onNavigateToRoute(
                     when (effect.kind) {
@@ -88,105 +87,40 @@ fun CreateIngestionScreen(
         ) {
             LocalOnlyNotice()
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "Reusable item", style = MaterialTheme.typography.titleSmall)
-                OutlinedTextField(
-                    value = state.reusableSearchQuery,
-                    onValueChange = { viewModel.onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery(it)) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("ingestion-reusable-search"),
-                    label = { Text("Search saved ingredients or compounds") },
-                    singleLine = true
-                )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AssistChip(
-                        onClick = { viewModel.onIntent(CreateIngestionUiIntent.CreateNewIngredient) },
-                        label = { Text("New ingredient") },
-                        modifier = Modifier.testTag("ingestion-create-ingredient")
-                    )
-                    AssistChip(
-                        onClick = { viewModel.onIntent(CreateIngestionUiIntent.CreateNewCompound) },
-                        label = { Text("New compound") },
-                        modifier = Modifier.testTag("ingestion-create-compound")
-                    )
-                }
-                if (state.filteredReusableEntities.isNotEmpty()) {
+            // Unified "What did you ingest?" field that handles:
+            // - Manual text entry (when no reusable entity selected)
+            // - Entity search and selection
+            // - Inline ingredient creation
+            ReusableEntitySearchField(
+                state = state,
+                onIntent = { viewModel.onIntent(it) }
+            )
+
+            // Show summary + actions only when a reusable entity is selected
+            state.selectedReusableEntitySummary?.let { summary ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = if (state.reusableSearchQuery.isBlank()) "Recent reusable items" else "Search results",
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        state.filteredReusableEntities.forEach { option ->
-                            AssistChip(
-                                onClick = {
-                                    viewModel.onIntent(
-                                        CreateIngestionUiIntent.SelectReusableEntity(
-                                            IngestionReusableSelectionResult(
-                                                id = option.id,
-                                                name = option.name,
-                                                kind = option.kind
-                                            )
-                                        )
-                                    )
-                                },
-                                label = { Text("${option.name} - ${option.supportingLabel}") },
-                                modifier = Modifier.testTag(
-                                    "ingestion-existing-${option.kind.storageValue}-${option.id}"
-                                )
-                            )
-                        }
-                    }
-                } else {
-                    Text(
-                        text = if (state.reusableSearchQuery.isBlank()) {
-                            "Search to find a saved reusable item, or create a new ingredient or compound inline."
-                        } else {
-                            "No saved reusable items match. Create a new ingredient or compound inline."
-                        },
+                        text = summary,
                         style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.testTag("ingestion-reusable-empty")
+                        modifier = Modifier.testTag("ingestion-reusable-summary")
                     )
-                }
-                state.selectedReusableEntitySummary?.let { summary ->
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            text = summary,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.testTag("ingestion-reusable-summary")
-                        )
-                        TextButton(
-                            onClick = {
-                                viewModel.onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery(""))
-                                viewModel.onIntent(CreateIngestionUiIntent.UpdateItemName(""))
-                            },
-                            modifier = Modifier.testTag("ingestion-reusable-clear")
-                        ) {
-                            Text("Clear reusable selection")
-                        }
-                        TextButton(
-                            onClick = { viewModel.onIntent(CreateIngestionUiIntent.EditSelectedReusableEntity) },
-                            modifier = Modifier.testTag("ingestion-reusable-edit")
-                        ) {
-                            Text("Edit saved reusable item")
-                        }
+                    TextButton(
+                        onClick = {
+                            viewModel.onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery(""))
+                            viewModel.onIntent(CreateIngestionUiIntent.UpdateItemName(""))
+                        },
+                        modifier = Modifier.testTag("ingestion-reusable-clear")
+                    ) {
+                        Text("Clear reusable selection")
+                    }
+                    TextButton(
+                        onClick = { viewModel.onIntent(CreateIngestionUiIntent.EditSelectedReusableEntity) },
+                        modifier = Modifier.testTag("ingestion-reusable-edit")
+                    ) {
+                        Text("Edit saved reusable item")
                     }
                 }
             }
-
-            OutlinedTextField(
-                value = state.itemName,
-                onValueChange = { viewModel.onIntent(CreateIngestionUiIntent.UpdateItemName(it)) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("ingestion-item-name"),
-                label = { Text("What did you ingest?") },
-                supportingText = {
-                    state.itemNameError?.let { Text(it) }
-                },
-                isError = state.itemNameError != null,
-                singleLine = true
-            )
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = "When did it happen?", style = MaterialTheme.typography.titleSmall)

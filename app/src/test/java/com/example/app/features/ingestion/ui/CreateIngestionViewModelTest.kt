@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+
 package com.example.app.features.ingestion.ui
 
 import com.example.app.MainDispatcherRule
@@ -13,6 +15,8 @@ import com.example.app.features.ingestion.domain.IngestionRepository
 import com.example.app.features.ingestion.domain.ReusableEntityKind
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.ingredients.domain.ObserveReusableIngredientsUseCase
+import com.example.app.features.ingredients.domain.CreateReusableIngredientCommand
+import com.example.app.features.ingredients.domain.CreateReusableIngredientUseCase
 import com.example.app.features.ingredients.domain.ReusableIngredient
 import com.example.app.features.ingredients.domain.ReusableIngredientRepository
 import kotlinx.coroutines.async
@@ -20,6 +24,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.runBlocking
 import java.time.Instant
 import java.time.ZoneId
@@ -28,6 +34,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.Test
 
@@ -114,7 +121,7 @@ class CreateIngestionViewModelTest {
     }
 
     @Test
-    fun search_query_filters_reusable_entities_without_hiding_inline_create_actions() {
+    fun search_query_filters_reusable_entities_without_hiding_inline_create_actions() = runTest {
         val viewModel = buildViewModel(
             ingredients = listOf(
                 ReusableIngredient(11L, "Oat milk", null, fixedNow, fixedNow),
@@ -126,6 +133,7 @@ class CreateIngestionViewModelTest {
         )
 
         viewModel.onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery("oat"))
+        advanceUntilIdle()
 
         assertEquals(listOf("Oat breakfast mix", "Oat milk"), viewModel.state.value.filteredReusableEntities.map { it.name })
     }
@@ -282,6 +290,12 @@ class CreateIngestionViewModelTest {
                     override suspend fun createCompound(command: com.example.app.features.compounds.domain.CreateReusableCompoundCommand): AppResult<ReusableCompound> = error("unused")
                     override fun observeCompounds(): Flow<List<ReusableCompound>> = flowOf(emptyList())
                 }
+            ),
+            createReusableIngredientUseCase = CreateReusableIngredientUseCase(
+                repository = object : ReusableIngredientRepository {
+                    override suspend fun createIngredient(command: CreateReusableIngredientCommand): AppResult<ReusableIngredient> = error("unused")
+                    override fun observeIngredients(): Flow<List<ReusableIngredient>> = flowOf(emptyList())
+                }
             )
         )
         val effect = async { viewModel.effects.first() }
@@ -299,7 +313,8 @@ class CreateIngestionViewModelTest {
     private fun buildViewModel(
         ingredients: List<ReusableIngredient> = emptyList(),
         compounds: List<ReusableCompound> = emptyList(),
-        saveResult: AppResult<IngestionEvent>? = null
+        saveResult: AppResult<IngestionEvent>? = null,
+        createIngredientResult: AppResult<ReusableIngredient>? = null
     ): CreateIngestionViewModel {
         val timeProvider = object : CurrentTimeProvider {
             override fun nowEpochMillis(): Long = fixedNow
@@ -321,25 +336,25 @@ class CreateIngestionViewModelTest {
                     }
 
                     override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> {
-                        error("Not used in create tests")
+                        error("Not used in create ingestion tests")
                     }
 
                     override suspend fun updateIngestion(command: com.example.app.features.ingestion.domain.UpdateIngestionEventCommand): AppResult<IngestionEvent> {
-                        error("Not used in create tests")
+                        error("Not used in create ingestion tests")
                     }
 
                     override suspend fun deleteIngestion(id: Long): AppResult<Unit> {
-                        error("Not used in create tests")
+                        error("Not used in create ingestion tests")
                     }
                 },
                 currentTimeProvider = timeProvider
             ),
             observeReusableIngredientsUseCase = ObserveReusableIngredientsUseCase(
                 repository = object : ReusableIngredientRepository {
-                    override suspend fun createIngredient(command: com.example.app.features.ingredients.domain.CreateReusableIngredientCommand): AppResult<ReusableIngredient> {
-                        error("Not used in create ingestion tests")
+                    // createIngredient is never called by ObserveReusableIngredientsUseCase
+                    override suspend fun createIngredient(command: CreateReusableIngredientCommand): AppResult<ReusableIngredient> {
+                        error("Not used by observe use case")
                     }
-
                     override fun observeIngredients(): Flow<List<ReusableIngredient>> = flowOf(ingredients)
                 }
             ),
@@ -351,7 +366,233 @@ class CreateIngestionViewModelTest {
 
                     override fun observeCompounds(): Flow<List<ReusableCompound>> = flowOf(compounds)
                 }
+            ),
+            createReusableIngredientUseCase = CreateReusableIngredientUseCase(
+                repository = object : ReusableIngredientRepository {
+                    override suspend fun createIngredient(command: CreateReusableIngredientCommand): AppResult<ReusableIngredient> {
+                        return createIngredientResult ?: AppResult.Success(
+                            ReusableIngredient(
+                                id = 99L,
+                                name = command.name,
+                                notes = command.notes,
+                                createdAtEpochMs = fixedNow,
+                                updatedAtEpochMs = fixedNow
+                            )
+                        )
+                    }
+
+                    override fun observeIngredients(): Flow<List<ReusableIngredient>> = flowOf(ingredients)
+                }
             )
         )
+    }
+
+    // === Inline ingredient creation tests (Story 5.1) ===
+
+    @Test
+    fun searching_with_no_match_shows_create_option_in_state() = runTest {
+        val viewModel = buildViewModel(
+            ingredients = listOf(
+                ReusableIngredient(11L, "Oat milk", null, fixedNow, fixedNow)
+            )
+        )
+
+        viewModel.onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery("banana"))
+        advanceUntilIdle()
+
+        // No match for "banana" — filtered list is empty, so UI should show create option (PROMINENT chip)
+        assertTrue(viewModel.state.value.filteredReusableEntities.isEmpty())
+        // itemName is synced to the search query immediately
+        assertEquals("banana", viewModel.state.value.itemName)
+    }
+
+    @Test
+    fun searching_with_exact_match_hides_create_option_in_state() = runTest {
+        val viewModel = buildViewModel(
+            ingredients = listOf(
+                ReusableIngredient(11L, "Oat milk", null, fixedNow, fixedNow)
+            )
+        )
+
+        viewModel.onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery("Oat milk"))
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.state.value.filteredReusableEntities.size)
+        assertEquals("Oat milk", viewModel.state.value.filteredReusableEntities.first().name)
+    }
+
+    @Test
+    fun clearing_search_query_clears_item_name_and_can_save() = runTest {
+        val viewModel = buildViewModel()
+        viewModel.onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery("Banana"))
+        viewModel.onIntent(CreateIngestionUiIntent.SelectQuantityLevel(2))
+        assertTrue(viewModel.state.value.canSave)
+
+        viewModel.onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery(""))
+        advanceUntilIdle()
+
+        assertEquals("", viewModel.state.value.itemName)
+        assertFalse(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun show_inline_ingredient_dialog_sets_state_correctly() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateIngestionUiIntent.ShowInlineIngredientDialog("Coconut oil"))
+
+        assertTrue(viewModel.state.value.showInlineIngredientDialog)
+        assertEquals("Coconut oil", viewModel.state.value.inlineIngredientName)
+        assertNull(viewModel.state.value.inlineIngredientError)
+    }
+
+    @Test
+    fun create_inline_ingredient_succeeds_and_selects() = runTest {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateIngestionUiIntent.ShowInlineIngredientDialog("Coconut oil"))
+        assertTrue(viewModel.state.value.showInlineIngredientDialog)
+
+        viewModel.onIntent(CreateIngestionUiIntent.CreateInlineIngredient("Coconut oil"))
+        advanceUntilIdle()
+
+        assertEquals("Coconut oil", viewModel.state.value.itemName)
+        assertEquals(ReusableEntityKind.INGREDIENT, viewModel.state.value.selectedReusableEntityKind)
+        assertFalse(viewModel.state.value.showInlineIngredientDialog)
+        assertFalse(viewModel.state.value.isCreatingInlineIngredient)
+    }
+
+    @Test
+    fun create_inline_ingredient_fails_shows_error() = runTest {
+        val viewModel = buildViewModel(
+            createIngredientResult = AppResult.Error(
+                com.example.app.core.common.error.DomainError.ValidationError(
+                    message = "Please fix the highlighted fields.",
+                    fieldErrors = mapOf("name" to "Enter an ingredient name.")
+                )
+            )
+        )
+
+        viewModel.onIntent(CreateIngestionUiIntent.ShowInlineIngredientDialog(""))
+        viewModel.onIntent(CreateIngestionUiIntent.CreateInlineIngredient(""))
+        advanceUntilIdle()
+
+        assertNotNull(viewModel.state.value.inlineIngredientError)
+        assertFalse(viewModel.state.value.isCreatingInlineIngredient)
+        assertTrue(viewModel.state.value.showInlineIngredientDialog)
+    }
+
+    @Test
+    fun create_inline_ingredient_duplicate_name_shows_error() = runTest {
+        val viewModel = buildViewModel(
+            createIngredientResult = AppResult.Error(
+                com.example.app.core.common.error.DomainError.ValidationError(
+                    message = "An ingredient with this name already exists.",
+                    fieldErrors = mapOf("name" to "An ingredient with this name already exists.")
+                )
+            )
+        )
+
+        viewModel.onIntent(CreateIngestionUiIntent.ShowInlineIngredientDialog("Oat milk"))
+        viewModel.onIntent(CreateIngestionUiIntent.CreateInlineIngredient("Oat milk"))
+        advanceUntilIdle()
+
+        assertNotNull(viewModel.state.value.inlineIngredientError)
+        assertTrue(viewModel.state.value.inlineIngredientError?.contains("already exists") == true)
+        assertFalse(viewModel.state.value.isCreatingInlineIngredient)
+    }
+
+    @Test
+    fun cancel_inline_ingredient_closes_dialog_and_clears_state() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateIngestionUiIntent.ShowInlineIngredientDialog("Test"))
+        assertTrue(viewModel.state.value.showInlineIngredientDialog)
+
+        viewModel.onIntent(CreateIngestionUiIntent.CancelInlineIngredientCreation)
+
+        assertFalse(viewModel.state.value.showInlineIngredientDialog)
+        assertEquals("", viewModel.state.value.inlineIngredientName)
+        assertNull(viewModel.state.value.inlineIngredientError)
+        assertFalse(viewModel.state.value.isCreatingInlineIngredient)
+    }
+
+    @Test
+    fun cancel_inline_ingredient_does_not_clear_item_name_when_already_set() = runTest {
+        val viewModel = buildViewModel()
+
+        // User types "Banana" — itemName syncs immediately
+        viewModel.onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery("Banana"))
+        viewModel.onIntent(CreateIngestionUiIntent.SelectQuantityLevel(2))
+        assertEquals("Banana", viewModel.state.value.itemName)
+        assertTrue(viewModel.state.value.canSave)
+
+        // User opens and cancels the inline dialog
+        viewModel.onIntent(CreateIngestionUiIntent.ShowInlineIngredientDialog("Banana"))
+        viewModel.onIntent(CreateIngestionUiIntent.CancelInlineIngredientCreation)
+
+        // itemName is NOT cleared — form remains saveable as free-text entry
+        assertEquals("Banana", viewModel.state.value.itemName)
+        assertTrue(viewModel.state.value.canSave)
+        assertFalse(viewModel.state.value.showInlineIngredientDialog)
+    }
+
+    @Test
+    fun second_inline_create_while_first_is_in_flight_is_ignored() = runTest {
+        val createGate = CompletableDeferred<Unit>()
+        val timeProvider = object : CurrentTimeProvider {
+            override fun nowEpochMillis(): Long = fixedNow
+        }
+        var createCalls = 0
+        val viewModel = CreateIngestionViewModel(
+            createIngestionDefaultsUseCase = CreateIngestionDefaultsUseCase(timeProvider),
+            createIngestionEventUseCase = CreateIngestionEventUseCase(
+                repository = object : IngestionRepository {
+                    override suspend fun createIngestion(command: CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
+                    override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> = error("unused")
+                    override suspend fun updateIngestion(command: com.example.app.features.ingestion.domain.UpdateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
+                    override suspend fun deleteIngestion(id: Long): AppResult<Unit> = error("unused")
+                },
+                currentTimeProvider = timeProvider
+            ),
+            observeReusableIngredientsUseCase = ObserveReusableIngredientsUseCase(
+                repository = object : ReusableIngredientRepository {
+                    override suspend fun createIngredient(command: CreateReusableIngredientCommand): AppResult<ReusableIngredient> = error("unused")
+                    override fun observeIngredients(): Flow<List<ReusableIngredient>> = flowOf(emptyList())
+                }
+            ),
+            observeReusableCompoundsUseCase = ObserveReusableCompoundsUseCase(
+                repository = object : ReusableCompoundRepository {
+                    override suspend fun createCompound(command: com.example.app.features.compounds.domain.CreateReusableCompoundCommand): AppResult<ReusableCompound> = error("unused")
+                    override fun observeCompounds(): Flow<List<ReusableCompound>> = flowOf(emptyList())
+                }
+            ),
+            createReusableIngredientUseCase = CreateReusableIngredientUseCase(
+                repository = object : ReusableIngredientRepository {
+                    override suspend fun createIngredient(command: CreateReusableIngredientCommand): AppResult<ReusableIngredient> {
+                        createCalls += 1
+                        createGate.await()
+                        return AppResult.Success(
+                            ReusableIngredient(
+                                id = 99L,
+                                name = command.name,
+                                notes = command.notes,
+                                createdAtEpochMs = fixedNow,
+                                updatedAtEpochMs = fixedNow
+                            )
+                        )
+                    }
+                    override fun observeIngredients(): Flow<List<ReusableIngredient>> = flowOf(emptyList())
+                }
+            )
+        )
+
+        viewModel.onIntent(CreateIngestionUiIntent.ShowInlineIngredientDialog("Test"))
+        viewModel.onIntent(CreateIngestionUiIntent.CreateInlineIngredient("Test"))
+        viewModel.onIntent(CreateIngestionUiIntent.CreateInlineIngredient("Test2"))
+        createGate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(1, createCalls)
     }
 }

@@ -42,6 +42,7 @@ import com.example.app.features.ingestion.domain.GetIngestionEventUseCase
 import com.example.app.features.ingestion.domain.IngestionEvent
 import com.example.app.features.ingestion.domain.IngestionQuantityOption
 import com.example.app.features.ingestion.domain.IngestionRepository
+import com.example.app.features.ingredients.domain.CreateReusableIngredientUseCase
 import com.example.app.features.ingredients.domain.ObserveReusableIngredientsUseCase
 import com.example.app.features.ingredients.domain.ReusableIngredient
 import com.example.app.features.ingredients.domain.ReusableIngredientRepository
@@ -720,6 +721,22 @@ class RecordsScreenTest {
 
                                     override fun observeCompounds(): Flow<List<ReusableCompound>> = emptyFlow()
                                 }
+                            ),
+                            createReusableIngredientUseCase = CreateReusableIngredientUseCase(
+                                object : ReusableIngredientRepository {
+                                    override suspend fun createIngredient(command: com.example.app.features.ingredients.domain.CreateReusableIngredientCommand): AppResult<ReusableIngredient> {
+                                        return AppResult.Success(
+                                            ReusableIngredient(
+                                                id = 99L,
+                                                name = command.name,
+                                                notes = command.notes,
+                                                createdAtEpochMs = System.currentTimeMillis(),
+                                                updatedAtEpochMs = System.currentTimeMillis()
+                                            )
+                                        )
+                                    }
+                                    override fun observeIngredients(): Flow<List<ReusableIngredient>> = emptyFlow()
+                                }
                             )
                         ) as T
                     }
@@ -730,7 +747,7 @@ class RecordsScreenTest {
         composeRule.onNodeWithTag("records-add-fab").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
-        composeRule.onNodeWithTag("ingestion-item-name").performTextReplacement("Tea")
+        composeRule.onNodeWithTag("ingestion-reusable-search").performTextReplacement("Tea")
         composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
         composeRule.onNodeWithTag("ingestion-save").performClick()
 
