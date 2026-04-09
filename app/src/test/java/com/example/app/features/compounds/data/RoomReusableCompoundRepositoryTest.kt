@@ -501,6 +501,16 @@ private class FakeReusableCompoundDao(
         return existingComponents.count { it.ingredientId == ingredientId }
     }
 
+    override suspend fun countIngredientMergeConflictingCompounds(
+        sourceIngredientId: Long,
+        destinationIngredientId: Long
+    ): Int = 0
+
+    override suspend fun replaceIngredientComponentReferences(
+        sourceIngredientId: Long,
+        destinationIngredientId: Long
+    ): Int = 0
+
     override suspend fun countChildCompoundReferences(compoundId: Long): Int {
         return existingComponents.count { it.childCompoundId == compoundId }
     }

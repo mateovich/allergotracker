@@ -4,11 +4,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +29,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.core.designsystem.AppScreenScaffold
 import com.example.app.core.designsystem.LocalOnlyNotice
 import com.example.app.features.ingestion.ui.IngestionReusableSelectionResult
+import com.example.app.features.ingredients.domain.ReusableIngredientMergePreview
 import com.example.app.features.ingredients.domain.ReusableIngredientRetirementImpact
 import kotlinx.coroutines.flow.collectLatest
 
@@ -117,12 +120,113 @@ fun EditIngredientScreen(
                 Text(if (state.isSaving) "Saving..." else "Save changes")
             }
             Button(
+                onClick = { viewModel.onIntent(EditIngredientUiIntent.RequestMergeFlow) },
+                enabled = !state.isSaving && !state.isRetiring && !state.isMerging,
+                modifier = Modifier.fillMaxWidth().testTag("edit-ingredient-merge")
+            ) {
+                Text("Merge duplicate ingredient")
+            }
+            Button(
                 onClick = { viewModel.onIntent(EditIngredientUiIntent.RequestRetirementPreview) },
                 enabled = !state.isSaving && !state.isRetiring,
                 modifier = Modifier.fillMaxWidth().testTag("edit-ingredient-retire")
             ) {
                 Text("Retire ingredient")
             }
+        }
+
+        if (state.isMergeDialogVisible) {
+            AlertDialog(
+                onDismissRequest = { viewModel.onIntent(EditIngredientUiIntent.DismissMergeDialog) },
+                title = { Text("Merge ingredient?") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = "Source ingredient: ${state.name}",
+                            modifier = Modifier.testTag("edit-ingredient-merge-source")
+                        )
+                        OutlinedTextField(
+                            value = state.mergeDestinationQuery,
+                            onValueChange = { viewModel.onIntent(EditIngredientUiIntent.UpdateMergeDestinationQuery(it)) },
+                            modifier = Modifier.fillMaxWidth().testTag("edit-ingredient-merge-query"),
+                            label = { Text("Canonical ingredient") },
+                            singleLine = true
+                        )
+                        if (state.mergeDestinationOptions.isNotEmpty()) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                state.mergeDestinationOptions.forEach { ingredient ->
+                                    AssistChip(
+                                        onClick = { viewModel.onIntent(EditIngredientUiIntent.SelectMergeDestination(ingredient.id)) },
+                                        label = { Text(ingredient.name) },
+                                        modifier = Modifier.testTag("edit-ingredient-merge-option-${ingredient.id}")
+                                    )
+                                }
+                            }
+                        } else {
+                            Text(
+                                text = "No saved ingredients match this search.",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.testTag("edit-ingredient-merge-empty")
+                            )
+                        }
+                        state.selectedMergeDestinationId?.let { destinationId ->
+                            state.mergeDestinationOptions.firstOrNull { it.id == destinationId }?.let { destination ->
+                                Text(
+                                    text = "Canonical destination: ${destination.name}",
+                                    modifier = Modifier.testTag("edit-ingredient-merge-selection")
+                                )
+                            }
+                        }
+                        if (state.isLoadingMergePreview) {
+                            CircularProgressIndicator(modifier = Modifier.testTag("edit-ingredient-merge-loading"))
+                        }
+                        state.mergePreview?.let { preview ->
+                            Text(
+                                text = buildIngredientMergeMessage(preview),
+                                modifier = Modifier.testTag("edit-ingredient-merge-preview")
+                            )
+                        }
+                        state.mergeError?.let { error ->
+                            Text(
+                                text = error,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.testTag("edit-ingredient-merge-error")
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    val mergePreview = state.mergePreview
+                    if (mergePreview != null && !mergePreview.isBlocked) {
+                        TextButton(
+                            onClick = { viewModel.onIntent(EditIngredientUiIntent.ConfirmMerge) },
+                            enabled = !state.isMerging,
+                            modifier = Modifier.testTag("edit-ingredient-merge-confirm")
+                        ) {
+                            Text(if (state.isMerging) "Merging..." else "Confirm merge")
+                        }
+                    } else {
+                        TextButton(
+                            onClick = { viewModel.onIntent(EditIngredientUiIntent.LoadMergePreview) },
+                            enabled = !state.isLoadingMergePreview,
+                            modifier = Modifier.testTag("edit-ingredient-merge-preview-action")
+                        ) {
+                            Text("Preview impact")
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { viewModel.onIntent(EditIngredientUiIntent.DismissMergeDialog) },
+                        modifier = Modifier.testTag("edit-ingredient-merge-dismiss")
+                    ) {
+                        Text(if (state.mergePreview?.isBlocked == true) "Close" else "Cancel")
+                    }
+                }
+            )
         }
 
         if (state.isRetirementDialogVisible) {
@@ -182,6 +286,23 @@ private fun buildIngredientRetirementMessage(impact: ReusableIngredientRetiremen
             } else {
                 "Safe path: no active references remain, so this ingredient can be removed from the reusable catalog."
             }
+        )
+    }.trimEnd()
+}
+
+private fun buildIngredientMergeMessage(preview: ReusableIngredientMergePreview): String {
+    return buildString {
+        appendLine("Impact preview:")
+        appendLine("- Destination: ${preview.destination.name}")
+        appendLine("- Ingestion records moved: ${preview.ingestionReferenceCount}")
+        appendLine("- Compound components moved: ${preview.compoundReferenceCount}")
+        if (preview.conflictingCompoundCount > 0) {
+            appendLine("- Conflicting compounds: ${preview.conflictingCompoundCount}")
+        }
+        appendLine()
+        append(
+            preview.blockMessage
+                ?: "Safe path: references will move to the canonical ingredient and the duplicate source will be removed."
         )
     }.trimEnd()
 }

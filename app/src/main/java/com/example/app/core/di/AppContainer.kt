@@ -44,8 +44,10 @@ import com.example.app.features.exposure.ui.CreateExposureViewModelFactory
 import com.example.app.features.exposure.ui.EditExposureViewModelFactory
 import com.example.app.features.ingredients.data.RoomReusableIngredientRepository
 import com.example.app.features.ingredients.domain.CreateReusableIngredientUseCase
+import com.example.app.features.ingredients.domain.GetReusableIngredientMergePreviewUseCase
 import com.example.app.features.ingredients.domain.GetReusableIngredientRetirementImpactUseCase
 import com.example.app.features.ingredients.domain.GetReusableIngredientUseCase
+import com.example.app.features.ingredients.domain.MergeReusableIngredientUseCase
 import com.example.app.features.ingredients.domain.ObserveReusableIngredientsUseCase
 import com.example.app.features.ingredients.domain.RetireReusableIngredientUseCase
 import com.example.app.features.ingredients.domain.UpdateReusableIngredientUseCase
@@ -225,6 +227,18 @@ class AppContainer(appContext: Context) {
             reusableCompoundDao.countIngredientComponentReferences(ingredientId)
         }
     )
+    private val getReusableIngredientMergePreviewUseCase = GetReusableIngredientMergePreviewUseCase(
+        repository = reusableIngredientRepository,
+        countIngestionReferences = { ingredientId ->
+            ingestionEventDao.countReusableEntityReferences(ReusableEntityKind.INGREDIENT.storageValue, ingredientId)
+        },
+        countCompoundReferences = { ingredientId ->
+            reusableCompoundDao.countIngredientComponentReferences(ingredientId)
+        },
+        countConflictingCompounds = { sourceIngredientId, destinationIngredientId ->
+            reusableCompoundDao.countIngredientMergeConflictingCompounds(sourceIngredientId, destinationIngredientId)
+        }
+    )
     private val getReusableCompoundRetirementImpactUseCase = GetReusableCompoundRetirementImpactUseCase(
         repository = reusableCompoundRepository,
         countIngestionReferences = { compoundId ->
@@ -261,6 +275,25 @@ class AppContainer(appContext: Context) {
         getImpact = getReusableIngredientRetirementImpactUseCase,
         detachIngestionReferences = { ingredientId ->
             ingestionEventDao.clearReusableEntityReferences(ReusableEntityKind.INGREDIENT.storageValue, ingredientId)
+        },
+        runAtomically = { block ->
+            appDatabase.withTransaction { block() }
+        }
+    )
+    private val mergeReusableIngredientUseCase = MergeReusableIngredientUseCase(
+        getPreview = getReusableIngredientMergePreviewUseCase,
+        getIngredient = reusableIngredientRepository::getIngredient,
+        deleteIngredient = reusableIngredientRepository::deleteIngredient,
+        reassignIngestionReferences = { sourceIngredientId, destinationIngredientId, destinationName ->
+            ingestionEventDao.reassignReusableEntityReferences(
+                ReusableEntityKind.INGREDIENT.storageValue,
+                sourceIngredientId,
+                destinationIngredientId,
+                destinationName
+            )
+        },
+        replaceCompoundReferences = { sourceIngredientId, destinationIngredientId ->
+            reusableCompoundDao.replaceIngredientComponentReferences(sourceIngredientId, destinationIngredientId)
         },
         runAtomically = { block ->
             appDatabase.withTransaction { block() }
@@ -360,6 +393,9 @@ class AppContainer(appContext: Context) {
             reusableId,
             getReusableIngredientUseCase,
             updateReusableIngredientUseCase,
+            observeReusableIngredientsUseCase,
+            getReusableIngredientMergePreviewUseCase,
+            mergeReusableIngredientUseCase,
             getReusableIngredientRetirementImpactUseCase,
             retireReusableIngredientUseCase
         )

@@ -111,7 +111,7 @@ class MainActivityTest {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()
 
-        composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Oat milk")
+        composeRule.onNodeWithTag("ingestion-reusable-search").performTextReplacement("Oat milk")
         waitForTag("ingestion-create-inline-ingredient")
         composeRule.onNodeWithTag("ingestion-create-inline-ingredient").performClick()
         waitForTag("ingestion-inline-ingredient-name")
@@ -665,6 +665,35 @@ class MainActivityTest {
         composeRule.onNodeWithTag("ingestion-form-message")
             .assertTextContains("Saved reusable item was retired. Review the text value before saving.")
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk")
+    }
+
+    @Test
+    fun ingredient_merge_confirm_flow_returns_canonical_selection_after_preview() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        createReusableIngredientInline("Oat milk")
+        createReusableIngredientInline("Oat milk plus")
+        createReusableCompoundInline("Breakfast mix", "Oat milk")
+        composeRule.onNodeWithTag("ingestion-reusable-clear").performClick()
+
+        composeRule.onNodeWithTag("ingestion-reusable-search").performTextReplacement("Oat milk")
+        waitForText("Oat milk - Ingredient")
+        composeRule.onNodeWithText("Oat milk - Ingredient").performClick()
+        waitForTag("ingestion-reusable-edit")
+        composeRule.onNodeWithTag("ingestion-reusable-edit").performClick()
+
+        composeRule.onNodeWithTag("edit-ingredient-merge").performClick()
+        composeRule.onNodeWithTag("edit-ingredient-merge-query").performTextInput("plus")
+        composeRule.onNodeWithText("Oat milk plus").performClick()
+        composeRule.onNodeWithTag("edit-ingredient-merge-preview-action").performClick()
+        composeRule.onNodeWithTag("edit-ingredient-merge-preview").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-ingredient-merge-confirm").performClick()
+
+        composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("ingestion-reusable-summary")
+            .assertTextContains("Reusable ingredient selected: Oat milk plus")
+        composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk plus")
     }
 
     @Test

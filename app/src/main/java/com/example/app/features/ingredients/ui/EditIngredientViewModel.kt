@@ -6,9 +6,13 @@ import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.ingestion.domain.ReusableEntityKind
 import com.example.app.features.ingestion.ui.IngestionReusableSelectionResult
+import com.example.app.features.ingredients.domain.GetReusableIngredientMergePreviewUseCase
 import com.example.app.features.ingredients.domain.GetReusableIngredientRetirementImpactUseCase
-import com.example.app.features.ingredients.domain.RetireReusableIngredientUseCase
 import com.example.app.features.ingredients.domain.GetReusableIngredientUseCase
+import com.example.app.features.ingredients.domain.MergeReusableIngredientUseCase
+import com.example.app.features.ingredients.domain.ObserveReusableIngredientsUseCase
+import com.example.app.features.ingredients.domain.ReusableIngredient
+import com.example.app.features.ingredients.domain.RetireReusableIngredientUseCase
 import com.example.app.features.ingredients.domain.UpdateReusableIngredientCommand
 import com.example.app.features.ingredients.domain.UpdateReusableIngredientUseCase
 import kotlinx.coroutines.channels.Channel
@@ -22,14 +26,28 @@ class EditIngredientViewModel(
     private val ingredientId: Long,
     private val getReusableIngredientUseCase: GetReusableIngredientUseCase,
     private val updateReusableIngredientUseCase: UpdateReusableIngredientUseCase,
+    private val observeReusableIngredients: ObserveReusableIngredientsUseCase,
+    private val getReusableIngredientMergePreviewUseCase: GetReusableIngredientMergePreviewUseCase,
+    private val mergeReusableIngredientUseCase: MergeReusableIngredientUseCase,
     private val getReusableIngredientRetirementImpactUseCase: GetReusableIngredientRetirementImpactUseCase,
     private val retireReusableIngredientUseCase: RetireReusableIngredientUseCase
 ) : ViewModel() {
+    private var observedIngredients: List<ReusableIngredient> = emptyList()
+
     private val mutableState = MutableStateFlow(EditIngredientUiState())
     val state: StateFlow<EditIngredientUiState> = mutableState.asStateFlow()
 
     private val effectChannel = Channel<EditIngredientUiEffect>(capacity = Channel.BUFFERED)
     val effects = effectChannel.receiveAsFlow()
+
+    init {
+        viewModelScope.launch {
+            observeReusableIngredients().collect { ingredients ->
+                observedIngredients = ingredients
+                updateState { it.refreshMergeDestinationOptions() }
+            }
+        }
+    }
 
     fun onIntent(intent: EditIngredientUiIntent) {
         when (intent) {
@@ -46,6 +64,31 @@ class EditIngredientViewModel(
 
             is EditIngredientUiIntent.UpdateNotes -> updateState { it.copy(notes = intent.value) }
             EditIngredientUiIntent.Save -> save()
+            EditIngredientUiIntent.RequestMergeFlow -> openMergeDialog()
+            is EditIngredientUiIntent.UpdateMergeDestinationQuery -> updateState {
+                it.copy(
+                    mergeDestinationQuery = intent.value,
+                    mergeError = null,
+                    mergePreview = null
+                ).refreshMergeDestinationOptions()
+            }
+            is EditIngredientUiIntent.SelectMergeDestination -> updateState {
+                it.copy(selectedMergeDestinationId = intent.id, mergePreview = null, mergeError = null)
+                    .refreshMergeDestinationOptions()
+            }
+            EditIngredientUiIntent.LoadMergePreview -> loadMergePreview()
+            EditIngredientUiIntent.DismissMergeDialog -> updateState {
+                it.copy(
+                    isMergeDialogVisible = false,
+                    mergeDestinationQuery = "",
+                    selectedMergeDestinationId = null,
+                    mergePreview = null,
+                    isLoadingMergePreview = false,
+                    isMerging = false,
+                    mergeError = null
+                ).refreshMergeDestinationOptions()
+            }
+            EditIngredientUiIntent.ConfirmMerge -> merge()
             EditIngredientUiIntent.RequestRetirementPreview -> loadRetirementPreview()
             EditIngredientUiIntent.DismissRetirementDialog -> updateState {
                 it.copy(isRetirementDialogVisible = false, retirementImpact = null, isRetiring = false)
@@ -55,7 +98,7 @@ class EditIngredientViewModel(
     }
 
     private fun loadIfNeeded() {
-        if (mutableState.value.name.isNotBlank()) return
+        if (!mutableState.value.isLoading && mutableState.value.name.isNotBlank()) return
         updateState { it.copy(isLoading = true, formMessage = "") }
         viewModelScope.launch {
             when (val result = getReusableIngredientUseCase(ingredientId)) {
@@ -65,10 +108,107 @@ class EditIngredientViewModel(
                         notes = result.value.notes.orEmpty(),
                         isLoading = false,
                         canSave = result.value.name.isNotBlank()
-                    )
+                    ).refreshMergeDestinationOptions()
                 }
 
                 is AppResult.Error -> updateState { it.copy(isLoading = false, formMessage = result.error.message) }
+            }
+        }
+    }
+
+    private fun openMergeDialog() {
+        val currentState = mutableState.value
+        if (currentState.isLoading || currentState.isSaving || currentState.isRetiring || currentState.isMerging) return
+        updateState {
+            it.copy(
+                isMergeDialogVisible = true,
+                mergeDestinationQuery = "",
+                selectedMergeDestinationId = null,
+                mergePreview = null,
+                isLoadingMergePreview = false,
+                isMerging = false,
+                mergeError = null
+            ).refreshMergeDestinationOptions()
+        }
+    }
+
+    private fun loadMergePreview() {
+        val currentState = mutableState.value
+        val destinationId = currentState.selectedMergeDestinationId
+        if (!currentState.isMergeDialogVisible || currentState.isLoading || currentState.isSaving || currentState.isRetiring || currentState.isMerging) {
+            return
+        }
+        if (destinationId == null) {
+            updateState { it.copy(mergeError = "Choose a canonical ingredient to continue.") }
+            return
+        }
+        updateState { it.copy(isLoadingMergePreview = true, mergePreview = null, mergeError = null) }
+        viewModelScope.launch {
+            when (val result = getReusableIngredientMergePreviewUseCase(ingredientId, destinationId)) {
+                is AppResult.Success -> updateState {
+                    if (!it.isMergeDialogVisible || it.selectedMergeDestinationId != destinationId) {
+                        it.copy(isLoadingMergePreview = false)
+                    } else {
+                        it.copy(isLoadingMergePreview = false, mergePreview = result.value, mergeError = null)
+                    }
+                }
+
+                is AppResult.Error -> updateState {
+                    if (!it.isMergeDialogVisible || it.selectedMergeDestinationId != destinationId) {
+                        it.copy(isLoadingMergePreview = false)
+                    } else {
+                        it.copy(isLoadingMergePreview = false, mergePreview = null, mergeError = result.error.message)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun merge() {
+        val currentState = mutableState.value
+        val destinationId = currentState.selectedMergeDestinationId ?: return
+        val preview = currentState.mergePreview ?: return
+        if (
+            !currentState.isMergeDialogVisible ||
+            currentState.isLoading ||
+            currentState.isSaving ||
+            currentState.isRetiring ||
+            currentState.isLoadingMergePreview ||
+            currentState.isMerging ||
+            preview.isBlocked
+        ) {
+            return
+        }
+        updateState { it.copy(isMerging = true, mergeError = null) }
+        viewModelScope.launch {
+            when (val result = mergeReusableIngredientUseCase(ingredientId, destinationId)) {
+                is AppResult.Success -> {
+                    updateState {
+                        it.copy(
+                            isMerging = false,
+                            isMergeDialogVisible = false,
+                            mergeDestinationQuery = "",
+                            selectedMergeDestinationId = null,
+                            mergePreview = null,
+                            isLoadingMergePreview = false,
+                            mergeError = null,
+                            formMessage = ""
+                        ).refreshMergeDestinationOptions()
+                    }
+                    effectChannel.trySend(
+                        EditIngredientUiEffect.NavigateBackWithSelection(
+                            IngestionReusableSelectionResult(
+                                result.value.destination.id,
+                                result.value.destination.name,
+                                ReusableEntityKind.INGREDIENT
+                            )
+                        )
+                    )
+                }
+
+                is AppResult.Error -> updateState {
+                    it.copy(isMerging = false, mergeError = result.error.message)
+                }
             }
         }
     }
@@ -151,6 +291,22 @@ class EditIngredientViewModel(
 
     private fun updateState(transform: (EditIngredientUiState) -> EditIngredientUiState) {
         mutableState.value = transform(mutableState.value)
+    }
+
+    private fun EditIngredientUiState.refreshMergeDestinationOptions(): EditIngredientUiState {
+        val normalizedQuery = mergeDestinationQuery.trim().lowercase()
+        val filteredOptions = observedIngredients.filter { ingredient ->
+            ingredient.id != ingredientId &&
+                (normalizedQuery.isBlank() || ingredient.name.lowercase().contains(normalizedQuery))
+        }
+        val hasSelectedDestination = filteredOptions.any { it.id == selectedMergeDestinationId }
+        return copy(
+            mergeDestinationOptions = filteredOptions,
+            selectedMergeDestinationId = selectedMergeDestinationId?.takeIf { hasSelectedDestination },
+            mergePreview = mergePreview?.takeIf { preview ->
+                preview.destination.id == selectedMergeDestinationId && hasSelectedDestination
+            }
+        )
     }
 
     private fun DomainError.fieldError(key: String): String? {

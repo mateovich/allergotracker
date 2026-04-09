@@ -41,6 +41,27 @@ interface ReusableCompoundDao {
     @Query("SELECT COUNT(*) FROM reusable_compound_components WHERE ingredient_id = :ingredientId")
     suspend fun countIngredientComponentReferences(ingredientId: Long): Int
 
+    @Query(
+        """
+        SELECT COUNT(*)
+        FROM (
+            SELECT compound_id
+            FROM reusable_compound_components
+            WHERE component_kind = 'ingredient'
+                AND ingredient_id IN (:sourceIngredientId, :destinationIngredientId)
+            GROUP BY compound_id
+            HAVING SUM(CASE WHEN ingredient_id = :sourceIngredientId THEN 1 ELSE 0 END) > 0
+                AND COUNT(*) > 1
+        )
+        """
+    )
+    suspend fun countIngredientMergeConflictingCompounds(sourceIngredientId: Long, destinationIngredientId: Long): Int
+
+    @Query(
+        "UPDATE reusable_compound_components SET ingredient_id = :destinationIngredientId WHERE ingredient_id = :sourceIngredientId AND component_kind = 'ingredient'"
+    )
+    suspend fun replaceIngredientComponentReferences(sourceIngredientId: Long, destinationIngredientId: Long): Int
+
     @Query("SELECT COUNT(*) FROM reusable_compound_components WHERE child_compound_id = :compoundId")
     suspend fun countChildCompoundReferences(compoundId: Long): Int
 
