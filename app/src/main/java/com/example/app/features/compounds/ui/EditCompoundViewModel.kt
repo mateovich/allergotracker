@@ -6,8 +6,10 @@ import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.compounds.domain.CompoundComponentKind
 import com.example.app.features.compounds.domain.CompoundCompositionIntegrity
+import com.example.app.features.compounds.domain.GetReusableCompoundMergePreviewUseCase
 import com.example.app.features.compounds.domain.GetReusableCompoundRetirementImpactUseCase
 import com.example.app.features.compounds.domain.GetReusableCompoundUseCase
+import com.example.app.features.compounds.domain.MergeReusableCompoundUseCase
 import com.example.app.features.compounds.domain.ObserveReusableCompoundsUseCase
 import com.example.app.features.compounds.domain.ReusableCompound
 import com.example.app.features.compounds.domain.RetireReusableCompoundUseCase
@@ -30,6 +32,8 @@ class EditCompoundViewModel(
     private val updateReusableCompoundUseCase: UpdateReusableCompoundUseCase,
     private val observeReusableIngredients: ObserveReusableIngredientsUseCase,
     private val observeReusableCompounds: ObserveReusableCompoundsUseCase,
+    private val getReusableCompoundMergePreviewUseCase: GetReusableCompoundMergePreviewUseCase,
+    private val mergeReusableCompoundUseCase: MergeReusableCompoundUseCase,
     private val getReusableCompoundRetirementImpactUseCase: GetReusableCompoundRetirementImpactUseCase,
     private val retireReusableCompoundUseCase: RetireReusableCompoundUseCase
 ) : ViewModel() {
@@ -128,6 +132,31 @@ class EditCompoundViewModel(
             is EditCompoundUiIntent.AdjustComponentProportion -> applyAdjustedProportion(intent.index, intent.basisPoints)
             is EditCompoundUiIntent.RemoveComponent -> removeComponent(intent.index)
             EditCompoundUiIntent.Save -> save()
+            EditCompoundUiIntent.RequestMergeFlow -> openMergeDialog()
+            is EditCompoundUiIntent.UpdateMergeDestinationQuery -> updateState {
+                it.copy(
+                    mergeDestinationQuery = intent.value,
+                    mergeError = null,
+                    mergePreview = null
+                ).refreshMergeDestinationOptions()
+            }
+            is EditCompoundUiIntent.SelectMergeDestination -> updateState {
+                it.copy(selectedMergeDestinationId = intent.id, mergePreview = null, mergeError = null)
+                    .refreshMergeDestinationOptions()
+            }
+            EditCompoundUiIntent.LoadMergePreview -> loadMergePreview()
+            EditCompoundUiIntent.DismissMergeDialog -> updateState {
+                it.copy(
+                    isMergeDialogVisible = false,
+                    mergeDestinationQuery = "",
+                    selectedMergeDestinationId = null,
+                    mergePreview = null,
+                    isLoadingMergePreview = false,
+                    isMerging = false,
+                    mergeError = null
+                ).refreshMergeDestinationOptions()
+            }
+            EditCompoundUiIntent.ConfirmMerge -> merge()
             EditCompoundUiIntent.RequestRetirementPreview -> loadRetirementPreview()
             EditCompoundUiIntent.DismissRetirementDialog -> updateState {
                 it.copy(isRetirementDialogVisible = false, retirementImpact = null, isRetiring = false)
@@ -298,6 +327,105 @@ class EditCompoundViewModel(
         }
     }
 
+    private fun openMergeDialog() {
+        val currentState = mutableState.value
+        if (currentState.isLoading || currentState.isSaving || currentState.isRetiring || currentState.isMerging) return
+        updateState {
+            it.copy(
+                isMergeDialogVisible = true,
+                mergeDestinationQuery = "",
+                selectedMergeDestinationId = null,
+                mergePreview = null,
+                isLoadingMergePreview = false,
+                isMerging = false,
+                mergeError = null
+            ).refreshMergeDestinationOptions()
+        }
+    }
+
+    private fun loadMergePreview() {
+        val currentState = mutableState.value
+        val destinationId = currentState.selectedMergeDestinationId
+        if (!currentState.isMergeDialogVisible || currentState.isLoading || currentState.isSaving || currentState.isRetiring || currentState.isMerging) {
+            return
+        }
+        if (destinationId == null) {
+            updateState { it.copy(mergeError = "Choose a canonical compound to continue.") }
+            return
+        }
+        updateState { it.copy(isLoadingMergePreview = true, mergePreview = null, mergeError = null) }
+        viewModelScope.launch {
+            when (val result = getReusableCompoundMergePreviewUseCase(compoundId, destinationId)) {
+                is AppResult.Success -> updateState {
+                    if (!it.isMergeDialogVisible || it.selectedMergeDestinationId != destinationId) {
+                        it.copy(isLoadingMergePreview = false)
+                    } else {
+                        it.copy(isLoadingMergePreview = false, mergePreview = result.value, mergeError = null)
+                    }
+                }
+
+                is AppResult.Error -> updateState {
+                    if (!it.isMergeDialogVisible || it.selectedMergeDestinationId != destinationId) {
+                        it.copy(isLoadingMergePreview = false)
+                    } else {
+                        it.copy(isLoadingMergePreview = false, mergePreview = null, mergeError = result.error.message)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun merge() {
+        val currentState = mutableState.value
+        val destinationId = currentState.selectedMergeDestinationId ?: return
+        val preview = currentState.mergePreview ?: return
+        if (
+            !currentState.isMergeDialogVisible ||
+            currentState.isLoading ||
+            currentState.isSaving ||
+            currentState.isRetiring ||
+            currentState.isLoadingMergePreview ||
+            currentState.isMerging ||
+            preview.isBlocked
+        ) {
+            return
+        }
+        updateState { it.copy(isMerging = true, mergeError = null) }
+        viewModelScope.launch {
+            when (val result = mergeReusableCompoundUseCase(compoundId, destinationId)) {
+                is AppResult.Success -> {
+                    updateState {
+                        it.copy(
+                            isMerging = false,
+                            isMergeDialogVisible = false,
+                            mergeDestinationQuery = "",
+                            selectedMergeDestinationId = null,
+                            mergePreview = null,
+                            isLoadingMergePreview = false,
+                            mergeError = null,
+                            formMessage = "",
+                            isFormMessageError = false,
+                            isFormMessageSticky = false
+                        ).refreshMergeDestinationOptions()
+                    }
+                    effectChannel.trySend(
+                        EditCompoundUiEffect.NavigateBackWithSelection(
+                            IngestionReusableSelectionResult(
+                                result.value.destination.id,
+                                result.value.destination.name,
+                                ReusableEntityKind.COMPOUND
+                            )
+                        )
+                    )
+                }
+
+                is AppResult.Error -> updateState {
+                    it.copy(isMerging = false, mergeError = result.error.message)
+                }
+            }
+        }
+    }
+
     private fun save() {
         val currentState = mutableState.value
         if (!currentState.canSave || currentState.isLoading || currentState.isSaving) {
@@ -410,7 +538,7 @@ class EditCompoundViewModel(
 
     private fun refreshCatalogOptions() {
         updateState { current ->
-            current.refreshAvailableComponents()
+            current.refreshAvailableComponents().refreshMergeDestinationOptions()
         }
     }
 
@@ -517,6 +645,23 @@ class EditCompoundViewModel(
                 component.copy(name = component.resolveName(allCatalogOptions()))
             }
         ).withDerivedFields()
+    }
+
+    private fun EditCompoundUiState.refreshMergeDestinationOptions(): EditCompoundUiState {
+        val normalizedQuery = mergeDestinationQuery.trim().lowercase()
+        val filteredOptions = observedCompounds.filter { compound ->
+            compound.id != compoundId &&
+                compound.compositionStatus == com.example.app.features.compounds.domain.CompoundCompositionStatus.COMPLETE &&
+                (normalizedQuery.isBlank() || compound.name.lowercase().contains(normalizedQuery))
+        }
+        val hasSelectedDestination = filteredOptions.any { it.id == selectedMergeDestinationId }
+        return copy(
+            mergeDestinationOptions = filteredOptions,
+            selectedMergeDestinationId = selectedMergeDestinationId?.takeIf { hasSelectedDestination },
+            mergePreview = mergePreview?.takeIf { preview ->
+                preview.destination.id == selectedMergeDestinationId && hasSelectedDestination
+            }
+        )
     }
 
     private fun blockedAddMessage(

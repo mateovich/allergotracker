@@ -697,6 +697,35 @@ class MainActivityTest {
     }
 
     @Test
+    fun compound_merge_confirm_flow_returns_canonical_selection_after_preview() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        createReusableCompoundInline("Breakfast mix", "Oat milk")
+        createReusableCompoundInline("Breakfast mix plus", "Oat milk")
+        createReusableCompoundInline("Parent crunch", "Breakfast mix")
+        composeRule.onNodeWithTag("ingestion-reusable-clear").performClick()
+
+        composeRule.onNodeWithTag("ingestion-reusable-search").performTextReplacement("Breakfast mix")
+        waitForText("Breakfast mix - Compound")
+        composeRule.onNodeWithText("Breakfast mix - Compound").performClick()
+        waitForTag("ingestion-reusable-edit")
+        composeRule.onNodeWithTag("ingestion-reusable-edit").performClick()
+
+        composeRule.onNodeWithTag("edit-compound-merge").performClick()
+        composeRule.onNodeWithTag("edit-compound-merge-query").performTextInput("plus")
+        composeRule.onNodeWithText("Breakfast mix plus").performClick()
+        composeRule.onNodeWithTag("edit-compound-merge-preview-action").performClick()
+        composeRule.onNodeWithTag("edit-compound-merge-preview").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-compound-merge-confirm").performClick()
+
+        composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("ingestion-reusable-summary")
+            .assertTextContains("Reusable compound selected: Breakfast mix plus")
+        composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Breakfast mix plus")
+    }
+
+    @Test
     fun compound_retirement_confirm_flow_clears_reusable_selection_after_return() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()

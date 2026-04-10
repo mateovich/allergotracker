@@ -19,8 +19,12 @@ import com.example.app.core.database.migrations.Migration_11_12
 import com.example.app.core.database.migrations.Migration_12_13
 import com.example.app.features.compounds.data.RoomReusableCompoundRepository
 import com.example.app.features.compounds.domain.CreateReusableCompoundUseCase
+import com.example.app.features.compounds.domain.CompoundChildEdge
+import com.example.app.features.compounds.domain.CompoundCompositionIntegrity
+import com.example.app.features.compounds.domain.GetReusableCompoundMergePreviewUseCase
 import com.example.app.features.compounds.domain.GetReusableCompoundRetirementImpactUseCase
 import com.example.app.features.compounds.domain.GetReusableCompoundUseCase
+import com.example.app.features.compounds.domain.MergeReusableCompoundUseCase
 import com.example.app.features.compounds.domain.ObserveReusableCompoundsUseCase
 import com.example.app.features.compounds.domain.RetireReusableCompoundUseCase
 import com.example.app.features.compounds.domain.UpdateReusableCompoundUseCase
@@ -248,6 +252,31 @@ class AppContainer(appContext: Context) {
             reusableCompoundDao.countChildCompoundReferences(compoundId)
         }
     )
+    private val getReusableCompoundMergePreviewUseCase = GetReusableCompoundMergePreviewUseCase(
+        repository = reusableCompoundRepository,
+        countIngestionReferences = { compoundId ->
+            ingestionEventDao.countReusableEntityReferences(ReusableEntityKind.COMPOUND.storageValue, compoundId)
+        },
+        countParentCompoundReferences = { compoundId ->
+            reusableCompoundDao.countChildCompoundReferences(compoundId)
+        },
+        countConflictingParentCompounds = { sourceCompoundId, destinationCompoundId ->
+            reusableCompoundDao.countCompoundMergeConflictingParents(sourceCompoundId, destinationCompoundId)
+        },
+        countRecursiveParentCompounds = { sourceCompoundId, destinationCompoundId ->
+            CompoundCompositionIntegrity.countRecursiveMergeParents(
+                sourceCompoundId = sourceCompoundId,
+                destinationCompoundId = destinationCompoundId,
+                impactedParentCompoundIds = reusableCompoundDao.findParentCompoundIdsReferencingChild(sourceCompoundId),
+                childEdges = reusableCompoundDao.findAllChildCompoundEdges().map { edge ->
+                    CompoundChildEdge(
+                        parentCompoundId = edge.parentCompoundId,
+                        childCompoundId = edge.childCompoundId
+                    )
+                }
+            )
+        }
+    )
     private val getReusableEventCatalogRetirementImpactUseCase = GetReusableEventCatalogRetirementImpactUseCase(
         repository = reusableEventCatalogRepository,
         countReferences = { kind, catalogId ->
@@ -318,6 +347,25 @@ class AppContainer(appContext: Context) {
         getImpact = getReusableCompoundRetirementImpactUseCase,
         detachIngestionReferences = { compoundId ->
             ingestionEventDao.clearReusableEntityReferences(ReusableEntityKind.COMPOUND.storageValue, compoundId)
+        },
+        runAtomically = { block ->
+            appDatabase.withTransaction { block() }
+        }
+    )
+    private val mergeReusableCompoundUseCase = MergeReusableCompoundUseCase(
+        getPreview = getReusableCompoundMergePreviewUseCase,
+        getCompound = reusableCompoundRepository::getCompound,
+        deleteCompound = reusableCompoundRepository::deleteCompound,
+        reassignIngestionReferences = { sourceCompoundId, destinationCompoundId, destinationName ->
+            ingestionEventDao.reassignReusableEntityReferences(
+                ReusableEntityKind.COMPOUND.storageValue,
+                sourceCompoundId,
+                destinationCompoundId,
+                destinationName
+            )
+        },
+        replaceParentCompoundReferences = { sourceCompoundId, destinationCompoundId ->
+            reusableCompoundDao.replaceChildCompoundReferences(sourceCompoundId, destinationCompoundId)
         },
         runAtomically = { block ->
             appDatabase.withTransaction { block() }
@@ -408,6 +456,8 @@ class AppContainer(appContext: Context) {
             updateReusableCompoundUseCase,
             observeReusableIngredientsUseCase,
             observeReusableCompoundsUseCase,
+            getReusableCompoundMergePreviewUseCase,
+            mergeReusableCompoundUseCase,
             getReusableCompoundRetirementImpactUseCase,
             retireReusableCompoundUseCase
         )

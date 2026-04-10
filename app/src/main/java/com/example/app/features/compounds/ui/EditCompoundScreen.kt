@@ -4,11 +4,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +28,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.core.designsystem.AppScreenScaffold
 import com.example.app.core.designsystem.LocalOnlyNotice
+import com.example.app.features.compounds.domain.ReusableCompoundMergePreview
 import com.example.app.features.compounds.domain.ReusableCompoundRetirementImpact
 import com.example.app.features.ingestion.ui.IngestionReusableSelectionResult
 import kotlinx.coroutines.flow.collectLatest
@@ -104,6 +107,13 @@ fun EditCompoundScreen(
                 Text(if (state.isSaving) "Saving..." else "Save changes")
             }
             Button(
+                onClick = { viewModel.onIntent(EditCompoundUiIntent.RequestMergeFlow) },
+                enabled = !state.isSaving && !state.isRetiring && !state.isMerging,
+                modifier = Modifier.fillMaxWidth().testTag("edit-compound-merge")
+            ) {
+                Text("Merge duplicate compound")
+            }
+            Button(
                 onClick = { viewModel.onIntent(EditCompoundUiIntent.RequestRetirementPreview) },
                 enabled = !state.isSaving && !state.isRetiring,
                 modifier = Modifier.fillMaxWidth().testTag("edit-compound-retire")
@@ -151,6 +161,100 @@ fun EditCompoundScreen(
             }
         }
 
+        if (state.isMergeDialogVisible) {
+            AlertDialog(
+                onDismissRequest = { viewModel.onIntent(EditCompoundUiIntent.DismissMergeDialog) },
+                title = { Text("Merge compound?") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = "Source compound: ${state.name}",
+                            modifier = Modifier.testTag("edit-compound-merge-source")
+                        )
+                        OutlinedTextField(
+                            value = state.mergeDestinationQuery,
+                            onValueChange = { viewModel.onIntent(EditCompoundUiIntent.UpdateMergeDestinationQuery(it)) },
+                            modifier = Modifier.fillMaxWidth().testTag("edit-compound-merge-query"),
+                            label = { Text("Canonical compound") },
+                            singleLine = true
+                        )
+                        if (state.mergeDestinationOptions.isNotEmpty()) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                state.mergeDestinationOptions.forEach { compound ->
+                                    AssistChip(
+                                        onClick = { viewModel.onIntent(EditCompoundUiIntent.SelectMergeDestination(compound.id)) },
+                                        label = { Text(compound.name) },
+                                        modifier = Modifier.testTag("edit-compound-merge-option-${compound.id}")
+                                    )
+                                }
+                            }
+                        } else {
+                            Text(
+                                text = "No saved compounds match this search.",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.testTag("edit-compound-merge-empty")
+                            )
+                        }
+                        state.selectedMergeDestinationId?.let { destinationId ->
+                            state.mergeDestinationOptions.firstOrNull { it.id == destinationId }?.let { destination ->
+                                Text(
+                                    text = "Canonical destination: ${destination.name}",
+                                    modifier = Modifier.testTag("edit-compound-merge-selection")
+                                )
+                            }
+                        }
+                        if (state.isLoadingMergePreview) {
+                            CircularProgressIndicator(modifier = Modifier.testTag("edit-compound-merge-loading"))
+                        }
+                        state.mergePreview?.let { preview ->
+                            Text(
+                                text = buildCompoundMergeMessage(preview),
+                                modifier = Modifier.testTag("edit-compound-merge-preview")
+                            )
+                        }
+                        state.mergeError?.let { error ->
+                            Text(
+                                text = error,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.testTag("edit-compound-merge-error")
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    val mergePreview = state.mergePreview
+                    if (mergePreview != null && !mergePreview.isBlocked) {
+                        TextButton(
+                            onClick = { viewModel.onIntent(EditCompoundUiIntent.ConfirmMerge) },
+                            enabled = !state.isMerging,
+                            modifier = Modifier.testTag("edit-compound-merge-confirm")
+                        ) {
+                            Text(if (state.isMerging) "Merging..." else "Confirm merge")
+                        }
+                    } else {
+                        TextButton(
+                            onClick = { viewModel.onIntent(EditCompoundUiIntent.LoadMergePreview) },
+                            enabled = !state.isLoadingMergePreview,
+                            modifier = Modifier.testTag("edit-compound-merge-preview-action")
+                        ) {
+                            Text("Preview impact")
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { viewModel.onIntent(EditCompoundUiIntent.DismissMergeDialog) },
+                        modifier = Modifier.testTag("edit-compound-merge-dismiss")
+                    ) {
+                        Text(if (state.mergePreview?.isBlocked == true) "Close" else "Cancel")
+                    }
+                }
+            )
+        }
+
         if (state.isRetirementDialogVisible) {
             state.retirementImpact?.let { impact ->
             val message = buildCompoundRetirementMessage(impact)
@@ -192,6 +296,26 @@ fun EditCompoundScreen(
             }
         }
     }
+}
+
+private fun buildCompoundMergeMessage(preview: ReusableCompoundMergePreview): String {
+    return buildString {
+        appendLine("Impact preview:")
+        appendLine("- Destination: ${preview.destination.name}")
+        appendLine("- Ingestion records moved: ${preview.ingestionReferenceCount}")
+        appendLine("- Parent compound references moved: ${preview.parentCompoundReferenceCount}")
+        if (preview.conflictingParentCompoundCount > 0) {
+            appendLine("- Conflicting parent compounds: ${preview.conflictingParentCompoundCount}")
+        }
+        if (preview.recursiveParentCompoundCount > 0) {
+            appendLine("- Recursive parent compounds: ${preview.recursiveParentCompoundCount}")
+        }
+        appendLine()
+        append(
+            preview.blockMessage
+                ?: "Safe path: references will move to the canonical compound and the duplicate source will be removed."
+        )
+    }.trimEnd()
 }
 
 private fun buildCompoundRetirementMessage(impact: ReusableCompoundRetirementImpact): String {

@@ -1,7 +1,9 @@
 package com.example.app.features.compounds.ui
 
-import com.example.app.features.ingestion.ui.IngestionReusableSelectionResult
+import com.example.app.features.compounds.domain.ReusableCompound
+import com.example.app.features.compounds.domain.ReusableCompoundMergePreview
 import com.example.app.features.compounds.domain.ReusableCompoundRetirementImpact
+import com.example.app.features.ingestion.ui.IngestionReusableSelectionResult
 
 data class EditCompoundUiState(
     val title: String = "Edit Compound",
@@ -24,6 +26,14 @@ data class EditCompoundUiState(
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val canSave: Boolean = false,
+    val isMergeDialogVisible: Boolean = false,
+    val mergeDestinationQuery: String = "",
+    val mergeDestinationOptions: List<ReusableCompound> = emptyList(),
+    val selectedMergeDestinationId: Long? = null,
+    val mergePreview: ReusableCompoundMergePreview? = null,
+    val isLoadingMergePreview: Boolean = false,
+    val isMerging: Boolean = false,
+    val mergeError: String? = null,
     val isRetiring: Boolean = false,
     val retirementImpact: ReusableCompoundRetirementImpact? = null,
     val isRetirementDialogVisible: Boolean = false
@@ -41,6 +51,12 @@ sealed interface EditCompoundUiIntent {
     data class AdjustComponentProportion(val index: Int, val basisPoints: Int) : EditCompoundUiIntent
     data class RemoveComponent(val index: Int) : EditCompoundUiIntent
     data object Save : EditCompoundUiIntent
+    data object RequestMergeFlow : EditCompoundUiIntent
+    data class UpdateMergeDestinationQuery(val value: String) : EditCompoundUiIntent
+    data class SelectMergeDestination(val id: Long) : EditCompoundUiIntent
+    data object LoadMergePreview : EditCompoundUiIntent
+    data object DismissMergeDialog : EditCompoundUiIntent
+    data object ConfirmMerge : EditCompoundUiIntent
     data object RequestRetirementPreview : EditCompoundUiIntent
     data object DismissRetirementDialog : EditCompoundUiIntent
     data object ConfirmRetirement : EditCompoundUiIntent

@@ -67,6 +67,32 @@ interface ReusableCompoundDao {
 
     @Query(
         """
+        SELECT COUNT(*)
+        FROM (
+            SELECT compound_id
+            FROM reusable_compound_components
+            WHERE component_kind = 'compound'
+                AND child_compound_id IN (:sourceCompoundId, :destinationCompoundId)
+            GROUP BY compound_id
+            HAVING SUM(CASE WHEN child_compound_id = :sourceCompoundId THEN 1 ELSE 0 END) > 0
+                AND COUNT(*) > 1
+        )
+        """
+    )
+    suspend fun countCompoundMergeConflictingParents(sourceCompoundId: Long, destinationCompoundId: Long): Int
+
+    @Query(
+        "SELECT DISTINCT compound_id FROM reusable_compound_components WHERE component_kind = 'compound' AND child_compound_id = :sourceCompoundId"
+    )
+    suspend fun findParentCompoundIdsReferencingChild(sourceCompoundId: Long): List<Long>
+
+    @Query(
+        "UPDATE reusable_compound_components SET child_compound_id = :destinationCompoundId WHERE component_kind = 'compound' AND child_compound_id = :sourceCompoundId"
+    )
+    suspend fun replaceChildCompoundReferences(sourceCompoundId: Long, destinationCompoundId: Long): Int
+
+    @Query(
+        """
         SELECT compound_id AS parentCompoundId, child_compound_id AS childCompoundId
         FROM reusable_compound_components
         WHERE child_compound_id IS NOT NULL

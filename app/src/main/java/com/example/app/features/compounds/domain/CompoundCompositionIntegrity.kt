@@ -67,4 +67,22 @@ object CompoundCompositionIntegrity {
             wouldCreateCycle(currentParentId, candidateId, childEdges)
         }
     }
+
+    fun countRecursiveMergeParents(
+        sourceCompoundId: Long,
+        destinationCompoundId: Long,
+        impactedParentCompoundIds: Iterable<Long>,
+        childEdges: List<CompoundChildEdge>
+    ): Int {
+        val adjustedEdges = childEdges.map { edge ->
+            if (edge.childCompoundId == sourceCompoundId) {
+                edge.copy(childCompoundId = destinationCompoundId)
+            } else {
+                edge
+            }
+        }
+        return impactedParentCompoundIds.toSet().count { parentCompoundId ->
+            wouldCreateCycle(parentCompoundId, destinationCompoundId, adjustedEdges)
+        }
+    }
 }

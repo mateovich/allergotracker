@@ -515,6 +515,12 @@ private class FakeReusableCompoundDao(
         return existingComponents.count { it.childCompoundId == compoundId }
     }
 
+    override suspend fun countCompoundMergeConflictingParents(sourceCompoundId: Long, destinationCompoundId: Long): Int = 0
+
+    override suspend fun findParentCompoundIdsReferencingChild(sourceCompoundId: Long): List<Long> = emptyList()
+
+    override suspend fun replaceChildCompoundReferences(sourceCompoundId: Long, destinationCompoundId: Long): Int = 0
+
     override suspend fun findAllChildCompoundEdges(): List<ReusableCompoundChildEdge> = childEdges
 
     override suspend fun touchById(id: Long, updatedAtEpochMs: Long): Int = if (existing?.id == id) 1 else 0

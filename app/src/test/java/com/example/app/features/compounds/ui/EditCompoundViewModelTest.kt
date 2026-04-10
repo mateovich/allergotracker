@@ -5,8 +5,10 @@ import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.compounds.domain.CompoundCompositionStatus
 import com.example.app.features.compounds.domain.CompoundComponentKind
+import com.example.app.features.compounds.domain.GetReusableCompoundMergePreviewUseCase
 import com.example.app.features.compounds.domain.GetReusableCompoundRetirementImpactUseCase
 import com.example.app.features.compounds.domain.GetReusableCompoundUseCase
+import com.example.app.features.compounds.domain.MergeReusableCompoundUseCase
 import com.example.app.features.compounds.domain.ObserveReusableCompoundsUseCase
 import com.example.app.features.compounds.domain.ReusableCompound
 import com.example.app.features.compounds.domain.ReusableCompoundComponent
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -299,6 +302,113 @@ class EditCompoundViewModelTest {
     }
 
     @Test
+    fun merge_preview_loads_counts_for_selected_destination() = runBlocking {
+        val repository = FakeEditCompoundRepository()
+        val viewModel = buildViewModel(
+            repository = repository,
+            countMergeIngestionReferences = { 2 },
+            countMergeParentReferences = { 1 }
+        )
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.RequestMergeFlow)
+        viewModel.onIntent(EditCompoundUiIntent.SelectMergeDestination(13L))
+        viewModel.onIntent(EditCompoundUiIntent.LoadMergePreview)
+
+        assertTrue(viewModel.state.value.isMergeDialogVisible)
+        assertEquals(2, viewModel.state.value.mergePreview?.ingestionReferenceCount)
+        assertEquals(1, viewModel.state.value.mergePreview?.parentCompoundReferenceCount)
+    }
+
+    @Test
+    fun blocked_merge_preview_surfaces_structural_message() = runBlocking {
+        val repository = FakeEditCompoundRepository()
+        val viewModel = buildViewModel(
+            repository = repository,
+            countConflictingParentCompounds = { _, _ -> 1 }
+        )
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.RequestMergeFlow)
+        viewModel.onIntent(EditCompoundUiIntent.SelectMergeDestination(13L))
+        viewModel.onIntent(EditCompoundUiIntent.LoadMergePreview)
+
+        assertTrue(viewModel.state.value.mergePreview?.isBlocked == true)
+        assertEquals(1, viewModel.state.value.mergePreview?.conflictingParentCompoundCount)
+    }
+
+    @Test
+    fun confirm_merge_success_navigates_back_with_canonical_selection() = runBlocking {
+        val repository = FakeEditCompoundRepository()
+        val viewModel = buildViewModel(repository)
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.RequestMergeFlow)
+        viewModel.onIntent(EditCompoundUiIntent.SelectMergeDestination(13L))
+        viewModel.onIntent(EditCompoundUiIntent.LoadMergePreview)
+        viewModel.onIntent(EditCompoundUiIntent.ConfirmMerge)
+
+        val navigation = effect.await() as EditCompoundUiEffect.NavigateBackWithSelection
+
+        assertEquals(13L, navigation.result.id)
+        assertEquals("Safe crunch", navigation.result.name)
+        assertFalse(viewModel.state.value.isMergeDialogVisible)
+    }
+
+    @Test
+    fun confirm_merge_failure_keeps_dialog_open_and_shows_error() = runBlocking {
+        val repository = FakeEditCompoundRepository(
+            deleteResult = AppResult.Error(
+                DomainError.IntegrityError(
+                    "Merge couldn't be completed locally because stored data changed unexpectedly. Reload the preview and try again."
+                )
+            )
+        )
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.RequestMergeFlow)
+        viewModel.onIntent(EditCompoundUiIntent.SelectMergeDestination(13L))
+        viewModel.onIntent(EditCompoundUiIntent.LoadMergePreview)
+        viewModel.onIntent(EditCompoundUiIntent.ConfirmMerge)
+
+        assertTrue(viewModel.state.value.isMergeDialogVisible)
+        assertEquals(
+            "Merge couldn't be completed locally because stored data changed unexpectedly. Reload the preview and try again.",
+            viewModel.state.value.mergeError
+        )
+        assertFalse(viewModel.state.value.isMerging)
+    }
+
+    @Test
+    fun stale_merge_preview_result_is_discarded_when_selection_changes() = runBlocking {
+        val repository = FakeEditCompoundRepository()
+        val viewModel = buildViewModel(
+            repository = repository,
+            countMergeIngestionReferences = {
+                repository.replaceObservedCompounds(
+                    listOf(
+                        repository.currentCompound(),
+                        ReusableCompound(14L, "Canonical crunch", null, CompoundCompositionStatus.COMPLETE, emptyList(), 1L, 6L)
+                    )
+                )
+                2
+            },
+            countMergeParentReferences = { 1 }
+        )
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.RequestMergeFlow)
+        viewModel.onIntent(EditCompoundUiIntent.SelectMergeDestination(13L))
+        viewModel.onIntent(EditCompoundUiIntent.LoadMergePreview)
+
+        assertNull(viewModel.state.value.selectedMergeDestinationId)
+        assertNull(viewModel.state.value.mergePreview)
+        assertFalse(viewModel.state.value.isLoadingMergePreview)
+    }
+
+    @Test
     fun confirm_retirement_navigates_back_after_successful_retire() = runBlocking {
         val repository = FakeEditCompoundRepository()
         val viewModel = buildViewModel(repository)
@@ -355,12 +465,23 @@ class EditCompoundViewModelTest {
     private fun buildViewModel(
         repository: FakeEditCompoundRepository,
         countIngestionReferences: suspend (Long) -> Int = { 0 },
-        countChildCompoundReferences: suspend (Long) -> Int = { 0 }
+        countChildCompoundReferences: suspend (Long) -> Int = { 0 },
+        countMergeIngestionReferences: suspend (Long) -> Int = { 0 },
+        countMergeParentReferences: suspend (Long) -> Int = { 0 },
+        countConflictingParentCompounds: suspend (Long, Long) -> Int = { _, _ -> 0 },
+        countRecursiveParentCompounds: suspend (Long, Long) -> Int = { _, _ -> 0 }
     ): EditCompoundViewModel {
         val impactUseCase = GetReusableCompoundRetirementImpactUseCase(
             repository = repository,
             countIngestionReferences = countIngestionReferences,
             countChildCompoundReferences = countChildCompoundReferences
+        )
+        val mergePreviewUseCase = GetReusableCompoundMergePreviewUseCase(
+            repository = repository,
+            countIngestionReferences = countMergeIngestionReferences,
+            countParentCompoundReferences = countMergeParentReferences,
+            countConflictingParentCompounds = countConflictingParentCompounds,
+            countRecursiveParentCompounds = countRecursiveParentCompounds
         )
         return EditCompoundViewModel(
             compoundId = 9L,
@@ -368,6 +489,14 @@ class EditCompoundViewModelTest {
             updateReusableCompoundUseCase = UpdateReusableCompoundUseCase(repository),
             observeReusableIngredients = ObserveReusableIngredientsUseCase(FakeObserveIngredientsRepository()),
             observeReusableCompounds = ObserveReusableCompoundsUseCase(repository),
+            getReusableCompoundMergePreviewUseCase = mergePreviewUseCase,
+            mergeReusableCompoundUseCase = MergeReusableCompoundUseCase(
+                getPreview = mergePreviewUseCase,
+                getCompound = repository::getCompound,
+                deleteCompound = repository::deleteCompound,
+                reassignIngestionReferences = { _, _, _ -> countMergeIngestionReferences(9L) },
+                replaceParentCompoundReferences = { _, _ -> countMergeParentReferences(9L) }
+            ),
             getReusableCompoundRetirementImpactUseCase = impactUseCase,
             retireReusableCompoundUseCase = RetireReusableCompoundUseCase(repository, impactUseCase)
         )
@@ -380,43 +509,71 @@ private class FakeEditCompoundRepository(
     private val withComponents: Boolean = true
 ) : ReusableCompoundRepository {
     var updatedCommand: UpdateReusableCompoundCommand? = null
+    private val observedCompounds = MutableStateFlow(
+        listOf(
+            currentCompoundStatic(),
+            ReusableCompound(
+                id = 11L,
+                name = "Berry base",
+                notes = null,
+                compositionStatus = CompoundCompositionStatus.COMPLETE,
+                components = emptyList(),
+                createdAtEpochMs = 1L,
+                updatedAtEpochMs = 3L
+            ),
+            ReusableCompound(
+                id = 12L,
+                name = "Recursive base",
+                notes = null,
+                compositionStatus = CompoundCompositionStatus.COMPLETE,
+                components = listOf(
+                    ReusableCompoundComponent(
+                        id = 2L,
+                        position = 0,
+                        kind = CompoundComponentKind.COMPOUND,
+                        ingredientId = null,
+                        childCompoundId = 9L,
+                        proportionBasisPoints = 10_000
+                    )
+                ),
+                createdAtEpochMs = 1L,
+                updatedAtEpochMs = 4L
+            ),
+            ReusableCompound(
+                id = 13L,
+                name = "Safe crunch",
+                notes = null,
+                compositionStatus = CompoundCompositionStatus.COMPLETE,
+                components = emptyList(),
+                createdAtEpochMs = 1L,
+                updatedAtEpochMs = 5L
+            )
+        )
+    )
+
+    fun replaceObservedCompounds(compounds: List<ReusableCompound>) {
+        observedCompounds.value = compounds
+    }
+
+    fun currentCompound(): ReusableCompound = currentCompoundStatic()
 
     override suspend fun createCompound(command: com.example.app.features.compounds.domain.CreateReusableCompoundCommand): AppResult<ReusableCompound> {
         error("unused")
     }
 
     override suspend fun getCompound(id: Long): AppResult<ReusableCompound> {
-        return AppResult.Success(
-            ReusableCompound(
-                id = id,
-                name = "Breakfast mix",
-                notes = "Draft",
-                compositionStatus = CompoundCompositionStatus.DRAFT,
-                components = if (withComponents) {
-                    listOf(
-                        ReusableCompoundComponent(
-                            id = 1L,
-                            position = 0,
-                            kind = CompoundComponentKind.INGREDIENT,
-                            ingredientId = 7L,
-                            childCompoundId = null,
-                            proportionBasisPoints = 6_000
-                        ),
-                        ReusableCompoundComponent(
-                            id = 2L,
-                            position = 1,
-                            kind = CompoundComponentKind.COMPOUND,
-                            ingredientId = null,
-                            childCompoundId = 11L,
-                            proportionBasisPoints = 4_000
-                        )
-                    )
+        val observed = observedCompounds.value.firstOrNull { it.id == id }
+        if (observed != null) {
+            return AppResult.Success(
+                if (id == 9L && !withComponents) {
+                    observed.copy(components = emptyList())
                 } else {
-                    emptyList()
-                },
-                createdAtEpochMs = 1L,
-                updatedAtEpochMs = 1L
+                    observed
+                }
             )
+        }
+        return AppResult.Success(
+            ReusableCompound(id, "Compound $id", null, CompoundCompositionStatus.COMPLETE, emptyList(), 1L, 1L)
         )
     }
 
@@ -447,64 +604,38 @@ private class FakeEditCompoundRepository(
     override suspend fun deleteCompound(id: Long): AppResult<Unit> = deleteResult
 
     override fun observeCompounds(): Flow<List<ReusableCompound>> {
-        return MutableStateFlow(
-            listOf(
-                ReusableCompound(
-                    id = 9L,
-                    name = "Breakfast mix",
-                    notes = null,
-                    compositionStatus = CompoundCompositionStatus.COMPLETE,
-                    components = listOf(
-                        ReusableCompoundComponent(
-                            id = 1L,
-                            position = 0,
-                            kind = CompoundComponentKind.COMPOUND,
-                            ingredientId = null,
-                            childCompoundId = 11L,
-                            proportionBasisPoints = 10_000
-                        )
+        return observedCompounds
+    }
+
+    companion object {
+        private fun currentCompoundStatic(): ReusableCompound {
+            return ReusableCompound(
+                id = 9L,
+                name = "Breakfast mix",
+                notes = "Draft",
+                compositionStatus = CompoundCompositionStatus.COMPLETE,
+                components = listOf(
+                    ReusableCompoundComponent(
+                        id = 1L,
+                        position = 0,
+                        kind = CompoundComponentKind.INGREDIENT,
+                        ingredientId = 7L,
+                        childCompoundId = null,
+                        proportionBasisPoints = 6_000
                     ),
-                    createdAtEpochMs = 1L,
-                    updatedAtEpochMs = 1L
+                    ReusableCompoundComponent(
+                        id = 2L,
+                        position = 1,
+                        kind = CompoundComponentKind.COMPOUND,
+                        ingredientId = null,
+                        childCompoundId = 11L,
+                        proportionBasisPoints = 4_000
+                    )
                 ),
-                ReusableCompound(
-                    id = 11L,
-                    name = "Berry base",
-                    notes = null,
-                    compositionStatus = CompoundCompositionStatus.COMPLETE,
-                    components = emptyList(),
-                    createdAtEpochMs = 1L,
-                    updatedAtEpochMs = 3L
-                ),
-                ReusableCompound(
-                    id = 12L,
-                    name = "Recursive base",
-                    notes = null,
-                    compositionStatus = CompoundCompositionStatus.COMPLETE,
-                    components = listOf(
-                        ReusableCompoundComponent(
-                            id = 2L,
-                            position = 0,
-                            kind = CompoundComponentKind.COMPOUND,
-                            ingredientId = null,
-                            childCompoundId = 9L,
-                            proportionBasisPoints = 10_000
-                        )
-                    ),
-                    createdAtEpochMs = 1L,
-                    updatedAtEpochMs = 4L
-                ),
-                ReusableCompound(
-                    id = 13L,
-                    name = "Safe crunch",
-                    notes = null,
-                    compositionStatus = CompoundCompositionStatus.COMPLETE,
-                    components = emptyList(),
-                    createdAtEpochMs = 1L,
-                    updatedAtEpochMs = 5L
-                )
+                createdAtEpochMs = 1L,
+                updatedAtEpochMs = 1L
             )
-        )
+        }
     }
 }
 
