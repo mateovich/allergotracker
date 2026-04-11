@@ -324,6 +324,13 @@ class AppContainer(appContext: Context) {
         replaceCompoundReferences = { sourceIngredientId, destinationIngredientId ->
             reusableCompoundDao.replaceIngredientComponentReferences(sourceIngredientId, destinationIngredientId)
         },
+        countIngestionReferences = { ingredientId ->
+            ingestionEventDao.countReusableEntityReferences(ReusableEntityKind.INGREDIENT.storageValue, ingredientId)
+        },
+        countCompoundReferences = reusableCompoundDao::countIngredientComponentReferences,
+        findAffectedCompoundIds = reusableCompoundDao::findCompoundIdsReferencingIngredient,
+        hasInvalidCompoundState = reusableCompoundRepository::hasDuplicateComponents,
+        validatePostMergeIntegrity = com.example.app.core.validation.ValidatePostMergeIntegrityUseCase(),
         runAtomically = { block ->
             appDatabase.withTransaction { block() }
         }
@@ -367,6 +374,16 @@ class AppContainer(appContext: Context) {
         replaceParentCompoundReferences = { sourceCompoundId, destinationCompoundId ->
             reusableCompoundDao.replaceChildCompoundReferences(sourceCompoundId, destinationCompoundId)
         },
+        countIngestionReferences = { compoundId ->
+            ingestionEventDao.countReusableEntityReferences(ReusableEntityKind.COMPOUND.storageValue, compoundId)
+        },
+        countParentCompoundReferences = reusableCompoundDao::countChildCompoundReferences,
+        findAffectedParentCompoundIds = reusableCompoundDao::findParentCompoundIdsReferencingChild,
+        hasInvalidParentCompoundState = { compoundIds ->
+            reusableCompoundRepository.hasDuplicateComponents(compoundIds) ||
+                reusableCompoundRepository.hasRecursiveComposition(compoundIds)
+        },
+        validatePostMergeIntegrity = com.example.app.core.validation.ValidatePostMergeIntegrityUseCase(),
         runAtomically = { block ->
             appDatabase.withTransaction { block() }
         }

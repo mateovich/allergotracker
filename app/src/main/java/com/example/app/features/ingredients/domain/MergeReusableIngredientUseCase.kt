@@ -2,6 +2,8 @@ package com.example.app.features.ingredients.domain
 
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.core.validation.PostMergeIntegrityCheck
+import com.example.app.core.validation.ValidatePostMergeIntegrityUseCase
 import kotlinx.coroutines.CancellationException
 
 data class ReusableIngredientMergePreview(
@@ -90,6 +92,11 @@ class MergeReusableIngredientUseCase(
     private val deleteIngredient: suspend (Long) -> AppResult<Unit>,
     private val reassignIngestionReferences: suspend (Long, Long, String) -> Int = { _, _, _ -> 0 },
     private val replaceCompoundReferences: suspend (Long, Long) -> Int = { _, _ -> 0 },
+    private val countIngestionReferences: suspend (Long) -> Int = { 0 },
+    private val countCompoundReferences: suspend (Long) -> Int = { 0 },
+    private val findAffectedCompoundIds: suspend (Long) -> List<Long> = { emptyList() },
+    private val hasInvalidCompoundState: suspend (List<Long>) -> Boolean = { false },
+    private val validatePostMergeIntegrity: ValidatePostMergeIntegrityUseCase = ValidatePostMergeIntegrityUseCase(),
     private val runAtomically: suspend (suspend () -> AppResult<ReusableIngredientMergeResult>) -> AppResult<ReusableIngredientMergeResult> = { block -> block() }
 ) {
     suspend operator fun invoke(sourceIngredientId: Long, destinationIngredientId: Long): AppResult<ReusableIngredientMergeResult> {
@@ -106,7 +113,15 @@ class MergeReusableIngredientUseCase(
 
         return try {
             runAtomically {
-                val destination = when (val result = getIngredient(preview.destination.id)) {
+                val confirmedPreview = when (val result = getPreview(sourceIngredientId, destinationIngredientId)) {
+                    is AppResult.Success -> result.value
+                    is AppResult.Error -> throw ReusableIngredientMergeRollback(result.error)
+                }
+                confirmedPreview.blockMessage?.let { message ->
+                    throw ReusableIngredientMergeRollback(DomainError.IntegrityError(message))
+                }
+
+                val destination = when (val result = getIngredient(confirmedPreview.destination.id)) {
                     is AppResult.Success -> result.value
                     is AppResult.Error -> throw ReusableIngredientMergeRollback(
                         DomainError.IntegrityError(
@@ -114,12 +129,15 @@ class MergeReusableIngredientUseCase(
                         )
                     )
                 }
+                val destinationIngestionReferenceCountBeforeMerge = countIngestionReferences(destination.id)
+                val destinationCompoundReferenceCountBeforeMerge = countCompoundReferences(destination.id)
+                val affectedCompoundIds = findAffectedCompoundIds(confirmedPreview.source.id)
                 val migratedIngestionReferenceCount = reassignIngestionReferences(
-                    preview.source.id,
+                    confirmedPreview.source.id,
                     destination.id,
                     destination.name
                 )
-                if (migratedIngestionReferenceCount != preview.ingestionReferenceCount) {
+                if (migratedIngestionReferenceCount != confirmedPreview.ingestionReferenceCount) {
                     throw ReusableIngredientMergeRollback(
                         DomainError.IntegrityError(
                             "Merge stopped because linked ingestion records changed during confirmation. Reload the preview and try again."
@@ -127,8 +145,8 @@ class MergeReusableIngredientUseCase(
                     )
                 }
 
-                val migratedCompoundReferenceCount = replaceCompoundReferences(preview.source.id, destination.id)
-                if (migratedCompoundReferenceCount != preview.compoundReferenceCount) {
+                val migratedCompoundReferenceCount = replaceCompoundReferences(confirmedPreview.source.id, destination.id)
+                if (migratedCompoundReferenceCount != confirmedPreview.compoundReferenceCount) {
                     throw ReusableIngredientMergeRollback(
                         DomainError.IntegrityError(
                             "Merge stopped because affected compound components changed during confirmation. Reload the preview and resolve any new conflicts before retrying."
@@ -136,11 +154,43 @@ class MergeReusableIngredientUseCase(
                     )
                 }
 
-                when (val deleteResult = deleteIngredient(preview.source.id)) {
+                when (
+                    val validationResult = validatePostMergeIntegrity(
+                        listOf(
+                            PostMergeIntegrityCheck(
+                                isValid = countIngestionReferences(confirmedPreview.source.id) == 0,
+                                failureMessage = "Merge stopped because linked ingestion references remained inconsistent after reassignment. Reload the preview and try again."
+                            ),
+                            PostMergeIntegrityCheck(
+                                isValid = countIngestionReferences(destination.id) ==
+                                    destinationIngestionReferenceCountBeforeMerge + migratedIngestionReferenceCount,
+                                failureMessage = "Merge stopped because linked ingestion references were not fully reassigned to the canonical ingredient. Reload the preview and try again."
+                            ),
+                            PostMergeIntegrityCheck(
+                                isValid = countCompoundReferences(confirmedPreview.source.id) == 0,
+                                failureMessage = "Merge stopped because affected compound references remained inconsistent after reassignment. Reload the preview and resolve those compounds before retrying."
+                            ),
+                            PostMergeIntegrityCheck(
+                                isValid = countCompoundReferences(destination.id) ==
+                                    destinationCompoundReferenceCountBeforeMerge + migratedCompoundReferenceCount,
+                                failureMessage = "Merge stopped because affected compound references were not fully reassigned to the canonical ingredient. Reload the preview and resolve those compounds before retrying."
+                            ),
+                            PostMergeIntegrityCheck(
+                                isValid = !hasInvalidCompoundState(affectedCompoundIds),
+                                failureMessage = "Merge stopped because affected compound components became inconsistent after reassignment. Reload the preview and resolve those compounds before retrying."
+                            )
+                        )
+                    )
+                ) {
+                    is AppResult.Success -> Unit
+                    is AppResult.Error -> throw ReusableIngredientMergeRollback(validationResult.error)
+                }
+
+                when (val deleteResult = deleteIngredient(confirmedPreview.source.id)) {
                     is AppResult.Success -> {
                         AppResult.Success(
                             ReusableIngredientMergeResult(
-                                sourceIngredientId = preview.source.id,
+                                sourceIngredientId = confirmedPreview.source.id,
                                 destination = destination,
                                 migratedIngestionReferenceCount = migratedIngestionReferenceCount,
                                 migratedCompoundReferenceCount = migratedCompoundReferenceCount

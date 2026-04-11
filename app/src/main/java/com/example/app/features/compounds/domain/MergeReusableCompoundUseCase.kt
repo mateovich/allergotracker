@@ -2,6 +2,8 @@ package com.example.app.features.compounds.domain
 
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.core.validation.PostMergeIntegrityCheck
+import com.example.app.core.validation.ValidatePostMergeIntegrityUseCase
 import kotlinx.coroutines.CancellationException
 
 data class ReusableCompoundMergePreview(
@@ -100,6 +102,11 @@ class MergeReusableCompoundUseCase(
     private val deleteCompound: suspend (Long) -> AppResult<Unit>,
     private val reassignIngestionReferences: suspend (Long, Long, String) -> Int = { _, _, _ -> 0 },
     private val replaceParentCompoundReferences: suspend (Long, Long) -> Int = { _, _ -> 0 },
+    private val countIngestionReferences: suspend (Long) -> Int = { 0 },
+    private val countParentCompoundReferences: suspend (Long) -> Int = { 0 },
+    private val findAffectedParentCompoundIds: suspend (Long) -> List<Long> = { emptyList() },
+    private val hasInvalidParentCompoundState: suspend (List<Long>) -> Boolean = { false },
+    private val validatePostMergeIntegrity: ValidatePostMergeIntegrityUseCase = ValidatePostMergeIntegrityUseCase(),
     private val runAtomically: suspend (suspend () -> AppResult<ReusableCompoundMergeResult>) -> AppResult<ReusableCompoundMergeResult> = { block -> block() }
 ) {
     suspend operator fun invoke(sourceCompoundId: Long, destinationCompoundId: Long): AppResult<ReusableCompoundMergeResult> {
@@ -131,6 +138,9 @@ class MergeReusableCompoundUseCase(
                         )
                     )
                 }
+                val destinationIngestionReferenceCountBeforeMerge = countIngestionReferences(destination.id)
+                val destinationParentReferenceCountBeforeMerge = countParentCompoundReferences(destination.id)
+                val affectedParentCompoundIds = findAffectedParentCompoundIds(confirmedPreview.source.id)
                 val migratedIngestionReferenceCount = reassignIngestionReferences(
                     confirmedPreview.source.id,
                     destination.id,
@@ -154,6 +164,38 @@ class MergeReusableCompoundUseCase(
                             "Merge stopped because affected parent compounds changed during confirmation. Reload the preview and resolve any new conflicts before retrying."
                         )
                     )
+                }
+
+                when (
+                    val validationResult = validatePostMergeIntegrity(
+                        listOf(
+                            PostMergeIntegrityCheck(
+                                isValid = countIngestionReferences(confirmedPreview.source.id) == 0,
+                                failureMessage = "Merge stopped because linked ingestion references remained inconsistent after reassignment. Reload the preview and try again."
+                            ),
+                            PostMergeIntegrityCheck(
+                                isValid = countIngestionReferences(destination.id) ==
+                                    destinationIngestionReferenceCountBeforeMerge + migratedIngestionReferenceCount,
+                                failureMessage = "Merge stopped because linked ingestion references were not fully reassigned to the canonical compound. Reload the preview and try again."
+                            ),
+                            PostMergeIntegrityCheck(
+                                isValid = countParentCompoundReferences(confirmedPreview.source.id) == 0,
+                                failureMessage = "Merge stopped because affected parent compound references remained inconsistent after reassignment. Reload the preview and resolve those compositions before retrying."
+                            ),
+                            PostMergeIntegrityCheck(
+                                isValid = countParentCompoundReferences(destination.id) ==
+                                    destinationParentReferenceCountBeforeMerge + migratedParentCompoundReferenceCount,
+                                failureMessage = "Merge stopped because affected parent compound references were not fully reassigned to the canonical compound. Reload the preview and resolve those compositions before retrying."
+                            ),
+                            PostMergeIntegrityCheck(
+                                isValid = !hasInvalidParentCompoundState(affectedParentCompoundIds),
+                                failureMessage = "Merge stopped because affected parent compounds became inconsistent after reassignment. Reload the preview and resolve those compositions before retrying."
+                            )
+                        )
+                    )
+                ) {
+                    is AppResult.Success -> Unit
+                    is AppResult.Error -> throw ReusableCompoundMergeRollback(validationResult.error)
                 }
 
                 when (val deleteResult = deleteCompound(confirmedPreview.source.id)) {

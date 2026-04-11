@@ -80,10 +80,26 @@ class MergeReusableCompoundUseCaseTest {
     @Test
     fun merge_reassigns_ingestion_and_parent_references_before_deleting_source() = runBlocking {
         val repository = FakeMergeReusableCompoundRepository()
+        val transactionState = CompoundMergeTransactionState(
+            sourceIngestionReferences = 3,
+            sourceParentReferences = 1
+        )
         val getPreview = GetReusableCompoundMergePreviewUseCase(
             repository = repository,
-            countIngestionReferences = { 3 },
-            countParentCompoundReferences = { 1 }
+            countIngestionReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countParentCompoundReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceParentReferences
+                    8L -> transactionState.destinationParentReferences
+                    else -> 0
+                }
+            }
         )
         var reassignedIngestionArgs: Triple<Long, Long, String>? = null
         var reassignedParentArgs: Pair<Long, Long>? = null
@@ -93,11 +109,29 @@ class MergeReusableCompoundUseCaseTest {
             deleteCompound = repository::deleteCompound,
             reassignIngestionReferences = { sourceId, destinationId, destinationName ->
                 reassignedIngestionArgs = Triple(sourceId, destinationId, destinationName)
+                transactionState.sourceIngestionReferences = 0
+                transactionState.destinationIngestionReferences = 3
                 3
             },
             replaceParentCompoundReferences = { sourceId, destinationId ->
                 reassignedParentArgs = sourceId to destinationId
+                transactionState.sourceParentReferences = 0
+                transactionState.destinationParentReferences = 1
                 1
+            },
+            countIngestionReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countParentCompoundReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceParentReferences
+                    8L -> transactionState.destinationParentReferences
+                    else -> 0
+                }
             }
         )
 
@@ -132,6 +166,159 @@ class MergeReusableCompoundUseCaseTest {
             "Merge stopped because affected parent compounds changed during confirmation. Reload the preview and resolve any new conflicts before retrying.",
             result.error.message
         )
+        assertTrue(repository.deletedIds.isEmpty())
+    }
+
+    @Test
+    fun merge_rolls_back_partial_mutation_when_post_write_validation_fails() = runBlocking {
+        val repository = FakeMergeReusableCompoundRepository()
+        val transactionState = CompoundMergeTransactionState(
+            sourceIngestionReferences = 2,
+            sourceParentReferences = 1
+        )
+        val getPreview = GetReusableCompoundMergePreviewUseCase(
+            repository = repository,
+            countIngestionReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countParentCompoundReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceParentReferences
+                    8L -> transactionState.destinationParentReferences
+                    else -> 0
+                }
+            }
+        )
+        val useCase = MergeReusableCompoundUseCase(
+            getPreview = getPreview,
+            getCompound = repository::getCompound,
+            deleteCompound = repository::deleteCompound,
+            reassignIngestionReferences = { _, _, _ ->
+                transactionState.sourceIngestionReferences = 0
+                transactionState.destinationIngestionReferences = 2
+                2
+            },
+            replaceParentCompoundReferences = { _, _ ->
+                transactionState.sourceParentReferences = 0
+                transactionState.destinationParentReferences = 1
+                1
+            },
+            countIngestionReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countParentCompoundReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceParentReferences
+                    8L -> transactionState.destinationParentReferences
+                    else -> 0
+                }
+            },
+            findAffectedParentCompoundIds = { listOf(31L) },
+            hasInvalidParentCompoundState = { true },
+            runAtomically = { block ->
+                val snapshot = transactionState.copy()
+                try {
+                    block()
+                } catch (error: RuntimeException) {
+                    transactionState.restoreFrom(snapshot)
+                    throw error
+                }
+            }
+        )
+
+        val result = useCase(7L, 8L) as AppResult.Error
+
+        assertEquals(
+            "Merge stopped because affected parent compounds became inconsistent after reassignment. Reload the preview and resolve those compositions before retrying.",
+            result.error.message
+        )
+        assertEquals(2, transactionState.sourceIngestionReferences)
+        assertEquals(0, transactionState.destinationIngestionReferences)
+        assertEquals(1, transactionState.sourceParentReferences)
+        assertEquals(0, transactionState.destinationParentReferences)
+        assertTrue(repository.deletedIds.isEmpty())
+    }
+
+    @Test
+    fun merge_rolls_back_when_ingestion_references_remain_after_reassignment() = runBlocking {
+        val repository = FakeMergeReusableCompoundRepository()
+        val transactionState = CompoundMergeTransactionState(
+            sourceIngestionReferences = 2,
+            sourceParentReferences = 1
+        )
+        val getPreview = GetReusableCompoundMergePreviewUseCase(
+            repository = repository,
+            countIngestionReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countParentCompoundReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceParentReferences
+                    8L -> transactionState.destinationParentReferences
+                    else -> 0
+                }
+            }
+        )
+        val useCase = MergeReusableCompoundUseCase(
+            getPreview = getPreview,
+            getCompound = repository::getCompound,
+            deleteCompound = repository::deleteCompound,
+            reassignIngestionReferences = { _, _, _ ->
+                transactionState.destinationIngestionReferences = 2
+                2
+            },
+            replaceParentCompoundReferences = { _, _ ->
+                transactionState.sourceParentReferences = 0
+                transactionState.destinationParentReferences = 1
+                1
+            },
+            countIngestionReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countParentCompoundReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceParentReferences
+                    8L -> transactionState.destinationParentReferences
+                    else -> 0
+                }
+            },
+            runAtomically = { block ->
+                val snapshot = transactionState.copy()
+                try {
+                    block()
+                } catch (error: RuntimeException) {
+                    transactionState.restoreFrom(snapshot)
+                    throw error
+                }
+            }
+        )
+
+        val result = useCase(7L, 8L) as AppResult.Error
+
+        assertEquals(
+            "Merge stopped because linked ingestion references remained inconsistent after reassignment. Reload the preview and try again.",
+            result.error.message
+        )
+        assertEquals(2, transactionState.sourceIngestionReferences)
+        assertEquals(0, transactionState.destinationIngestionReferences)
+        assertEquals(1, transactionState.sourceParentReferences)
+        assertEquals(0, transactionState.destinationParentReferences)
         assertTrue(repository.deletedIds.isEmpty())
     }
 
@@ -173,6 +360,10 @@ class MergeReusableCompoundUseCaseTest {
                 8L to ReusableCompound(8L, "Breakfast mix plus renamed", null, CompoundCompositionStatus.COMPLETE, emptyList(), 1L, 2L)
             )
         )
+        val transactionState = CompoundMergeTransactionState(
+            sourceIngestionReferences = 1,
+            sourceParentReferences = 0
+        )
         val getPreview = GetReusableCompoundMergePreviewUseCase(
             repository = object : ReusableCompoundRepository by repository {
                 override suspend fun getCompound(id: Long): AppResult<ReusableCompound> {
@@ -189,8 +380,20 @@ class MergeReusableCompoundUseCaseTest {
                     }
                 }
             },
-            countIngestionReferences = { 1 },
-            countParentCompoundReferences = { 0 }
+            countIngestionReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countParentCompoundReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceParentReferences
+                    8L -> transactionState.destinationParentReferences
+                    else -> 0
+                }
+            }
         )
         var reassignedIngestionArgs: Triple<Long, Long, String>? = null
         val useCase = MergeReusableCompoundUseCase(
@@ -199,7 +402,23 @@ class MergeReusableCompoundUseCaseTest {
             deleteCompound = repository::deleteCompound,
             reassignIngestionReferences = { sourceId, destinationId, destinationName ->
                 reassignedIngestionArgs = Triple(sourceId, destinationId, destinationName)
+                transactionState.sourceIngestionReferences = 0
+                transactionState.destinationIngestionReferences = 1
                 1
+            },
+            countIngestionReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countParentCompoundReferences = { compoundId ->
+                when (compoundId) {
+                    7L -> transactionState.sourceParentReferences
+                    8L -> transactionState.destinationParentReferences
+                    else -> 0
+                }
             }
         )
 
@@ -265,4 +484,18 @@ private class FakeMergeReusableCompoundRepository(
     }
 
     override fun observeCompounds(): Flow<List<ReusableCompound>> = emptyFlow()
+}
+
+private data class CompoundMergeTransactionState(
+    var sourceIngestionReferences: Int,
+    var destinationIngestionReferences: Int = 0,
+    var sourceParentReferences: Int,
+    var destinationParentReferences: Int = 0
+) {
+    fun restoreFrom(snapshot: CompoundMergeTransactionState) {
+        sourceIngestionReferences = snapshot.sourceIngestionReferences
+        destinationIngestionReferences = snapshot.destinationIngestionReferences
+        sourceParentReferences = snapshot.sourceParentReferences
+        destinationParentReferences = snapshot.destinationParentReferences
+    }
 }

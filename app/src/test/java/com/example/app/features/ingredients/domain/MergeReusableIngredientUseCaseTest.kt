@@ -67,10 +67,26 @@ class MergeReusableIngredientUseCaseTest {
     @Test
     fun merge_reassigns_ingestion_and_compound_references_before_deleting_source() = runBlocking {
         val repository = FakeMergeReusableIngredientRepository()
+        val transactionState = IngredientMergeTransactionState(
+            sourceIngestionReferences = 3,
+            sourceCompoundReferences = 1
+        )
         val getPreview = GetReusableIngredientMergePreviewUseCase(
             repository = repository,
-            countIngestionReferences = { 3 },
-            countCompoundReferences = { 1 },
+            countIngestionReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countCompoundReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceCompoundReferences
+                    8L -> transactionState.destinationCompoundReferences
+                    else -> 0
+                }
+            },
             countConflictingCompounds = { _, _ -> 0 }
         )
         var reassignedIngestionArgs: Triple<Long, Long, String>? = null
@@ -81,11 +97,29 @@ class MergeReusableIngredientUseCaseTest {
             deleteIngredient = repository::deleteIngredient,
             reassignIngestionReferences = { sourceId, destinationId, destinationName ->
                 reassignedIngestionArgs = Triple(sourceId, destinationId, destinationName)
+                transactionState.sourceIngestionReferences = 0
+                transactionState.destinationIngestionReferences = 3
                 3
             },
             replaceCompoundReferences = { sourceId, destinationId ->
                 reassignedCompoundArgs = sourceId to destinationId
+                transactionState.sourceCompoundReferences = 0
+                transactionState.destinationCompoundReferences = 1
                 1
+            },
+            countIngestionReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countCompoundReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceCompoundReferences
+                    8L -> transactionState.destinationCompoundReferences
+                    else -> 0
+                }
             }
         )
 
@@ -124,12 +158,199 @@ class MergeReusableIngredientUseCaseTest {
     }
 
     @Test
+    fun merge_rechecks_preview_inside_transaction_before_persisting() = runBlocking {
+        val repository = FakeMergeReusableIngredientRepository()
+        var previewCalls = 0
+        val getPreview = GetReusableIngredientMergePreviewUseCase(
+            repository = repository,
+            countIngestionReferences = { 1 },
+            countCompoundReferences = { 1 },
+            countConflictingCompounds = { _, _ ->
+                previewCalls += 1
+                if (previewCalls == 1) 0 else 1
+            }
+        )
+        val useCase = MergeReusableIngredientUseCase(
+            getPreview = getPreview,
+            getIngredient = repository::getIngredient,
+            deleteIngredient = repository::deleteIngredient,
+            reassignIngestionReferences = { _, _, _ -> 1 },
+            replaceCompoundReferences = { _, _ -> 1 }
+        )
+
+        val result = useCase(7L, 8L) as AppResult.Error
+
+        assertEquals(
+            "Merge blocked: 1 compound would end up with duplicate ingredient components. Resolve those compounds first.",
+            result.error.message
+        )
+        assertTrue(repository.deletedIds.isEmpty())
+    }
+
+    @Test
+    fun merge_rolls_back_partial_mutation_when_post_write_validation_fails() = runBlocking {
+        val repository = FakeMergeReusableIngredientRepository()
+        val transactionState = IngredientMergeTransactionState(
+            sourceIngestionReferences = 2,
+            sourceCompoundReferences = 1
+        )
+        val getPreview = GetReusableIngredientMergePreviewUseCase(
+            repository = repository,
+            countIngestionReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countCompoundReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceCompoundReferences
+                    8L -> transactionState.destinationCompoundReferences
+                    else -> 0
+                }
+            }
+        )
+        val useCase = MergeReusableIngredientUseCase(
+            getPreview = getPreview,
+            getIngredient = repository::getIngredient,
+            deleteIngredient = repository::deleteIngredient,
+            reassignIngestionReferences = { _, _, _ ->
+                transactionState.sourceIngestionReferences = 0
+                transactionState.destinationIngestionReferences = 2
+                2
+            },
+            replaceCompoundReferences = { _, _ ->
+                transactionState.sourceCompoundReferences = 0
+                transactionState.destinationCompoundReferences = 1
+                1
+            },
+            countIngestionReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countCompoundReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceCompoundReferences
+                    8L -> transactionState.destinationCompoundReferences
+                    else -> 0
+                }
+            },
+            findAffectedCompoundIds = { listOf(21L) },
+            hasInvalidCompoundState = { true },
+            runAtomically = { block ->
+                val snapshot = transactionState.copy()
+                try {
+                    block()
+                } catch (error: RuntimeException) {
+                    transactionState.restoreFrom(snapshot)
+                    throw error
+                }
+            }
+        )
+
+        val result = useCase(7L, 8L) as AppResult.Error
+
+        assertEquals(
+            "Merge stopped because affected compound components became inconsistent after reassignment. Reload the preview and resolve those compounds before retrying.",
+            result.error.message
+        )
+        assertEquals(2, transactionState.sourceIngestionReferences)
+        assertEquals(0, transactionState.destinationIngestionReferences)
+        assertEquals(1, transactionState.sourceCompoundReferences)
+        assertEquals(0, transactionState.destinationCompoundReferences)
+        assertTrue(repository.deletedIds.isEmpty())
+    }
+
+    @Test
+    fun merge_rolls_back_when_ingestion_references_remain_after_reassignment() = runBlocking {
+        val repository = FakeMergeReusableIngredientRepository()
+        val transactionState = IngredientMergeTransactionState(
+            sourceIngestionReferences = 2,
+            sourceCompoundReferences = 1
+        )
+        val getPreview = GetReusableIngredientMergePreviewUseCase(
+            repository = repository,
+            countIngestionReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countCompoundReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceCompoundReferences
+                    8L -> transactionState.destinationCompoundReferences
+                    else -> 0
+                }
+            }
+        )
+        val useCase = MergeReusableIngredientUseCase(
+            getPreview = getPreview,
+            getIngredient = repository::getIngredient,
+            deleteIngredient = repository::deleteIngredient,
+            reassignIngestionReferences = { _, _, _ ->
+                transactionState.destinationIngestionReferences = 2
+                2
+            },
+            replaceCompoundReferences = { _, _ ->
+                transactionState.sourceCompoundReferences = 0
+                transactionState.destinationCompoundReferences = 1
+                1
+            },
+            countIngestionReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countCompoundReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceCompoundReferences
+                    8L -> transactionState.destinationCompoundReferences
+                    else -> 0
+                }
+            },
+            runAtomically = { block ->
+                val snapshot = transactionState.copy()
+                try {
+                    block()
+                } catch (error: RuntimeException) {
+                    transactionState.restoreFrom(snapshot)
+                    throw error
+                }
+            }
+        )
+
+        val result = useCase(7L, 8L) as AppResult.Error
+
+        assertEquals(
+            "Merge stopped because linked ingestion references remained inconsistent after reassignment. Reload the preview and try again.",
+            result.error.message
+        )
+        assertEquals(2, transactionState.sourceIngestionReferences)
+        assertEquals(0, transactionState.destinationIngestionReferences)
+        assertEquals(1, transactionState.sourceCompoundReferences)
+        assertEquals(0, transactionState.destinationCompoundReferences)
+        assertTrue(repository.deletedIds.isEmpty())
+    }
+
+    @Test
     fun merge_uses_latest_destination_name_during_confirmation() = runBlocking {
         val repository = FakeMergeReusableIngredientRepository(
             ingredients = mutableMapOf(
                 7L to ReusableIngredient(7L, "Oat milk", null, 1L, 1L),
                 8L to ReusableIngredient(8L, "Oat milk plus renamed", null, 1L, 2L)
             )
+        )
+        val transactionState = IngredientMergeTransactionState(
+            sourceIngestionReferences = 1,
+            sourceCompoundReferences = 0
         )
         val getPreview = GetReusableIngredientMergePreviewUseCase(
             repository = object : ReusableIngredientRepository by repository {
@@ -141,8 +362,20 @@ class MergeReusableIngredientUseCaseTest {
                     }
                 }
             },
-            countIngestionReferences = { 1 },
-            countCompoundReferences = { 0 }
+            countIngestionReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countCompoundReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceCompoundReferences
+                    8L -> transactionState.destinationCompoundReferences
+                    else -> 0
+                }
+            }
         )
         var reassignedIngestionArgs: Triple<Long, Long, String>? = null
         val useCase = MergeReusableIngredientUseCase(
@@ -151,7 +384,23 @@ class MergeReusableIngredientUseCaseTest {
             deleteIngredient = repository::deleteIngredient,
             reassignIngestionReferences = { sourceId, destinationId, destinationName ->
                 reassignedIngestionArgs = Triple(sourceId, destinationId, destinationName)
+                transactionState.sourceIngestionReferences = 0
+                transactionState.destinationIngestionReferences = 1
                 1
+            },
+            countIngestionReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceIngestionReferences
+                    8L -> transactionState.destinationIngestionReferences
+                    else -> 0
+                }
+            },
+            countCompoundReferences = { ingredientId ->
+                when (ingredientId) {
+                    7L -> transactionState.sourceCompoundReferences
+                    8L -> transactionState.destinationCompoundReferences
+                    else -> 0
+                }
             }
         )
 
@@ -217,4 +466,18 @@ private class FakeMergeReusableIngredientRepository(
     }
 
     override fun observeIngredients(): Flow<List<ReusableIngredient>> = emptyFlow()
+}
+
+private data class IngredientMergeTransactionState(
+    var sourceIngestionReferences: Int,
+    var destinationIngestionReferences: Int = 0,
+    var sourceCompoundReferences: Int,
+    var destinationCompoundReferences: Int = 0
+) {
+    fun restoreFrom(snapshot: IngredientMergeTransactionState) {
+        sourceIngestionReferences = snapshot.sourceIngestionReferences
+        destinationIngestionReferences = snapshot.destinationIngestionReferences
+        sourceCompoundReferences = snapshot.sourceCompoundReferences
+        destinationCompoundReferences = snapshot.destinationCompoundReferences
+    }
 }

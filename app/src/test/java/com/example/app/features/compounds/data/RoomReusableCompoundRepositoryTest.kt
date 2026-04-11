@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -411,6 +412,136 @@ class RoomReusableCompoundRepositoryTest {
             error.error
         )
     }
+
+    @Test
+    fun has_duplicate_components_detects_invalid_impacted_compound_snapshots() = runBlocking {
+        val dao = FakeReusableCompoundDao(
+            compoundSnapshotsById = mapOf(
+                11L to compoundSnapshot(
+                    id = 11L,
+                    components = listOf(
+                        ReusableCompoundComponentEntity(
+                            id = 1L,
+                            compoundId = 11L,
+                            position = 0,
+                            componentKind = CompoundComponentKind.INGREDIENT.storageValue,
+                            ingredientId = 7L,
+                            childCompoundId = null,
+                            proportionBasisPoints = 5_000
+                        ),
+                        ReusableCompoundComponentEntity(
+                            id = 2L,
+                            compoundId = 11L,
+                            position = 1,
+                            componentKind = CompoundComponentKind.INGREDIENT.storageValue,
+                            ingredientId = 7L,
+                            childCompoundId = null,
+                            proportionBasisPoints = 5_000
+                        )
+                    )
+                )
+            )
+        )
+        val repository = RoomReusableCompoundRepository(
+            compoundDao = dao,
+            ingredientExists = { true },
+            compoundExists = { true },
+            nowEpochMillis = { 2_000L }
+        )
+
+        assertTrue(repository.hasDuplicateComponents(listOf(11L)))
+    }
+
+    @Test
+    fun has_duplicate_components_ignores_malformed_mixed_shape_rows() = runBlocking {
+        val dao = FakeReusableCompoundDao(
+            compoundSnapshotsById = mapOf(
+                11L to compoundSnapshot(
+                    id = 11L,
+                    components = listOf(
+                        ReusableCompoundComponentEntity(
+                            id = 1L,
+                            compoundId = 11L,
+                            position = 0,
+                            componentKind = CompoundComponentKind.INGREDIENT.storageValue,
+                            ingredientId = 7L,
+                            childCompoundId = null,
+                            proportionBasisPoints = 5_000
+                        ),
+                        ReusableCompoundComponentEntity(
+                            id = 2L,
+                            compoundId = 11L,
+                            position = 1,
+                            componentKind = CompoundComponentKind.COMPOUND.storageValue,
+                            ingredientId = 7L,
+                            childCompoundId = 12L,
+                            proportionBasisPoints = 5_000
+                        )
+                    )
+                )
+            )
+        )
+        val repository = RoomReusableCompoundRepository(
+            compoundDao = dao,
+            ingredientExists = { true },
+            compoundExists = { true },
+            nowEpochMillis = { 2_000L }
+        )
+
+        assertFalse(repository.hasDuplicateComponents(listOf(11L)))
+    }
+
+    @Test
+    fun has_recursive_composition_detects_cycle_in_impacted_parent_graph() = runBlocking {
+        val dao = FakeReusableCompoundDao(
+            compoundSnapshotsById = mapOf(
+                11L to compoundSnapshot(
+                    id = 11L,
+                    components = listOf(
+                        ReusableCompoundComponentEntity(
+                            id = 1L,
+                            compoundId = 11L,
+                            position = 0,
+                            componentKind = CompoundComponentKind.COMPOUND.storageValue,
+                            ingredientId = null,
+                            childCompoundId = 12L,
+                            proportionBasisPoints = 10_000
+                        )
+                    )
+                )
+            ),
+            childEdges = listOf(
+                ReusableCompoundChildEdge(parentCompoundId = 11L, childCompoundId = 12L),
+                ReusableCompoundChildEdge(parentCompoundId = 12L, childCompoundId = 11L)
+            )
+        )
+        val repository = RoomReusableCompoundRepository(
+            compoundDao = dao,
+            ingredientExists = { true },
+            compoundExists = { true },
+            nowEpochMillis = { 2_000L }
+        )
+
+        assertTrue(repository.hasRecursiveComposition(listOf(11L)))
+    }
+}
+
+private fun compoundSnapshot(
+    id: Long,
+    components: List<ReusableCompoundComponentEntity>
+): ReusableCompoundWithComponents {
+    return ReusableCompoundWithComponents(
+        compound = ReusableCompoundEntity(
+            id = id,
+            name = "Compound $id",
+            normalizedName = "compound-$id",
+            notes = null,
+            compositionStatus = CompoundCompositionStatus.COMPLETE.storageValue,
+            createdAtEpochMs = 1L,
+            updatedAtEpochMs = 1L
+        ),
+        components = components
+    )
 }
 
 private fun validIngredientComponent(
@@ -426,6 +557,7 @@ private fun validIngredientComponent(
 private class FakeReusableCompoundDao(
     private val existing: ReusableCompoundEntity? = null,
     private val existingComponents: List<ReusableCompoundComponentEntity> = emptyList(),
+    private val compoundSnapshotsById: Map<Long, ReusableCompoundWithComponents> = emptyMap(),
     private val childEdges: List<ReusableCompoundChildEdge> = emptyList(),
     private val deleteFailure: Exception? = null
 ) : ReusableCompoundDao {
@@ -448,6 +580,7 @@ private class FakeReusableCompoundDao(
     override suspend fun findById(id: Long): ReusableCompoundEntity? = existing?.takeIf { it.id == id }
 
     override suspend fun findCompoundWithComponentsById(id: Long): ReusableCompoundWithComponents? {
+        compoundSnapshotsById[id]?.let { return it }
         val compound = when {
             existing?.id == id && updated.isNotEmpty() -> updated.last()
             existing?.id == id -> existing
@@ -467,6 +600,10 @@ private class FakeReusableCompoundDao(
             else -> emptyList()
         }
         return ReusableCompoundWithComponents(compound = compound, components = components)
+    }
+
+    override suspend fun findCompoundsWithComponentsByIds(ids: List<Long>): List<ReusableCompoundWithComponents> {
+        return ids.mapNotNull { id -> findCompoundWithComponentsById(id) }
     }
 
     override suspend fun updateCompound(entity: ReusableCompoundEntity): Int {
@@ -498,7 +635,19 @@ private class FakeReusableCompoundDao(
     override suspend fun existsById(id: Long): Boolean = existing?.id == id || id == 1L
 
     override suspend fun countIngredientComponentReferences(ingredientId: Long): Int {
-        return existingComponents.count { it.ingredientId == ingredientId }
+        return existingComponents.count {
+            it.componentKind == CompoundComponentKind.INGREDIENT.storageValue && it.ingredientId == ingredientId
+        }
+    }
+
+    override suspend fun findCompoundIdsReferencingIngredient(ingredientId: Long): List<Long> {
+        return compoundSnapshotsById.values
+            .filter { snapshot ->
+                snapshot.components.any {
+                    it.componentKind == CompoundComponentKind.INGREDIENT.storageValue && it.ingredientId == ingredientId
+                }
+            }
+            .map { snapshot -> snapshot.compound.id }
     }
 
     override suspend fun countIngredientMergeConflictingCompounds(
@@ -512,7 +661,9 @@ private class FakeReusableCompoundDao(
     ): Int = 0
 
     override suspend fun countChildCompoundReferences(compoundId: Long): Int {
-        return existingComponents.count { it.childCompoundId == compoundId }
+        return existingComponents.count {
+            it.componentKind == CompoundComponentKind.COMPOUND.storageValue && it.childCompoundId == compoundId
+        }
     }
 
     override suspend fun countCompoundMergeConflictingParents(sourceCompoundId: Long, destinationCompoundId: Long): Int = 0

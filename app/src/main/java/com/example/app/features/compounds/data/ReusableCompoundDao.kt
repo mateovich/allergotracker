@@ -26,6 +26,10 @@ interface ReusableCompoundDao {
     @Query("SELECT * FROM reusable_compounds WHERE id = :id LIMIT 1")
     suspend fun findCompoundWithComponentsById(id: Long): ReusableCompoundWithComponents?
 
+    @Transaction
+    @Query("SELECT * FROM reusable_compounds WHERE id IN (:ids)")
+    suspend fun findCompoundsWithComponentsByIds(ids: List<Long>): List<ReusableCompoundWithComponents>
+
     @Update
     suspend fun updateCompound(entity: ReusableCompoundEntity): Int
 
@@ -38,8 +42,15 @@ interface ReusableCompoundDao {
     @Query("SELECT EXISTS(SELECT 1 FROM reusable_compounds WHERE id = :id)")
     suspend fun existsById(id: Long): Boolean
 
-    @Query("SELECT COUNT(*) FROM reusable_compound_components WHERE ingredient_id = :ingredientId")
+    @Query(
+        "SELECT COUNT(*) FROM reusable_compound_components WHERE component_kind = 'ingredient' AND ingredient_id = :ingredientId"
+    )
     suspend fun countIngredientComponentReferences(ingredientId: Long): Int
+
+    @Query(
+        "SELECT DISTINCT compound_id FROM reusable_compound_components WHERE component_kind = 'ingredient' AND ingredient_id = :ingredientId"
+    )
+    suspend fun findCompoundIdsReferencingIngredient(ingredientId: Long): List<Long>
 
     @Query(
         """
@@ -62,7 +73,9 @@ interface ReusableCompoundDao {
     )
     suspend fun replaceIngredientComponentReferences(sourceIngredientId: Long, destinationIngredientId: Long): Int
 
-    @Query("SELECT COUNT(*) FROM reusable_compound_components WHERE child_compound_id = :compoundId")
+    @Query(
+        "SELECT COUNT(*) FROM reusable_compound_components WHERE component_kind = 'compound' AND child_compound_id = :compoundId"
+    )
     suspend fun countChildCompoundReferences(compoundId: Long): Int
 
     @Query(

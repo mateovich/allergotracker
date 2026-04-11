@@ -23,6 +23,59 @@ class RoomReusableCompoundRepository(
     private val compoundExists: suspend (Long) -> Boolean,
     private val nowEpochMillis: () -> Long
 ) : ReusableCompoundRepository {
+    suspend fun hasDuplicateComponents(compoundIds: List<Long>): Boolean {
+        val distinctIds = compoundIds.distinct()
+        if (distinctIds.isEmpty()) {
+            return false
+        }
+        return compoundDao.findCompoundsWithComponentsByIds(distinctIds).any { compound ->
+            CompoundCompositionIntegrity.findDuplicateComponentIndexes(
+                compound.components
+                    .sortedBy(ReusableCompoundComponentEntity::position)
+                    .mapNotNull { component ->
+                        when (CompoundComponentKind.fromStorageValue(component.componentKind)) {
+                            CompoundComponentKind.INGREDIENT -> {
+                                component.ingredientId?.let { ingredientId -> CompoundComponentKind.INGREDIENT to ingredientId }
+                            }
+
+                            CompoundComponentKind.COMPOUND -> {
+                                component.childCompoundId?.let { childCompoundId -> CompoundComponentKind.COMPOUND to childCompoundId }
+                            }
+                        }
+                    }
+            ).isNotEmpty()
+        }
+    }
+
+    suspend fun hasRecursiveComposition(compoundIds: List<Long>): Boolean {
+        val distinctIds = compoundIds.distinct()
+        if (distinctIds.isEmpty()) {
+            return false
+        }
+        val childEdges = compoundDao.findAllChildCompoundEdges().map { edge ->
+            CompoundChildEdge(
+                parentCompoundId = edge.parentCompoundId,
+                childCompoundId = edge.childCompoundId
+            )
+        }
+        return compoundDao.findCompoundsWithComponentsByIds(distinctIds).any { compound ->
+            compound.components
+                .sortedBy(ReusableCompoundComponentEntity::position)
+                .mapNotNull { component ->
+                    component.childCompoundId?.takeIf {
+                        CompoundComponentKind.fromStorageValue(component.componentKind) == CompoundComponentKind.COMPOUND
+                    }
+                }
+                .any { childCompoundId ->
+                    CompoundCompositionIntegrity.wouldCreateCycle(
+                        parentCompoundId = compound.compound.id,
+                        childCompoundId = childCompoundId,
+                        childEdges = childEdges
+                    )
+                }
+        }
+    }
+
     override suspend fun createCompound(command: CreateReusableCompoundCommand): AppResult<ReusableCompound> {
         return try {
             val canonicalName = command.name.normalizeReusableName()
