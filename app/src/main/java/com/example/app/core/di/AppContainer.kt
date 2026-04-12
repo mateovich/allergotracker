@@ -38,6 +38,8 @@ import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
 import com.example.app.features.eventcatalog.domain.RetireReusableEventCatalogUseCase
 import com.example.app.features.eventcatalog.domain.UpdateReusableEventCatalogUseCase
 import com.example.app.features.eventcatalog.ui.EditReusableEventCatalogViewModelFactory
+import com.example.app.features.export.domain.ValidateExportConfigurationUseCase
+import com.example.app.features.export.ui.ExportViewModelFactory
 import com.example.app.features.exposure.data.RoomExposureRepository
 import com.example.app.features.exposure.domain.CreateExposureDefaultsUseCase
 import com.example.app.features.exposure.domain.CreateExposureEventUseCase
@@ -421,9 +423,12 @@ class AppContainer(appContext: Context) {
     private val observeRecordCountUseCase = ObserveRecordCountUseCase(recordsRepository)
     private val observeRecordsUseCase = ObserveRecordsUseCase(recordsRepository)
     private val observeRecordDetailUseCase = ObserveRecordDetailUseCase(recordsRepository)
+    private val validateExportConfigurationUseCase = ValidateExportConfigurationUseCase()
 
     val recordsViewModelFactory: RecordsViewModelFactory =
         RecordsViewModelFactory(systemCurrentTimeProvider, observeRecordCountUseCase, observeRecordsUseCase)
+    val exportViewModelFactory: ExportViewModelFactory =
+        ExportViewModelFactory(observeRecordCountUseCase, validateExportConfigurationUseCase)
     val createIngestionViewModelFactory: CreateIngestionViewModelFactory =
         CreateIngestionViewModelFactory(
             createIngestionDefaultsUseCase,

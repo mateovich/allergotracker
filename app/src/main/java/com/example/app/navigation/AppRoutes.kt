@@ -7,6 +7,7 @@ object AppRoutes {
     const val CATALOG_KIND_ARG = "catalogKind"
     const val OPEN_DELETE_ARG = "openDelete"
     const val RECORDS = "records"
+    const val EXPORT = "export"
     const val RECORD_DETAIL = "record-detail/{$RECORD_EVENT_TYPE_ARG}/{$RECORD_ID_ARG}"
     const val CREATE_INGESTION = "create/ingestion"
     const val CREATE_EXPOSURE = "create/exposure"

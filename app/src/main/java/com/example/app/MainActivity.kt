@@ -17,6 +17,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 AppNavGraph(
                     recordsViewModelFactory = appContainer.recordsViewModelFactory,
+                    exportViewModelFactory = appContainer.exportViewModelFactory,
                     createIngestionViewModelFactory = appContainer.createIngestionViewModelFactory,
                     createExposureViewModelFactory = appContainer.createExposureViewModelFactory,
                     createOutbreakViewModelFactory = appContainer.createOutbreakViewModelFactory,

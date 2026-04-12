@@ -2,13 +2,17 @@ package com.example.app.core.designsystem
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -17,9 +21,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+
+data class AppTopLevelDestination(
+    val route: String,
+    val label: String,
+    val testTag: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,6 +110,49 @@ fun EmptyStateMessage(
                         .semantics { contentDescription = actionLabel }
                 ) {
                     Text(text = actionLabel)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AppTopLevelNavigationBar(
+    destinations: List<AppTopLevelDestination>,
+    selectedRoute: String?,
+    onDestinationSelected: (AppTopLevelDestination) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("app-top-level-navigation"),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 3.dp
+    ) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            destinations.forEach { destination ->
+                val isSelected = destination.route == selectedRoute
+                TextButton(
+                    onClick = { onDestinationSelected(destination) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(destination.testTag)
+                        .semantics {
+                            contentDescription = destination.label
+                            selected = isSelected
+                            role = Role.Tab
+                            stateDescription = if (isSelected) "Selected" else "Not selected"
+                        }
+                ) {
+                    Text(
+                        text = destination.label,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
                 }
             }
         }

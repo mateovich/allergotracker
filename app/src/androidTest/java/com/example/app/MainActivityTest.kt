@@ -43,9 +43,51 @@ class MainActivityTest {
     fun app_launches_into_records_with_enabled_primary_add_action() {
         composeRule.onNodeWithText("Records").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Add record").assertIsDisplayed().assertIsEnabled()
+        composeRule.onNodeWithContentDescription("Export").assertIsDisplayed()
         composeRule.onNodeWithTag("records-add-fab")
             .assertWidthIsAtLeast(48.dp)
             .assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun export_tab_opens_export_configuration_with_explicit_choices_and_summary() {
+        composeRule.onNodeWithContentDescription("Export").performClick()
+
+        composeRule.onNodeWithTag("export-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("export-format-selector").assertIsDisplayed()
+        composeRule.onNodeWithTag("export-scope-selector").assertIsDisplayed()
+        composeRule.onNodeWithTag("export-summary").assertIsDisplayed()
+        composeRule.onNodeWithTag("export-summary-text")
+            .assertTextContains("Choose an export format and scope to review what will be included.")
+
+        composeRule.onNodeWithTag("export-format-json").performClick()
+        composeRule.onNodeWithTag("export-scope-ingestion").performClick()
+        composeRule.onNodeWithTag("export-summary-text")
+            .assertTextContains("JSON export will include only ingestion records saved on this device.")
+    }
+
+    @Test
+    fun export_flow_blocks_confirmation_until_required_configuration_is_selected() {
+        composeRule.onNodeWithContentDescription("Export").performClick()
+
+        composeRule.onNodeWithTag("export-confirm-action").performScrollTo().performClick()
+
+        composeRule.onNodeWithTag("export-screen").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("export-request-message").assertCountEquals(0)
+    }
+
+    @Test
+    fun export_flow_waits_for_explicit_confirmation_before_requesting_next_step() {
+        composeRule.onNodeWithContentDescription("Export").performClick()
+        composeRule.onNodeWithTag("export-format-json").performClick()
+        composeRule.onNodeWithTag("export-scope-all-records").performClick()
+        composeRule.onAllNodesWithTag("export-request-message").assertCountEquals(0)
+
+        composeRule.onNodeWithTag("export-confirm-action").performScrollTo().performClick()
+
+        composeRule.onNodeWithTag("export-request-message")
+            .assertIsDisplayed()
+            .assertTextContains("Export request ready. Choose where to save it in the next step.")
     }
 
     @Test

@@ -1,14 +1,23 @@
 package com.example.app.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.padding
 import androidx.lifecycle.ViewModelProvider
+import androidx.compose.material3.Scaffold
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavType
 import androidx.navigation.NavHostController
 import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.lifecycle.SavedStateHandle
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navOptions
+import com.example.app.core.designsystem.AppTopLevelDestination
+import com.example.app.core.designsystem.AppTopLevelNavigationBar
 import com.example.app.features.compounds.ui.CreateCompoundScreen
 import com.example.app.features.compounds.ui.CreateCompoundViewModelFactory
 import com.example.app.features.compounds.ui.EditCompoundScreen
@@ -17,6 +26,8 @@ import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
 import com.example.app.features.eventcatalog.ui.EditReusableEventCatalogScreen
 import com.example.app.features.eventcatalog.ui.EditReusableEventCatalogViewModelFactory
 import com.example.app.features.eventcatalog.ui.EditedEventCatalogSelectionResult
+import com.example.app.features.export.ui.ExportScreen
+import com.example.app.features.export.ui.ExportViewModelFactory
 import com.example.app.features.exposure.ui.CreateExposureScreen
 import com.example.app.features.exposure.ui.CreateExposureViewModelFactory
 import com.example.app.features.exposure.ui.EditExposureScreen
@@ -43,6 +54,7 @@ import com.example.app.features.records.ui.RecordsScreen
 @Composable
 fun AppNavGraph(
     recordsViewModelFactory: ViewModelProvider.Factory,
+    exportViewModelFactory: ExportViewModelFactory,
     createIngestionViewModelFactory: CreateIngestionViewModelFactory,
     createExposureViewModelFactory: CreateExposureViewModelFactory,
     createOutbreakViewModelFactory: CreateOutbreakViewModelFactory,
@@ -57,12 +69,47 @@ fun AppNavGraph(
     editOutbreakViewModelFactoryProvider: (Long) -> EditOutbreakViewModelFactory
 ) {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = AppRoutes.RECORDS) {
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = currentBackStackEntry?.destination?.route
+    val topLevelDestinations = listOf(
+        AppTopLevelDestination(route = AppRoutes.RECORDS, label = "Records", testTag = "top-level-records"),
+        AppTopLevelDestination(route = AppRoutes.EXPORT, label = "Export", testTag = "top-level-export")
+    )
+    val topLevelRoutes = topLevelDestinations.map { it.route }.toSet()
+
+    Scaffold(
+        containerColor = Color.Transparent,
+        bottomBar = {
+            if (currentRoute in topLevelRoutes) {
+                AppTopLevelNavigationBar(
+                    destinations = topLevelDestinations,
+                    selectedRoute = currentRoute,
+                    onDestinationSelected = { destination ->
+                        navController.navigate(destination.route, navOptions {
+                            popUpTo(navController.graph.startDestinationId) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        })
+                    }
+                )
+            }
+        }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = AppRoutes.RECORDS,
+            modifier = Modifier.padding(innerPadding)
+        ) {
         composable(route = AppRoutes.RECORDS) {
             RecordsScreen(
                 onNavigateToRoute = navController::navigate,
                 viewModelFactory = recordsViewModelFactory
             )
+        }
+        composable(route = AppRoutes.EXPORT) {
+            ExportScreen(viewModelFactory = exportViewModelFactory)
         }
         composable(
             route = AppRoutes.RECORD_DETAIL,
@@ -300,6 +347,7 @@ fun AppNavGraph(
                 onNavigateToRoute = { route -> navigateToRouteOrReturnToRecords(navController, route) }
             )
         }
+    }
     }
 }
 
