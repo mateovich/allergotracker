@@ -9,14 +9,23 @@ data class ExportSnapshot(
     val reusableEventCatalogEntries: List<ExportReusableEventCatalogRecord>
 )
 
+data class ExportReusableEntityReference(
+    val kind: String,
+    val id: Long
+)
+
+data class ExportEventCatalogReference(
+    val kind: String,
+    val id: Long
+)
+
 data class ExportIngestionRecord(
     val id: Long,
     val itemName: String,
     val quantityLevel: Int,
     val occurredAtEpochMs: Long,
     val notes: String?,
-    val reusableEntityKind: String?,
-    val reusableEntityId: Long?,
+    val reusableEntityRef: ExportReusableEntityReference?,
     val createdAtEpochMs: Long
 )
 
@@ -26,7 +35,7 @@ data class ExportExposureRecord(
     val occurredAtEpochMs: Long,
     val notes: String?,
     val intensityLevel: Int,
-    val exposureTypeCatalogId: Long?,
+    val exposureTypeCatalogRef: ExportEventCatalogReference?,
     val createdAtEpochMs: Long
 )
 
@@ -37,8 +46,8 @@ data class ExportOutbreakRecord(
     val occurredAtEpochMs: Long,
     val notes: String?,
     val intensityLevel: Int,
-    val outbreakDescriptorCatalogId: Long?,
-    val bodyLocationCatalogId: Long?,
+    val outbreakDescriptorCatalogRef: ExportEventCatalogReference?,
+    val bodyLocationCatalogRef: ExportEventCatalogReference?,
     val createdAtEpochMs: Long
 )
 
@@ -63,9 +72,7 @@ data class ExportReusableCompoundRecord(
 data class ExportReusableCompoundComponentRecord(
     val id: Long,
     val position: Int,
-    val kind: String,
-    val ingredientId: Long?,
-    val childCompoundId: Long?,
+    val componentRef: ExportReusableEntityReference,
     val proportionBasisPoints: Int?
 )
 

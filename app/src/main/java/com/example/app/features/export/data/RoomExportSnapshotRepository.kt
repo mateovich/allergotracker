@@ -1,13 +1,16 @@
 package com.example.app.features.export.data
 
+import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.compounds.data.ReusableCompoundWithComponents
 import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
 import com.example.app.features.export.domain.ExportExposureRecord
+import com.example.app.features.export.domain.ExportEventCatalogReference
 import com.example.app.features.export.domain.ExportIngestionRecord
 import com.example.app.features.export.domain.ExportOutbreakRecord
 import com.example.app.features.export.domain.ExportReusableCompoundComponentRecord
 import com.example.app.features.export.domain.ExportReusableCompoundRecord
+import com.example.app.features.export.domain.ExportReusableEntityReference
 import com.example.app.features.export.domain.ExportReusableEventCatalogRecord
 import com.example.app.features.export.domain.ExportReusableIngredientRecord
 import com.example.app.features.export.domain.ExportScope
@@ -24,39 +27,55 @@ class RoomExportSnapshotRepository(
         return try {
             AppResult.Success(
                 dataAccess.readSnapshot {
-                    val ingestions = if (scope.includes(RecordEventType.INGESTION)) {
-                        dataAccess.getIngestionEvents().map { entity ->
+                    val ingestionEntities = if (scope.includes(RecordEventType.INGESTION)) dataAccess.getIngestionEvents() else emptyList()
+                    val exposureEntities = if (scope.includes(RecordEventType.EXPOSURE)) dataAccess.getExposureEvents() else emptyList()
+                    val outbreakEntities = if (scope.includes(RecordEventType.OUTBREAK)) dataAccess.getOutbreakEvents() else emptyList()
+                    val reusableIngredients = dataAccess.getReusableIngredients().sortedBy { it.id }
+                    val reusableCompounds = dataAccess.getReusableCompounds().sortedBy { it.compound.id }
+                    val reusableEventCatalogEntries = dataAccess.getReusableEventCatalogEntries().sortedWith(compareBy({ it.kind }, { it.id }))
+                    val scopedReusableData = scope.toScopedReusableData(
+                        ingestions = ingestionEntities,
+                        exposures = exposureEntities,
+                        outbreaks = outbreakEntities,
+                        reusableIngredients = reusableIngredients,
+                        reusableCompounds = reusableCompounds,
+                        reusableEventCatalogEntries = reusableEventCatalogEntries
+                    )
+                    val reusableIngredientIds = scopedReusableData.reusableIngredients.map { it.id }.toSet()
+                    val reusableCompoundIds = scopedReusableData.reusableCompounds.map { it.compound.id }.toSet()
+                    val reusableEventCatalogEntriesById = scopedReusableData.reusableEventCatalogEntries.associateBy { it.id }
+                    ExportSnapshot(
+                        ingestions = ingestionEntities.map { entity ->
                             ExportIngestionRecord(
                                 id = entity.id,
                                 itemName = entity.itemName,
                                 quantityLevel = entity.quantityLevel,
                                 occurredAtEpochMs = entity.occurredAtEpochMs,
                                 notes = entity.notes,
-                                reusableEntityKind = entity.reusableEntityKind,
-                                reusableEntityId = entity.reusableEntityId,
+                                reusableEntityRef = entity.toReusableEntityReferenceOrNull(
+                                    reusableIngredientIds = reusableIngredientIds,
+                                    reusableCompoundIds = reusableCompoundIds
+                                ),
                                 createdAtEpochMs = entity.createdAtEpochMs
                             )
-                        }
-                    } else {
-                        emptyList()
-                    }
-                    val exposures = if (scope.includes(RecordEventType.EXPOSURE)) {
-                        dataAccess.getExposureEvents().map { entity ->
+                        },
+                        exposures = exposureEntities.map { entity ->
                             ExportExposureRecord(
                                 id = entity.id,
                                 exposureType = entity.exposureType,
                                 occurredAtEpochMs = entity.occurredAtEpochMs,
                                 notes = entity.notes,
                                 intensityLevel = entity.intensityLevel,
-                                exposureTypeCatalogId = entity.exposureTypeCatalogId,
+                                exposureTypeCatalogRef = entity.toCatalogReferenceOrNull(
+                                    expectedKind = ReusableEventCatalogKind.EXPOSURE_TYPE.storageValue,
+                                    catalogEntriesById = reusableEventCatalogEntriesById,
+                                    ownerDescription = "exposure record ${entity.id}",
+                                    fieldLabel = "exposure_type_catalog_id"
+                                ),
                                 createdAtEpochMs = entity.createdAtEpochMs
                             )
-                        }
-                    } else {
-                        emptyList()
-                    }
-                    val outbreaks = if (scope.includes(RecordEventType.OUTBREAK)) {
-                        dataAccess.getOutbreakEvents().map { entity ->
+                        },
+                        outbreaks = outbreakEntities.map { entity ->
                             ExportOutbreakRecord(
                                 id = entity.id,
                                 outbreakDescriptor = entity.outbreakDescriptor,
@@ -64,29 +83,21 @@ class RoomExportSnapshotRepository(
                                 occurredAtEpochMs = entity.occurredAtEpochMs,
                                 notes = entity.notes,
                                 intensityLevel = entity.intensityLevel,
-                                outbreakDescriptorCatalogId = entity.outbreakDescriptorCatalogId,
-                                bodyLocationCatalogId = entity.bodyLocationCatalogId,
+                                outbreakDescriptorCatalogRef = entity.outbreakDescriptorCatalogId.toCatalogReferenceOrNull(
+                                    expectedKind = ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR.storageValue,
+                                    catalogEntriesById = reusableEventCatalogEntriesById,
+                                    ownerDescription = "outbreak record ${entity.id}",
+                                    fieldLabel = "outbreak_descriptor_catalog_id"
+                                ),
+                                bodyLocationCatalogRef = entity.bodyLocationCatalogId.toCatalogReferenceOrNull(
+                                    expectedKind = ReusableEventCatalogKind.BODY_LOCATION.storageValue,
+                                    catalogEntriesById = reusableEventCatalogEntriesById,
+                                    ownerDescription = "outbreak record ${entity.id}",
+                                    fieldLabel = "body_location_catalog_id"
+                                ),
                                 createdAtEpochMs = entity.createdAtEpochMs
                             )
-                        }
-                    } else {
-                        emptyList()
-                    }
-                    val reusableIngredients = dataAccess.getReusableIngredients()
-                    val reusableCompounds = dataAccess.getReusableCompounds()
-                    val reusableEventCatalogEntries = dataAccess.getReusableEventCatalogEntries()
-                    val scopedReusableData = scope.toScopedReusableData(
-                        ingestions = ingestions,
-                        exposures = exposures,
-                        outbreaks = outbreaks,
-                        reusableIngredients = reusableIngredients,
-                        reusableCompounds = reusableCompounds,
-                        reusableEventCatalogEntries = reusableEventCatalogEntries
-                    )
-                    ExportSnapshot(
-                        ingestions = ingestions,
-                        exposures = exposures,
-                        outbreaks = outbreaks,
+                        },
                         reusableIngredients = scopedReusableData.reusableIngredients.map { entity ->
                             ExportReusableIngredientRecord(
                                 id = entity.id,
@@ -108,9 +119,11 @@ class RoomExportSnapshotRepository(
                                         ExportReusableCompoundComponentRecord(
                                             id = component.id,
                                             position = component.position,
-                                            kind = component.componentKind,
-                                            ingredientId = component.ingredientId,
-                                            childCompoundId = component.childCompoundId,
+                                            componentRef = component.toComponentReference(
+                                                compoundId = compound.compound.id,
+                                                reusableIngredientIds = reusableIngredientIds,
+                                                reusableCompoundIds = reusableCompoundIds
+                                            ),
                                             proportionBasisPoints = component.proportionBasisPoints
                                         )
                                     },
@@ -132,11 +145,15 @@ class RoomExportSnapshotRepository(
                     )
                 }
             )
+        } catch (error: MissingExportReferenceException) {
+            AppResult.Error(DomainError.ExportError(error.message ?: "Could not build the export snapshot. Try again."))
         } catch (error: Exception) {
             AppResult.Error(error.toExportError("Could not build the export snapshot. Try again."))
         }
     }
 }
+
+private class MissingExportReferenceException(message: String) : IllegalStateException(message)
 
 private data class ScopedReusableData(
     val reusableIngredients: List<com.example.app.features.ingredients.data.ReusableIngredientEntity>,
@@ -155,9 +172,9 @@ interface ExportSnapshotDataAccess {
 }
 
 private fun ExportScope.toScopedReusableData(
-    ingestions: List<ExportIngestionRecord>,
-    exposures: List<ExportExposureRecord>,
-    outbreaks: List<ExportOutbreakRecord>,
+    ingestions: List<com.example.app.features.ingestion.data.IngestionEventEntity>,
+    exposures: List<com.example.app.features.exposure.data.ExposureEventEntity>,
+    outbreaks: List<com.example.app.features.outbreak.data.OutbreakEventEntity>,
     reusableIngredients: List<com.example.app.features.ingredients.data.ReusableIngredientEntity>,
     reusableCompounds: List<ReusableCompoundWithComponents>,
     reusableEventCatalogEntries: List<com.example.app.features.eventcatalog.data.ReusableEventCatalogEntity>
@@ -212,6 +229,113 @@ private fun ExportScope.toScopedReusableData(
                     reusableEventCatalogEntries = reusableEventCatalogEntries.filter { it.id in selectedCatalogIds }
                 )
             }
+        }
+    }
+}
+
+private fun com.example.app.features.ingestion.data.IngestionEventEntity.toReusableEntityReferenceOrNull(
+    reusableIngredientIds: Set<Long>,
+    reusableCompoundIds: Set<Long>
+): ExportReusableEntityReference? {
+    val kind = reusableEntityKind
+    val id = reusableEntityId
+    if (kind == null && id == null) return null
+    if (kind == null || id == null) {
+        throw MissingExportReferenceException(
+            "Export blocked: ingestion record ${this.id} has an incomplete reusable entity reference."
+        )
+    }
+    return when (kind) {
+        ReusableEntityKind.INGREDIENT.storageValue -> {
+            if (id !in reusableIngredientIds) {
+                throw MissingExportReferenceException(
+                    "Export blocked: ingestion record ${this.id} references missing reusable ingredient $id. Resolve the inconsistency before exporting."
+                )
+            }
+            ExportReusableEntityReference(kind = kind, id = id)
+        }
+
+        ReusableEntityKind.COMPOUND.storageValue -> {
+            if (id !in reusableCompoundIds) {
+                throw MissingExportReferenceException(
+                    "Export blocked: ingestion record ${this.id} references missing reusable compound $id. Resolve the inconsistency before exporting."
+                )
+            }
+            ExportReusableEntityReference(kind = kind, id = id)
+        }
+
+        else -> {
+            throw MissingExportReferenceException(
+                "Export blocked: ingestion record ${this.id} references unsupported reusable entity kind '$kind'."
+            )
+        }
+    }
+}
+
+private fun com.example.app.features.exposure.data.ExposureEventEntity.toCatalogReferenceOrNull(
+    expectedKind: String,
+    catalogEntriesById: Map<Long, com.example.app.features.eventcatalog.data.ReusableEventCatalogEntity>,
+    ownerDescription: String,
+    fieldLabel: String
+): ExportEventCatalogReference? {
+    return exposureTypeCatalogId.toCatalogReferenceOrNull(expectedKind, catalogEntriesById, ownerDescription, fieldLabel)
+}
+
+private fun Long?.toCatalogReferenceOrNull(
+    expectedKind: String,
+    catalogEntriesById: Map<Long, com.example.app.features.eventcatalog.data.ReusableEventCatalogEntity>,
+    ownerDescription: String,
+    fieldLabel: String
+): ExportEventCatalogReference? {
+    val id = this ?: return null
+    val entry = catalogEntriesById[id]
+        ?: throw MissingExportReferenceException(
+            "Export blocked: $ownerDescription references missing catalog entry $id in $fieldLabel. Resolve the inconsistency before exporting."
+        )
+    if (entry.kind != expectedKind) {
+        throw MissingExportReferenceException(
+            "Export blocked: $ownerDescription references catalog entry $id with unexpected kind '${entry.kind}' in $fieldLabel."
+        )
+    }
+    return ExportEventCatalogReference(kind = entry.kind, id = entry.id)
+}
+
+private fun com.example.app.features.compounds.data.ReusableCompoundComponentEntity.toComponentReference(
+    compoundId: Long,
+    reusableIngredientIds: Set<Long>,
+    reusableCompoundIds: Set<Long>
+): ExportReusableEntityReference {
+    return when (componentKind) {
+        ReusableEntityKind.INGREDIENT.storageValue -> {
+            val ingredientId = ingredientId
+                ?: throw MissingExportReferenceException(
+                    "Export blocked: compound $compoundId component $id is missing ingredient_id."
+                )
+            if (ingredientId !in reusableIngredientIds) {
+                throw MissingExportReferenceException(
+                    "Export blocked: compound $compoundId component $id references missing reusable ingredient $ingredientId. Resolve the inconsistency before exporting."
+                )
+            }
+            ExportReusableEntityReference(kind = componentKind, id = ingredientId)
+        }
+
+        ReusableEntityKind.COMPOUND.storageValue -> {
+            val childCompoundId = childCompoundId
+                ?: throw MissingExportReferenceException(
+                    "Export blocked: compound $compoundId component $id is missing child_compound_id."
+                )
+            if (childCompoundId !in reusableCompoundIds) {
+                throw MissingExportReferenceException(
+                    "Export blocked: compound $compoundId component $id references missing child compound $childCompoundId. Resolve the inconsistency before exporting."
+                )
+            }
+            ExportReusableEntityReference(kind = componentKind, id = childCompoundId)
+        }
+
+        else -> {
+            throw MissingExportReferenceException(
+                "Export blocked: compound $compoundId component $id uses unsupported component kind '$componentKind'."
+            )
         }
     }
 }

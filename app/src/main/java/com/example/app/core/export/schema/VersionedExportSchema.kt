@@ -3,7 +3,7 @@ package com.example.app.core.export.schema
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-const val EXPORT_SCHEMA_VERSION = "1.0.0"
+const val EXPORT_SCHEMA_VERSION = "2.0.0"
 
 @Serializable
 data class VersionedExportEnvelopeDto(
@@ -37,10 +37,8 @@ data class IngestionExportDto(
     @SerialName("occurred_at")
     val occurredAt: String,
     val notes: String? = null,
-    @SerialName("reusable_entity_kind")
-    val reusableEntityKind: String? = null,
-    @SerialName("reusable_entity_id")
-    val reusableEntityId: Long? = null,
+    @SerialName("reusable_entity_ref")
+    val reusableEntityRef: ReusableEntityReferenceDto? = null,
     @SerialName("created_at")
     val createdAt: String
 )
@@ -55,8 +53,8 @@ data class ExposureExportDto(
     val notes: String? = null,
     @SerialName("intensity_level")
     val intensityLevel: Int,
-    @SerialName("exposure_type_catalog_id")
-    val exposureTypeCatalogId: Long? = null,
+    @SerialName("exposure_type_catalog_ref")
+    val exposureTypeCatalogRef: EventCatalogReferenceDto? = null,
     @SerialName("created_at")
     val createdAt: String
 )
@@ -73,12 +71,24 @@ data class OutbreakExportDto(
     val notes: String? = null,
     @SerialName("intensity_level")
     val intensityLevel: Int,
-    @SerialName("outbreak_descriptor_catalog_id")
-    val outbreakDescriptorCatalogId: Long? = null,
-    @SerialName("body_location_catalog_id")
-    val bodyLocationCatalogId: Long? = null,
+    @SerialName("outbreak_descriptor_catalog_ref")
+    val outbreakDescriptorCatalogRef: EventCatalogReferenceDto? = null,
+    @SerialName("body_location_catalog_ref")
+    val bodyLocationCatalogRef: EventCatalogReferenceDto? = null,
     @SerialName("created_at")
     val createdAt: String
+)
+
+@Serializable
+data class ReusableEntityReferenceDto(
+    val kind: String,
+    val id: Long
+)
+
+@Serializable
+data class EventCatalogReferenceDto(
+    val kind: String,
+    val id: Long
 )
 
 @Serializable
@@ -110,11 +120,8 @@ data class ReusableCompoundExportDto(
 data class ReusableCompoundComponentExportDto(
     val id: Long,
     val position: Int,
-    val kind: String,
-    @SerialName("ingredient_id")
-    val ingredientId: Long? = null,
-    @SerialName("child_compound_id")
-    val childCompoundId: Long? = null,
+    @SerialName("component_ref")
+    val componentRef: ReusableEntityReferenceDto,
     @SerialName("proportion_basis_points")
     val proportionBasisPoints: Int? = null
 )

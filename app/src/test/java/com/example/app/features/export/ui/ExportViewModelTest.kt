@@ -14,6 +14,7 @@ import com.example.app.features.records.domain.RecordEventType
 import com.example.app.features.records.domain.RecordSummary
 import com.example.app.features.records.domain.RecordsFilter
 import com.example.app.features.records.domain.RecordsRepository
+import com.example.app.core.export.schema.EXPORT_SCHEMA_VERSION
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
@@ -48,10 +49,10 @@ class ExportViewModelTest {
                 format = ExportFormat.JSON,
                 scope = ExportScope.AllRecords
             ),
-            schemaVersion = "1.0.0",
+            schemaVersion = EXPORT_SCHEMA_VERSION,
             exportedAt = "2023-11-14T22:13:20Z",
             artifact = ExportArtifact(
-                fileName = "app-export-v1_0_0-20231114T221320Z.json",
+                fileName = "app-export-v${EXPORT_SCHEMA_VERSION.replace('.', '_')}-20231114T221320Z.json",
                 absolutePath = "/tmp/app-export.json"
             )
         )

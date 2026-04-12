@@ -1,13 +1,14 @@
 package com.example.app.features.export.data
 
 import com.example.app.core.common.result.AppResult
+import com.example.app.features.eventcatalog.data.ReusableEventCatalogEntity
 import com.example.app.features.compounds.data.ReusableCompoundComponentEntity
 import com.example.app.features.compounds.data.ReusableCompoundEntity
 import com.example.app.features.compounds.data.ReusableCompoundWithComponents
-import com.example.app.features.eventcatalog.data.ReusableEventCatalogEntity
 import com.example.app.features.export.domain.ExportScope
 import com.example.app.features.ingredients.data.ReusableIngredientEntity
 import com.example.app.features.ingestion.data.IngestionEventEntity
+import com.example.app.features.outbreak.data.OutbreakEventEntity
 import com.example.app.features.records.domain.RecordEventType
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -48,6 +49,10 @@ class RoomExportSnapshotRepositoryTest {
                             ReusableCompoundComponentEntity(5L, 9L, 1, "ingredient", 20L, null, 6000)
                         )
                     )
+                ),
+                reusableIngredients = listOf(
+                    ReusableIngredientEntity(20L, "Tea", "tea", null, 100L, 101L),
+                    ReusableIngredientEntity(21L, "Coffee", "coffee", null, 102L, 103L)
                 )
             )
         )
@@ -55,9 +60,9 @@ class RoomExportSnapshotRepositoryTest {
         val result = repository.getSnapshot(ExportScope.AllRecords)
 
         require(result is AppResult.Success)
-        assertEquals(20L, result.value.ingestions.single().reusableEntityId)
+        assertEquals(20L, result.value.ingestions.single().reusableEntityRef?.id)
         assertEquals(listOf(1, 2), result.value.reusableCompounds.single().components.map { it.position })
-        assertEquals(listOf(20L, 21L), result.value.reusableCompounds.single().components.map { it.ingredientId })
+        assertEquals(listOf(20L, 21L), result.value.reusableCompounds.single().components.map { it.componentRef.id })
     }
 
     @Test
@@ -83,6 +88,75 @@ class RoomExportSnapshotRepositoryTest {
         assertEquals(listOf(20L), result.value.reusableIngredients.map { it.id })
         assertTrue(result.value.reusableCompounds.isEmpty())
         assertTrue(result.value.reusableEventCatalogEntries.isEmpty())
+    }
+
+    @Test
+    fun ingestion_scope_includes_recursive_child_compounds_and_nested_ingredient_dependencies() = runBlocking {
+        val repository = RoomExportSnapshotRepository(
+            FakeExportSnapshotDataAccess(
+                ingestions = listOf(
+                    IngestionEventEntity(2L, "Blend drink", 2, 200L, null, "compound", 90L, 201L)
+                ),
+                reusableIngredients = listOf(
+                    ReusableIngredientEntity(20L, "Tea", "tea", null, 100L, 101L),
+                    ReusableIngredientEntity(21L, "Mint", "mint", null, 102L, 103L)
+                ),
+                reusableCompounds = listOf(
+                    ReusableCompoundWithComponents(
+                        compound = ReusableCompoundEntity(90L, "Blend", "blend", null, "complete", 100L, 101L),
+                        components = listOf(
+                            ReusableCompoundComponentEntity(1L, 90L, 1, "compound", null, 91L, 7000),
+                            ReusableCompoundComponentEntity(2L, 90L, 2, "ingredient", 20L, null, 3000)
+                        )
+                    ),
+                    ReusableCompoundWithComponents(
+                        compound = ReusableCompoundEntity(91L, "Base", "base", null, "complete", 102L, 103L),
+                        components = listOf(
+                            ReusableCompoundComponentEntity(3L, 91L, 1, "ingredient", 21L, null, 10000)
+                        )
+                    )
+                )
+            )
+        )
+
+        val result = repository.getSnapshot(ExportScope.EventTypeRecords(RecordEventType.INGESTION))
+
+        require(result is AppResult.Success)
+        assertEquals(listOf(20L, 21L), result.value.reusableIngredients.map { it.id })
+        assertEquals(listOf(90L, 91L), result.value.reusableCompounds.map { it.id })
+        assertEquals("compound", result.value.ingestions.single().reusableEntityRef?.kind)
+        assertEquals(91L, result.value.reusableCompounds.first().components.first().componentRef.id)
+    }
+
+    @Test
+    fun missing_referenced_catalog_entry_returns_actionable_export_error() = runBlocking {
+        val repository = RoomExportSnapshotRepository(
+            FakeExportSnapshotDataAccess(
+                outbreaks = listOf(
+                    OutbreakEventEntity(
+                        id = 7L,
+                        outbreakDescriptor = "Rash",
+                        bodyLocation = "Arm",
+                        occurredAtEpochMs = 300L,
+                        notes = null,
+                        createdAtEpochMs = 301L,
+                        intensityLevel = 2,
+                        outbreakDescriptorCatalogId = 99L,
+                        bodyLocationCatalogId = null
+                    )
+                ),
+                reusableEventCatalogEntries = listOf(
+                    ReusableEventCatalogEntity(12L, "outbreak_descriptor", "Rash", "rash", 1, 100L, 101L, 102L)
+                )
+            )
+        )
+
+        val result = repository.getSnapshot(ExportScope.EventTypeRecords(RecordEventType.OUTBREAK))
+
+        require(result is AppResult.Error)
+        assertTrue(result.error.message.contains("Export blocked"))
+        assertTrue(result.error.message.contains("outbreak record 7"))
+        assertTrue(result.error.message.contains("99"))
     }
 }
 

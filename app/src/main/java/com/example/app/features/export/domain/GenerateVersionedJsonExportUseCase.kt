@@ -3,11 +3,13 @@ package com.example.app.features.export.domain
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.core.export.schema.EXPORT_SCHEMA_VERSION
+import com.example.app.core.export.schema.EventCatalogReferenceDto
 import com.example.app.core.export.schema.ExposureExportDto
 import com.example.app.core.export.schema.IngestionExportDto
 import com.example.app.core.export.schema.OutbreakExportDto
 import com.example.app.core.export.schema.ReusableCompoundComponentExportDto
 import com.example.app.core.export.schema.ReusableCompoundExportDto
+import com.example.app.core.export.schema.ReusableEntityReferenceDto
 import com.example.app.core.export.schema.ReusableEventCatalogExportDto
 import com.example.app.core.export.schema.ReusableIngredientExportDto
 import com.example.app.core.export.schema.VersionedExportDataDto
@@ -70,8 +72,7 @@ private fun ExportSnapshot.toDto(): VersionedExportDataDto {
                 quantityLevel = record.quantityLevel,
                 occurredAt = record.occurredAtEpochMs.toUtcIsoString(),
                 notes = record.notes,
-                reusableEntityKind = record.reusableEntityKind,
-                reusableEntityId = record.reusableEntityId,
+                reusableEntityRef = record.reusableEntityRef?.toDto(),
                 createdAt = record.createdAtEpochMs.toUtcIsoString()
             )
         },
@@ -82,7 +83,7 @@ private fun ExportSnapshot.toDto(): VersionedExportDataDto {
                 occurredAt = record.occurredAtEpochMs.toUtcIsoString(),
                 notes = record.notes,
                 intensityLevel = record.intensityLevel,
-                exposureTypeCatalogId = record.exposureTypeCatalogId,
+                exposureTypeCatalogRef = record.exposureTypeCatalogRef?.toDto(),
                 createdAt = record.createdAtEpochMs.toUtcIsoString()
             )
         },
@@ -94,8 +95,8 @@ private fun ExportSnapshot.toDto(): VersionedExportDataDto {
                 occurredAt = record.occurredAtEpochMs.toUtcIsoString(),
                 notes = record.notes,
                 intensityLevel = record.intensityLevel,
-                outbreakDescriptorCatalogId = record.outbreakDescriptorCatalogId,
-                bodyLocationCatalogId = record.bodyLocationCatalogId,
+                outbreakDescriptorCatalogRef = record.outbreakDescriptorCatalogRef?.toDto(),
+                bodyLocationCatalogRef = record.bodyLocationCatalogRef?.toDto(),
                 createdAt = record.createdAtEpochMs.toUtcIsoString()
             )
         },
@@ -118,9 +119,7 @@ private fun ExportSnapshot.toDto(): VersionedExportDataDto {
                     ReusableCompoundComponentExportDto(
                         id = component.id,
                         position = component.position,
-                        kind = component.kind,
-                        ingredientId = component.ingredientId,
-                        childCompoundId = component.childCompoundId,
+                        componentRef = component.componentRef.toDto(),
                         proportionBasisPoints = component.proportionBasisPoints
                     )
                 },
@@ -143,6 +142,20 @@ private fun ExportSnapshot.toDto(): VersionedExportDataDto {
 }
 
 internal fun Long.toUtcIsoString(): String = DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(this))
+
+private fun ExportReusableEntityReference.toDto(): ReusableEntityReferenceDto {
+    return ReusableEntityReferenceDto(
+        kind = kind,
+        id = id
+    )
+}
+
+private fun ExportEventCatalogReference.toDto(): EventCatalogReferenceDto {
+    return EventCatalogReferenceDto(
+        kind = kind,
+        id = id
+    )
+}
 
 internal fun Throwable.toExportError(defaultMessage: String): DomainError.ExportError {
     return DomainError.ExportError(defaultMessage)
