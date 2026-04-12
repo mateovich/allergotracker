@@ -24,7 +24,45 @@ data class VersionedExportDataDto(
     @SerialName("reusable_compounds")
     val reusableCompounds: List<ReusableCompoundExportDto> = emptyList(),
     @SerialName("reusable_event_catalog")
-    val reusableEventCatalog: List<ReusableEventCatalogExportDto> = emptyList()
+    val reusableEventCatalog: List<ReusableEventCatalogExportDto> = emptyList(),
+    @SerialName("normalized_base_ingredients")
+    val normalizedBaseIngredients: List<NormalizedBaseIngredientsExportDto> = emptyList()
+)
+
+@Serializable
+data class NormalizedBaseIngredientsExportDto(
+    @SerialName("source_event")
+    val sourceEvent: NormalizedSourceIngestionExportDto,
+    @SerialName("derivation_kind")
+    val derivationKind: String,
+    @SerialName("base_ingredients")
+    val baseIngredients: List<NormalizedBaseIngredientContributionExportDto>
+)
+
+@Serializable
+data class NormalizedSourceIngestionExportDto(
+    val kind: String,
+    val id: Long,
+    @SerialName("item_name")
+    val itemName: String,
+    @SerialName("quantity_level")
+    val quantityLevel: Int,
+    @SerialName("occurred_at")
+    val occurredAt: String,
+    @SerialName("reusable_entity_ref")
+    val reusableEntityRef: ReusableEntityReferenceDto
+)
+
+@Serializable
+data class NormalizedBaseIngredientContributionExportDto(
+    @SerialName("reusable_ingredient_ref")
+    val reusableIngredientRef: ReusableEntityReferenceDto,
+    @SerialName("ingredient_name")
+    val ingredientName: String,
+    @SerialName("contribution_basis_points")
+    val contributionBasisPoints: Int,
+    @SerialName("derived_quantity_level_basis_points")
+    val derivedQuantityLevelBasisPoints: Int
 )
 
 @Serializable

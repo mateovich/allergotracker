@@ -6,6 +6,9 @@ import com.example.app.core.export.schema.EXPORT_SCHEMA_VERSION
 import com.example.app.core.export.schema.EventCatalogReferenceDto
 import com.example.app.core.export.schema.ExposureExportDto
 import com.example.app.core.export.schema.IngestionExportDto
+import com.example.app.core.export.schema.NormalizedBaseIngredientContributionExportDto
+import com.example.app.core.export.schema.NormalizedBaseIngredientsExportDto
+import com.example.app.core.export.schema.NormalizedSourceIngestionExportDto
 import com.example.app.core.export.schema.OutbreakExportDto
 import com.example.app.core.export.schema.ReusableCompoundComponentExportDto
 import com.example.app.core.export.schema.ReusableCompoundExportDto
@@ -24,16 +27,22 @@ open class GenerateVersionedJsonExportUseCase(
     private val serializer: VersionedJsonExportSerializer,
     private val currentTimeProvider: CurrentTimeProvider
 ) {
+    private val normalizedIngredientBaseExportBuilder = NormalizedIngredientBaseExportBuilder()
+
     open suspend operator fun invoke(configuration: ExportConfiguration): AppResult<GeneratedJsonExport> {
         val snapshot = when (val result = snapshotRepository.getSnapshot(configuration.scope)) {
             is AppResult.Success -> result.value
             is AppResult.Error -> return AppResult.Error(result.error)
         }
         val exportedAt = currentTimeProvider.nowEpochMillis().toUtcIsoString()
+        val normalizedBaseIngredients = when (val result = normalizedIngredientBaseExportBuilder.build(snapshot)) {
+            is AppResult.Success -> result.value
+            is AppResult.Error -> return AppResult.Error(result.error)
+        }
         val envelope = VersionedExportEnvelopeDto(
             schemaVersion = EXPORT_SCHEMA_VERSION,
             exportedAt = exportedAt,
-            data = snapshot.toDto()
+            data = snapshot.toDto(normalizedBaseIngredients)
         )
         val serialized = when (val result = serializer.serialize(envelope)) {
             is AppResult.Success -> result.value
@@ -63,7 +72,9 @@ interface VersionedJsonExportSerializer {
     fun serialize(envelope: VersionedExportEnvelopeDto): AppResult<String>
 }
 
-private fun ExportSnapshot.toDto(): VersionedExportDataDto {
+private fun ExportSnapshot.toDto(
+    normalizedBaseIngredients: List<NormalizedBaseIngredientsRecord>
+): VersionedExportDataDto {
     return VersionedExportDataDto(
         ingestions = ingestions.map { record ->
             IngestionExportDto(
@@ -136,6 +147,27 @@ private fun ExportSnapshot.toDto(): VersionedExportDataDto {
                 createdAt = record.createdAtEpochMs.toUtcIsoString(),
                 updatedAt = record.updatedAtEpochMs.toUtcIsoString(),
                 lastUsedAt = record.lastUsedAtEpochMs.toUtcIsoString()
+            )
+        },
+        normalizedBaseIngredients = normalizedBaseIngredients.map { record ->
+            NormalizedBaseIngredientsExportDto(
+                sourceEvent = NormalizedSourceIngestionExportDto(
+                    kind = record.sourceEvent.kind,
+                    id = record.sourceEvent.id,
+                    itemName = record.sourceEvent.itemName,
+                    quantityLevel = record.sourceEvent.quantityLevel,
+                    occurredAt = record.sourceEvent.occurredAtEpochMs.toUtcIsoString(),
+                    reusableEntityRef = record.sourceEvent.reusableEntityRef.toDto()
+                ),
+                derivationKind = record.derivationKind,
+                baseIngredients = record.baseIngredients.map { ingredient ->
+                    NormalizedBaseIngredientContributionExportDto(
+                        reusableIngredientRef = ingredient.reusableIngredientRef.toDto(),
+                        ingredientName = ingredient.ingredientName,
+                        contributionBasisPoints = ingredient.contributionBasisPoints,
+                        derivedQuantityLevelBasisPoints = ingredient.derivedQuantityLevelBasisPoints
+                    )
+                }
             )
         }
     )
