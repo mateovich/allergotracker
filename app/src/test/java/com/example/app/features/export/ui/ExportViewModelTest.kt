@@ -1,14 +1,20 @@
 package com.example.app.features.export.ui
 
 import com.example.app.MainDispatcherRule
+import com.example.app.core.common.error.DomainError
+import com.example.app.core.common.result.AppResult
 import com.example.app.features.export.domain.ExportFormat
 import com.example.app.features.export.domain.ExportScope
+import com.example.app.features.export.domain.ExportArtifact
+import com.example.app.features.export.domain.GenerateVersionedJsonExportUseCase
+import com.example.app.features.export.domain.GeneratedJsonExport
 import com.example.app.features.export.domain.ValidateExportConfigurationUseCase
 import com.example.app.features.records.domain.ObserveRecordCountUseCase
 import com.example.app.features.records.domain.RecordEventType
 import com.example.app.features.records.domain.RecordSummary
 import com.example.app.features.records.domain.RecordsFilter
 import com.example.app.features.records.domain.RecordsRepository
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -34,10 +40,46 @@ class ExportViewModelTest {
 
     private val observeRecordCountUseCase = ObserveRecordCountUseCase(repository)
     private val validateExportConfigurationUseCase = ValidateExportConfigurationUseCase()
+    private var pendingGenerateResult: CompletableDeferred<AppResult<GeneratedJsonExport>>? = null
+    private var generateInvocationCount: Int = 0
+    private var nextGenerateResult: AppResult<GeneratedJsonExport> = AppResult.Success(
+        GeneratedJsonExport(
+            configuration = com.example.app.features.export.domain.ExportConfiguration(
+                format = ExportFormat.JSON,
+                scope = ExportScope.AllRecords
+            ),
+            schemaVersion = "1.0.0",
+            exportedAt = "2023-11-14T22:13:20Z",
+            artifact = ExportArtifact(
+                fileName = "app-export-v1_0_0-20231114T221320Z.json",
+                absolutePath = "/tmp/app-export.json"
+            )
+        )
+    )
+    private fun createViewModel(): ExportViewModel {
+        val fakeGenerateUseCase = object : GenerateVersionedJsonExportUseCase(
+            snapshotRepository = object : com.example.app.features.export.domain.ExportSnapshotRepository {
+                override suspend fun getSnapshot(scope: ExportScope) = error("unused")
+            },
+            writer = object : com.example.app.features.export.domain.ExportArtifactWriter {
+                override suspend fun writeJson(fileName: String, content: String) = error("unused")
+            },
+            serializer = object : com.example.app.features.export.domain.VersionedJsonExportSerializer {
+                override fun serialize(envelope: com.example.app.core.export.schema.VersionedExportEnvelopeDto) = error("unused")
+            },
+            currentTimeProvider = com.example.app.features.ingestion.domain.CurrentTimeProvider { 0L }
+        ) {
+            override suspend fun invoke(configuration: com.example.app.features.export.domain.ExportConfiguration): AppResult<GeneratedJsonExport> {
+                generateInvocationCount += 1
+                return pendingGenerateResult?.await() ?: nextGenerateResult
+            }
+        }
+        return ExportViewModel(observeRecordCountUseCase, validateExportConfigurationUseCase, fakeGenerateUseCase)
+    }
 
     @Test
     fun initial_state_does_not_emit_export_start_effect() {
-        val viewModel = ExportViewModel(observeRecordCountUseCase, validateExportConfigurationUseCase)
+        val viewModel = createViewModel()
 
         assertNull(viewModel.state.value.requestMessage)
         assertEquals(
@@ -48,7 +90,7 @@ class ExportViewModelTest {
 
     @Test
     fun selecting_format_and_scope_updates_summary_deterministically() {
-        val viewModel = ExportViewModel(observeRecordCountUseCase, validateExportConfigurationUseCase)
+        val viewModel = createViewModel()
 
         viewModel.onIntent(ExportUiIntent.SelectFormat(ExportFormat.JSON))
         viewModel.onIntent(ExportUiIntent.SelectScope(ExportScope.EventTypeRecords(RecordEventType.EXPOSURE)))
@@ -61,7 +103,7 @@ class ExportViewModelTest {
 
     @Test
     fun selecting_configuration_does_not_emit_export_start_before_confirm() = runBlocking {
-        val viewModel = ExportViewModel(observeRecordCountUseCase, validateExportConfigurationUseCase)
+        val viewModel = createViewModel()
 
         viewModel.onIntent(ExportUiIntent.SelectFormat(ExportFormat.JSON))
         viewModel.onIntent(ExportUiIntent.SelectScope(ExportScope.AllRecords))
@@ -74,7 +116,7 @@ class ExportViewModelTest {
 
     @Test
     fun confirm_requires_format_selection() {
-        val viewModel = ExportViewModel(observeRecordCountUseCase, validateExportConfigurationUseCase)
+        val viewModel = createViewModel()
 
         viewModel.onIntent(ExportUiIntent.SelectScope(ExportScope.AllRecords))
         viewModel.onIntent(ExportUiIntent.ConfirmExportStart)
@@ -86,7 +128,7 @@ class ExportViewModelTest {
 
     @Test
     fun confirm_requires_scope_selection() {
-        val viewModel = ExportViewModel(observeRecordCountUseCase, validateExportConfigurationUseCase)
+        val viewModel = createViewModel()
 
         viewModel.onIntent(ExportUiIntent.SelectFormat(ExportFormat.JSON))
         viewModel.onIntent(ExportUiIntent.ConfirmExportStart)
@@ -97,8 +139,8 @@ class ExportViewModelTest {
     }
 
     @Test
-    fun export_start_is_emitted_only_after_explicit_confirm() = runBlocking {
-        val viewModel = ExportViewModel(observeRecordCountUseCase, validateExportConfigurationUseCase)
+    fun export_start_is_emitted_only_after_explicit_confirm_and_success_updates_message() = runBlocking {
+        val viewModel = createViewModel()
 
         viewModel.onIntent(ExportUiIntent.SelectFormat(ExportFormat.JSON))
         viewModel.onIntent(ExportUiIntent.SelectScope(ExportScope.AllRecords))
@@ -116,9 +158,62 @@ class ExportViewModelTest {
             effect.await()
         )
         assertEquals(
-            "JSON export will include all 3 saved records on this device.",
-            viewModel.state.value.summaryText
+            "JSON export generated locally on this device.",
+            viewModel.state.value.requestMessage
         )
-        assertTrue(viewModel.state.value.requestMessage?.contains("Export request ready") == true)
+        assertTrue(viewModel.state.value.generatedExport != null)
+    }
+
+    @Test
+    fun generation_failure_surfaces_actionable_error_without_success_state() = runBlocking {
+        nextGenerateResult = AppResult.Error(DomainError.ExportError("Could not generate the local JSON export. Try again."))
+        val viewModel = createViewModel()
+
+        viewModel.onIntent(ExportUiIntent.SelectFormat(ExportFormat.JSON))
+        viewModel.onIntent(ExportUiIntent.SelectScope(ExportScope.AllRecords))
+        viewModel.onIntent(ExportUiIntent.ConfirmExportStart)
+
+        assertEquals(
+            "Could not generate the local JSON export. Try again.",
+            viewModel.state.value.generalValidationMessage
+        )
+        assertNull(viewModel.state.value.requestMessage)
+        assertNull(viewModel.state.value.generatedExport)
+    }
+
+    @Test
+    fun repeated_confirm_taps_do_not_start_duplicate_exports() {
+        runBlocking {
+            pendingGenerateResult = CompletableDeferred()
+            generateInvocationCount = 0
+            val viewModel = createViewModel()
+
+            viewModel.onIntent(ExportUiIntent.SelectFormat(ExportFormat.JSON))
+            viewModel.onIntent(ExportUiIntent.SelectScope(ExportScope.AllRecords))
+            viewModel.onIntent(ExportUiIntent.ConfirmExportStart)
+            viewModel.onIntent(ExportUiIntent.ConfirmExportStart)
+
+            assertEquals(1, generateInvocationCount)
+
+            pendingGenerateResult?.complete(nextGenerateResult)
+        }
+    }
+
+    @Test
+    fun selection_changes_are_ignored_while_export_generation_is_in_flight() {
+        runBlocking {
+            pendingGenerateResult = CompletableDeferred()
+            generateInvocationCount = 0
+            val viewModel = createViewModel()
+
+            viewModel.onIntent(ExportUiIntent.SelectFormat(ExportFormat.JSON))
+            viewModel.onIntent(ExportUiIntent.SelectScope(ExportScope.AllRecords))
+            viewModel.onIntent(ExportUiIntent.ConfirmExportStart)
+            viewModel.onIntent(ExportUiIntent.SelectScope(ExportScope.EventTypeRecords(RecordEventType.EXPOSURE)))
+
+            assertEquals(ExportScope.AllRecords, viewModel.state.value.selectedScope)
+
+            pendingGenerateResult?.complete(nextGenerateResult)
+        }
     }
 }

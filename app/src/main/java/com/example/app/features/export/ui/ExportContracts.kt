@@ -3,6 +3,7 @@ package com.example.app.features.export.ui
 import com.example.app.features.export.domain.ExportConfiguration
 import com.example.app.features.export.domain.ExportFormat
 import com.example.app.features.export.domain.ExportScope
+import com.example.app.features.export.domain.GeneratedJsonExport
 import com.example.app.features.records.domain.RecordEventType
 
 data class ExportFormatOptionUiModel(
@@ -32,6 +33,7 @@ data class ExportUiState(
     val generalValidationMessage: String? = null,
     val requestMessage: String? = null,
     val isConfirming: Boolean = false,
+    val generatedExport: GeneratedJsonExport? = null,
     val confirmActionLabel: String = "Start export",
     val privacyNotice: String = "Exports can contain sensitive local records. Review the summary before sharing.",
     val totalRecordCount: Int = 0

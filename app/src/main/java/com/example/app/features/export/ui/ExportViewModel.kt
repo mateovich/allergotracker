@@ -7,6 +7,7 @@ import com.example.app.core.common.result.AppResult
 import com.example.app.features.export.domain.ExportConfiguration
 import com.example.app.features.export.domain.ExportFormat
 import com.example.app.features.export.domain.ExportScope
+import com.example.app.features.export.domain.GenerateVersionedJsonExportUseCase
 import com.example.app.features.export.domain.ValidateExportConfigurationUseCase
 import com.example.app.features.records.domain.ObserveRecordCountUseCase
 import com.example.app.features.records.domain.RecordEventType
@@ -17,10 +18,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.launch
 
 class ExportViewModel(
     observeRecordCountUseCase: ObserveRecordCountUseCase,
-    private val validateExportConfigurationUseCase: ValidateExportConfigurationUseCase
+    private val validateExportConfigurationUseCase: ValidateExportConfigurationUseCase,
+    private val generateVersionedJsonExportUseCase: GenerateVersionedJsonExportUseCase
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(createState())
     val state: StateFlow<ExportUiState> = mutableState.asStateFlow()
@@ -39,6 +42,7 @@ class ExportViewModel(
                     generalValidationMessage = mutableState.value.generalValidationMessage,
                     requestMessage = mutableState.value.requestMessage,
                     isConfirming = mutableState.value.isConfirming,
+                    generatedExport = mutableState.value.generatedExport,
                     totalRecordCount = count
                 )
             }
@@ -48,6 +52,7 @@ class ExportViewModel(
     fun onIntent(intent: ExportUiIntent) {
         when (intent) {
             is ExportUiIntent.SelectFormat -> {
+                if (mutableState.value.isConfirming) return
                 mutableState.value = createState(
                     selectedFormat = intent.format,
                     selectedScope = mutableState.value.selectedScope,
@@ -56,6 +61,7 @@ class ExportViewModel(
             }
 
             is ExportUiIntent.SelectScope -> {
+                if (mutableState.value.isConfirming) return
                 mutableState.value = createState(
                     selectedFormat = mutableState.value.selectedFormat,
                     selectedScope = intent.scope,
@@ -68,21 +74,41 @@ class ExportViewModel(
     }
 
     private fun confirmExportStart() {
-        mutableState.value = mutableState.value.copy(isConfirming = true)
+        if (mutableState.value.isConfirming) return
         when (val result = validateExportConfigurationUseCase(mutableState.value.selectedFormat, mutableState.value.selectedScope)) {
-            is AppResult.Success -> handleValidConfiguration(result.value)
+            is AppResult.Success -> generateExport(result.value)
             is AppResult.Error -> handleValidationError(result.error)
         }
     }
 
-    private fun handleValidConfiguration(configuration: ExportConfiguration) {
+    private fun generateExport(configuration: ExportConfiguration) {
+        mutableState.value = mutableState.value.copy(isConfirming = true)
+        viewModelScope.launch {
+            when (val result = generateVersionedJsonExportUseCase(configuration)) {
+                is AppResult.Success -> handleGeneratedExport(result.value)
+                is AppResult.Error -> handleGenerationError(result.error, configuration)
+            }
+        }
+    }
+
+    private fun handleGeneratedExport(result: com.example.app.features.export.domain.GeneratedJsonExport) {
+        mutableState.value = createState(
+            selectedFormat = result.configuration.format,
+            selectedScope = result.configuration.scope,
+            requestMessage = "JSON export generated locally on this device.",
+            generatedExport = result,
+            totalRecordCount = mutableState.value.totalRecordCount
+        )
+        effectChannel.trySend(ExportUiEffect.ExportStartRequested(result.configuration))
+    }
+
+    private fun handleGenerationError(error: DomainError, configuration: ExportConfiguration) {
         mutableState.value = createState(
             selectedFormat = configuration.format,
             selectedScope = configuration.scope,
-            requestMessage = "Export request ready. Choose where to save it in the next step.",
+            generalValidationMessage = error.message,
             totalRecordCount = mutableState.value.totalRecordCount
         )
-        effectChannel.trySend(ExportUiEffect.ExportStartRequested(configuration))
     }
 
     private fun handleValidationError(error: DomainError) {
@@ -105,6 +131,7 @@ class ExportViewModel(
         generalValidationMessage: String? = null,
         requestMessage: String? = null,
         isConfirming: Boolean = false,
+        generatedExport: com.example.app.features.export.domain.GeneratedJsonExport? = null,
         totalRecordCount: Int = 0
     ): ExportUiState {
         return ExportUiState(
@@ -133,6 +160,7 @@ class ExportViewModel(
             generalValidationMessage = generalValidationMessage,
             requestMessage = requestMessage,
             isConfirming = isConfirming,
+            generatedExport = generatedExport,
             totalRecordCount = totalRecordCount
         )
     }

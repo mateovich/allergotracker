@@ -87,7 +87,7 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("export-request-message")
             .assertIsDisplayed()
-            .assertTextContains("Export request ready. Choose where to save it in the next step.")
+            .assertTextContains("JSON export generated locally on this device.")
     }
 
     @Test

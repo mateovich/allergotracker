@@ -39,6 +39,11 @@ import com.example.app.features.eventcatalog.domain.RetireReusableEventCatalogUs
 import com.example.app.features.eventcatalog.domain.UpdateReusableEventCatalogUseCase
 import com.example.app.features.eventcatalog.ui.EditReusableEventCatalogViewModelFactory
 import com.example.app.features.export.domain.ValidateExportConfigurationUseCase
+import com.example.app.features.export.domain.GenerateVersionedJsonExportUseCase
+import com.example.app.features.export.data.ExportSnapshotDataAccess
+import com.example.app.features.export.data.KotlinxVersionedJsonExportSerializer
+import com.example.app.features.export.data.LocalJsonExportArtifactWriter
+import com.example.app.features.export.data.RoomExportSnapshotRepository
 import com.example.app.features.export.ui.ExportViewModelFactory
 import com.example.app.features.exposure.data.RoomExposureRepository
 import com.example.app.features.exposure.domain.CreateExposureDefaultsUseCase
@@ -88,6 +93,7 @@ import com.example.app.features.records.domain.RecordsRepository
 import com.example.app.features.records.domain.RecordEventType
 import com.example.app.features.records.ui.RecordDetailViewModelFactory
 import com.example.app.features.records.ui.RecordsViewModelFactory
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -424,11 +430,34 @@ class AppContainer(appContext: Context) {
     private val observeRecordsUseCase = ObserveRecordsUseCase(recordsRepository)
     private val observeRecordDetailUseCase = ObserveRecordDetailUseCase(recordsRepository)
     private val validateExportConfigurationUseCase = ValidateExportConfigurationUseCase()
+    private val exportSnapshotRepository = RoomExportSnapshotRepository(
+        object : ExportSnapshotDataAccess {
+            override suspend fun <T> readSnapshot(block: suspend () -> T): T {
+                return appDatabase.withTransaction { block() }
+            }
+
+            override suspend fun getIngestionEvents() = ingestionEventDao.observeIngestionEvents().first().sortedWith(compareBy({ it.occurredAtEpochMs }, { it.id }))
+            override suspend fun getExposureEvents() = exposureEventDao.observeExposureEvents().first().sortedWith(compareBy({ it.occurredAtEpochMs }, { it.id }))
+            override suspend fun getOutbreakEvents() = outbreakEventDao.observeOutbreakEvents().first().sortedWith(compareBy({ it.occurredAtEpochMs }, { it.id }))
+            override suspend fun getReusableIngredients() = reusableIngredientDao.observeAll().first()
+            override suspend fun getReusableCompounds() = reusableCompoundDao.observeAll().first()
+            override suspend fun getReusableEventCatalogEntries() =
+                reusableEventCatalogDao.observeByKind(ReusableEventCatalogKind.EXPOSURE_TYPE.storageValue).first() +
+                    reusableEventCatalogDao.observeByKind(ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR.storageValue).first() +
+                    reusableEventCatalogDao.observeByKind(ReusableEventCatalogKind.BODY_LOCATION.storageValue).first()
+        }
+    )
+    private val generateVersionedJsonExportUseCase = GenerateVersionedJsonExportUseCase(
+        snapshotRepository = exportSnapshotRepository,
+        writer = LocalJsonExportArtifactWriter(appContext.cacheDir.resolve("exports")),
+        serializer = KotlinxVersionedJsonExportSerializer(),
+        currentTimeProvider = systemCurrentTimeProvider
+    )
 
     val recordsViewModelFactory: RecordsViewModelFactory =
         RecordsViewModelFactory(systemCurrentTimeProvider, observeRecordCountUseCase, observeRecordsUseCase)
     val exportViewModelFactory: ExportViewModelFactory =
-        ExportViewModelFactory(observeRecordCountUseCase, validateExportConfigurationUseCase)
+        ExportViewModelFactory(observeRecordCountUseCase, validateExportConfigurationUseCase, generateVersionedJsonExportUseCase)
     val createIngestionViewModelFactory: CreateIngestionViewModelFactory =
         CreateIngestionViewModelFactory(
             createIngestionDefaultsUseCase,
