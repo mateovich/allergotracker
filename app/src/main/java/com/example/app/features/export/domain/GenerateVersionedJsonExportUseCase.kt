@@ -29,20 +29,62 @@ open class GenerateVersionedJsonExportUseCase(
 ) {
     private val normalizedIngredientBaseExportBuilder = NormalizedIngredientBaseExportBuilder()
 
-    open suspend operator fun invoke(configuration: ExportConfiguration): AppResult<GeneratedJsonExport> {
-        val snapshot = when (val result = snapshotRepository.getSnapshot(configuration.scope)) {
-            is AppResult.Success -> result.value
-            is AppResult.Error -> return AppResult.Error(result.error)
+    open suspend fun review(configuration: ExportConfiguration): ExportPreflightReview {
+        return assess(configuration)
+    }
+
+    open suspend operator fun invoke(
+        configuration: ExportConfiguration,
+        warningDecision: ExportWarningDecision = ExportWarningDecision.RequireCleanPass,
+        preparedExport: PreparedExport? = null
+    ): AppResult<GeneratedJsonExport> {
+        val review = assess(configuration)
+        review.result.blockingIssues.firstOrNull()?.let { issue ->
+            return AppResult.Error(issue.error)
         }
+        if (
+            warningDecision == ExportWarningDecision.AcceptWarnings &&
+            review.result.requiresExplicitWarningAcceptance() &&
+            preparedExport == null
+        ) {
+            return AppResult.Error(
+                DomainError.ValidationError(
+                    message = "Review export warnings before continuing.",
+                    fieldErrors = mapOf(PREFLIGHT_FIELD to "Review export warnings before continuing.")
+                )
+            )
+        }
+        if (review.result.requiresExplicitWarningAcceptance() && warningDecision != ExportWarningDecision.AcceptWarnings) {
+            return AppResult.Error(
+                DomainError.ValidationError(
+                    message = "Review export warnings before continuing.",
+                    fieldErrors = mapOf(PREFLIGHT_FIELD to "Review export warnings before continuing.")
+                )
+            )
+        }
+        if (warningDecision == ExportWarningDecision.AcceptWarnings && preparedExport?.configuration != configuration) {
+            return AppResult.Error(
+                DomainError.ValidationError(
+                    message = "Export options changed. Review warnings before continuing.",
+                    fieldErrors = mapOf(PREFLIGHT_FIELD to "Export options changed. Review warnings before continuing.")
+                )
+            )
+        }
+        if (warningDecision == ExportWarningDecision.AcceptWarnings && preparedExport != null && review.preparedExport != preparedExport) {
+            return AppResult.Error(
+                DomainError.ValidationError(
+                    message = "Export data changed. Review warnings before continuing.",
+                    fieldErrors = mapOf(PREFLIGHT_FIELD to "Export data changed. Review warnings before continuing.")
+                )
+            )
+        }
+        val exportData = review.preparedExport
+            ?: return AppResult.Error(DomainError.ExportError("Could not prepare the export. Try again."))
         val exportedAt = currentTimeProvider.nowEpochMillis().toUtcIsoString()
-        val normalizedBaseIngredients = when (val result = normalizedIngredientBaseExportBuilder.build(snapshot)) {
-            is AppResult.Success -> result.value
-            is AppResult.Error -> return AppResult.Error(result.error)
-        }
         val envelope = VersionedExportEnvelopeDto(
             schemaVersion = EXPORT_SCHEMA_VERSION,
             exportedAt = exportedAt,
-            data = snapshot.toDto(normalizedBaseIngredients)
+            data = exportData.snapshot.toDto(exportData.normalizedBaseIngredients)
         )
         val serialized = when (val result = serializer.serialize(envelope)) {
             is AppResult.Success -> result.value
@@ -65,6 +107,60 @@ open class GenerateVersionedJsonExportUseCase(
     private fun buildFileName(exportedAt: String): String {
         val safeTimestamp = exportedAt.replace("-", "").replace(":", "").replace(".", "").replace("+", "_")
         return "app-export-v${EXPORT_SCHEMA_VERSION.replace('.', '_')}-$safeTimestamp.json"
+    }
+
+    private suspend fun assess(configuration: ExportConfiguration): ExportPreflightReview {
+        val snapshot = when (val result = snapshotRepository.getSnapshot(configuration.scope)) {
+            is AppResult.Success -> result.value
+            is AppResult.Error -> {
+                return ExportPreflightReview(
+                    result = ExportPreflightResult(
+                        issues = listOf(ExportPreflightIssue.Blocking(result.error))
+                    ),
+                    preparedExport = null
+                )
+            }
+        }
+        val normalizedBaseIngredients = when (val result = normalizedIngredientBaseExportBuilder.build(snapshot)) {
+            is AppResult.Success -> result.value
+            is AppResult.Error -> {
+                return ExportPreflightReview(
+                    result = ExportPreflightResult(
+                        issues = listOf(ExportPreflightIssue.Blocking(result.error))
+                    ),
+                    preparedExport = null
+                )
+            }
+        }
+        return ExportPreflightReview(
+            result = buildResult(configuration),
+            preparedExport = PreparedExport(
+                configuration = configuration,
+                snapshot = snapshot,
+                normalizedBaseIngredients = normalizedBaseIngredients
+            )
+        )
+    }
+
+    private fun buildResult(configuration: ExportConfiguration): ExportPreflightResult {
+        return ExportPreflightResult(issues = buildWarnings(configuration))
+    }
+
+    private fun buildWarnings(configuration: ExportConfiguration): List<ExportPreflightIssue.Warning> {
+        return when (configuration.scope) {
+            ExportScope.AllRecords -> emptyList()
+            is ExportScope.EventTypeRecords -> {
+                listOf(
+                    ExportPreflightIssue.Warning(
+                        message = "This export includes only ${configuration.scope.eventType.label.lowercase()} records. Continue only if you intentionally want a partial dataset."
+                    )
+                )
+            }
+        }
+    }
+
+    private companion object {
+        const val PREFLIGHT_FIELD = "preflight"
     }
 }
 
@@ -192,3 +288,10 @@ private fun ExportEventCatalogReference.toDto(): EventCatalogReferenceDto {
 internal fun Throwable.toExportError(defaultMessage: String): DomainError.ExportError {
     return DomainError.ExportError(defaultMessage)
 }
+
+private val com.example.app.features.records.domain.RecordEventType.label: String
+    get() = when (this) {
+        com.example.app.features.records.domain.RecordEventType.INGESTION -> "Ingestion"
+        com.example.app.features.records.domain.RecordEventType.EXPOSURE -> "Exposure"
+        com.example.app.features.records.domain.RecordEventType.OUTBREAK -> "Outbreak"
+    }

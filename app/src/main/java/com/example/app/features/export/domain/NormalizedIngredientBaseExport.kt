@@ -9,13 +9,13 @@ private const val BASIS_POINTS_SCALE = 10_000
 private const val INGESTION_EVENT_KIND = "ingestion"
 internal const val NORMALIZED_DERIVATION_KIND = "final_base_ingredients"
 
-internal data class NormalizedBaseIngredientsRecord(
+data class NormalizedBaseIngredientsRecord(
     val sourceEvent: NormalizedSourceIngestionRecord,
     val derivationKind: String,
     val baseIngredients: List<NormalizedBaseIngredientContributionRecord>
 )
 
-internal data class NormalizedSourceIngestionRecord(
+data class NormalizedSourceIngestionRecord(
     val kind: String,
     val id: Long,
     val itemName: String,
@@ -24,7 +24,7 @@ internal data class NormalizedSourceIngestionRecord(
     val reusableEntityRef: ExportReusableEntityReference
 )
 
-internal data class NormalizedBaseIngredientContributionRecord(
+data class NormalizedBaseIngredientContributionRecord(
     val reusableIngredientRef: ExportReusableEntityReference,
     val ingredientName: String,
     val contributionBasisPoints: Int,

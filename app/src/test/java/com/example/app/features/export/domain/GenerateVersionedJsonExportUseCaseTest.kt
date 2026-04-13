@@ -225,6 +225,259 @@ class GenerateVersionedJsonExportUseCaseTest {
         assertEquals("Could not serialize the export to JSON.", result.error.message)
     }
 
+    @Test
+    fun review_returns_pass_when_export_scope_has_no_preflight_issues() = runBlocking {
+        val useCase = GenerateVersionedJsonExportUseCase(
+            snapshotRepository = FakeExportSnapshotRepository(sampleSnapshot()),
+            writer = object : ExportArtifactWriter {
+                override suspend fun writeJson(fileName: String, content: String): AppResult<ExportArtifact> = error("unused")
+            },
+            serializer = object : VersionedJsonExportSerializer {
+                override fun serialize(envelope: VersionedExportEnvelopeDto): AppResult<String> = error("unused")
+            },
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L }
+        )
+
+        val result = useCase.review(ExportConfiguration(ExportFormat.JSON, ExportScope.AllRecords))
+
+        assertTrue(result.result.issues.isEmpty())
+        assertTrue(result.preparedExport != null)
+    }
+
+    @Test
+    fun review_returns_warning_for_partial_scope_before_generation() = runBlocking {
+        val useCase = GenerateVersionedJsonExportUseCase(
+            snapshotRepository = FakeExportSnapshotRepository(sampleSnapshot()),
+            writer = object : ExportArtifactWriter {
+                override suspend fun writeJson(fileName: String, content: String): AppResult<ExportArtifact> = error("unused")
+            },
+            serializer = object : VersionedJsonExportSerializer {
+                override fun serialize(envelope: VersionedExportEnvelopeDto): AppResult<String> = error("unused")
+            },
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L }
+        )
+
+        val result = useCase.review(
+            ExportConfiguration(
+                ExportFormat.JSON,
+                ExportScope.EventTypeRecords(com.example.app.features.records.domain.RecordEventType.EXPOSURE)
+            )
+        )
+
+        assertEquals(1, result.result.warningIssues.size)
+        assertTrue(result.result.requiresExplicitWarningAcceptance())
+        assertTrue(result.result.warningIssues.single().message.contains("only exposure records"))
+        assertTrue(result.preparedExport != null)
+    }
+
+    @Test
+    fun review_returns_blocking_issue_for_integrity_failure() = runBlocking {
+        val useCase = GenerateVersionedJsonExportUseCase(
+            snapshotRepository = FakeExportSnapshotRepository(
+                sampleSnapshot().copy(
+                    reusableCompounds = listOf(
+                        ExportReusableCompoundRecord(
+                            id = 60L,
+                            name = "Broken blend",
+                            notes = null,
+                            compositionStatus = "complete",
+                            components = listOf(
+                                ExportReusableCompoundComponentRecord(
+                                    id = 61L,
+                                    position = 1,
+                                    componentRef = ExportReusableEntityReference(kind = "ingredient", id = 50L),
+                                    proportionBasisPoints = null
+                                )
+                            ),
+                            createdAtEpochMs = 1_699_998_600_000L,
+                            updatedAtEpochMs = 1_699_998_700_000L
+                        )
+                    )
+                )
+            ),
+            writer = object : ExportArtifactWriter {
+                override suspend fun writeJson(fileName: String, content: String): AppResult<ExportArtifact> = error("unused")
+            },
+            serializer = object : VersionedJsonExportSerializer {
+                override fun serialize(envelope: VersionedExportEnvelopeDto): AppResult<String> = error("unused")
+            },
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L }
+        )
+
+        val result = useCase.review(ExportConfiguration(ExportFormat.JSON, ExportScope.AllRecords))
+
+        assertEquals(1, result.result.blockingIssues.size)
+        assertTrue(result.result.hasBlockingIssues())
+        assertTrue(result.result.blockingIssues.single().message.contains("missing proportion_basis_points"))
+        assertTrue(result.preparedExport == null)
+    }
+
+    @Test
+    fun warning_scope_does_not_write_artifact_until_warnings_are_explicitly_accepted() = runBlocking {
+        var writeInvocationCount = 0
+        val useCase = GenerateVersionedJsonExportUseCase(
+            snapshotRepository = FakeExportSnapshotRepository(sampleSnapshot()),
+            writer = object : ExportArtifactWriter {
+                override suspend fun writeJson(fileName: String, content: String): AppResult<ExportArtifact> {
+                    writeInvocationCount += 1
+                    return AppResult.Success(ExportArtifact(fileName = fileName, absolutePath = "/tmp/$fileName"))
+                }
+            },
+            serializer = object : VersionedJsonExportSerializer {
+                override fun serialize(envelope: VersionedExportEnvelopeDto): AppResult<String> = AppResult.Success("{}")
+            },
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L }
+        )
+
+        val blockedResult = useCase(
+            ExportConfiguration(
+                ExportFormat.JSON,
+                ExportScope.EventTypeRecords(com.example.app.features.records.domain.RecordEventType.EXPOSURE)
+            )
+        )
+
+        require(blockedResult is AppResult.Error)
+        assertEquals(0, writeInvocationCount)
+
+        val review = useCase.review(
+            ExportConfiguration(
+                ExportFormat.JSON,
+                ExportScope.EventTypeRecords(com.example.app.features.records.domain.RecordEventType.EXPOSURE)
+            )
+        )
+
+        val acceptedResult = useCase(
+            configuration = ExportConfiguration(
+                ExportFormat.JSON,
+                ExportScope.EventTypeRecords(com.example.app.features.records.domain.RecordEventType.EXPOSURE)
+            ),
+            warningDecision = ExportWarningDecision.AcceptWarnings,
+            preparedExport = review.preparedExport
+        )
+
+        require(acceptedResult is AppResult.Success)
+        assertEquals(1, writeInvocationCount)
+    }
+
+    @Test
+    fun accepted_warning_export_succeeds_when_reviewed_snapshot_still_matches_current_data() = runBlocking {
+        var snapshotInvocationCount = 0
+        var writeInvocationCount = 0
+        val firstSnapshot = sampleSnapshot()
+        val exportDirectory = Files.createTempDirectory("json-export-reviewed-warning").toFile()
+        val useCase = GenerateVersionedJsonExportUseCase(
+            snapshotRepository = object : ExportSnapshotRepository {
+                override suspend fun getSnapshot(scope: ExportScope): AppResult<ExportSnapshot> {
+                    snapshotInvocationCount += 1
+                    return AppResult.Success(firstSnapshot)
+                }
+            },
+            writer = object : ExportArtifactWriter {
+                override suspend fun writeJson(fileName: String, content: String): AppResult<ExportArtifact> {
+                    writeInvocationCount += 1
+                    val outputFile = File(exportDirectory, fileName)
+                    outputFile.writeText(content)
+                    return AppResult.Success(ExportArtifact(fileName = fileName, absolutePath = outputFile.absolutePath))
+                }
+            },
+            serializer = object : VersionedJsonExportSerializer {
+                override fun serialize(envelope: VersionedExportEnvelopeDto): AppResult<String> {
+                    return AppResult.Success(Json.encodeToString(VersionedExportEnvelopeDto.serializer(), envelope))
+                }
+            },
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L }
+        )
+
+        val review = useCase.review(
+            ExportConfiguration(
+                ExportFormat.JSON,
+                ExportScope.EventTypeRecords(com.example.app.features.records.domain.RecordEventType.EXPOSURE)
+            )
+        )
+        val acceptedResult = useCase(
+            configuration = ExportConfiguration(
+                ExportFormat.JSON,
+                ExportScope.EventTypeRecords(com.example.app.features.records.domain.RecordEventType.EXPOSURE)
+            ),
+            warningDecision = ExportWarningDecision.AcceptWarnings,
+            preparedExport = review.preparedExport
+        )
+
+        require(acceptedResult is AppResult.Success)
+        assertEquals(2, snapshotInvocationCount)
+        assertEquals(1, writeInvocationCount)
+        val json = Json.parseToJsonElement(File(acceptedResult.value.artifact.absolutePath).readText()).jsonObject
+        assertEquals(1, json.getValue("data").jsonObject.getValue("exposures").jsonArray.size)
+    }
+
+    @Test
+    fun accepted_warning_export_requires_matching_reviewed_prepared_export() = runBlocking {
+        val useCase = GenerateVersionedJsonExportUseCase(
+            snapshotRepository = FakeExportSnapshotRepository(sampleSnapshot()),
+            writer = object : ExportArtifactWriter {
+                override suspend fun writeJson(fileName: String, content: String): AppResult<ExportArtifact> = error("unused")
+            },
+            serializer = object : VersionedJsonExportSerializer {
+                override fun serialize(envelope: VersionedExportEnvelopeDto): AppResult<String> = error("unused")
+            },
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L }
+        )
+
+        val result = useCase(
+            configuration = ExportConfiguration(
+                ExportFormat.JSON,
+                ExportScope.EventTypeRecords(com.example.app.features.records.domain.RecordEventType.EXPOSURE)
+            ),
+            warningDecision = ExportWarningDecision.AcceptWarnings,
+            preparedExport = null
+        )
+
+        require(result is AppResult.Error)
+        assertTrue(result.error is DomainError.ValidationError)
+        assertEquals("Review export warnings before continuing.", result.error.message)
+    }
+
+    @Test
+    fun accepted_warning_export_rejects_stale_reviewed_snapshot() = runBlocking {
+        var snapshotInvocationCount = 0
+        val firstSnapshot = sampleSnapshot()
+        val secondSnapshot = sampleSnapshot().copy(exposures = emptyList())
+        val useCase = GenerateVersionedJsonExportUseCase(
+            snapshotRepository = object : ExportSnapshotRepository {
+                override suspend fun getSnapshot(scope: ExportScope): AppResult<ExportSnapshot> {
+                    snapshotInvocationCount += 1
+                    return AppResult.Success(if (snapshotInvocationCount == 1) firstSnapshot else secondSnapshot)
+                }
+            },
+            writer = object : ExportArtifactWriter {
+                override suspend fun writeJson(fileName: String, content: String): AppResult<ExportArtifact> = error("unused")
+            },
+            serializer = object : VersionedJsonExportSerializer {
+                override fun serialize(envelope: VersionedExportEnvelopeDto): AppResult<String> = error("unused")
+            },
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L }
+        )
+
+        val review = useCase.review(
+            ExportConfiguration(
+                ExportFormat.JSON,
+                ExportScope.EventTypeRecords(com.example.app.features.records.domain.RecordEventType.EXPOSURE)
+            )
+        )
+        val result = useCase(
+            configuration = ExportConfiguration(
+                ExportFormat.JSON,
+                ExportScope.EventTypeRecords(com.example.app.features.records.domain.RecordEventType.EXPOSURE)
+            ),
+            warningDecision = ExportWarningDecision.AcceptWarnings,
+            preparedExport = review.preparedExport
+        )
+
+        require(result is AppResult.Error)
+        assertTrue(result.error is DomainError.ValidationError)
+        assertEquals("Export data changed. Review warnings before continuing.", result.error.message)
+    }
+
     private fun sampleSnapshot() = ExportSnapshot(
         ingestions = listOf(
             ExportIngestionRecord(

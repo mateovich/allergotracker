@@ -6,8 +6,11 @@ import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
 import com.example.app.features.export.domain.ExportConfiguration
 import com.example.app.features.export.domain.ExportFormat
+import com.example.app.features.export.domain.ExportPreflightReview
 import com.example.app.features.export.domain.ExportScope
+import com.example.app.features.export.domain.ExportWarningDecision
 import com.example.app.features.export.domain.GenerateVersionedJsonExportUseCase
+import com.example.app.features.export.domain.PreparedExport
 import com.example.app.features.export.domain.ValidateExportConfigurationUseCase
 import com.example.app.features.records.domain.ObserveRecordCountUseCase
 import com.example.app.features.records.domain.RecordEventType
@@ -28,6 +31,9 @@ class ExportViewModel(
     private val mutableState = MutableStateFlow(createState())
     val state: StateFlow<ExportUiState> = mutableState.asStateFlow()
 
+    private var pendingWarningConfiguration: ExportConfiguration? = null
+    private var pendingPreparedExport: PreparedExport? = null
+
     private val effectChannel = Channel<ExportUiEffect>(capacity = Channel.BUFFERED)
     val effects = effectChannel.receiveAsFlow()
 
@@ -40,8 +46,10 @@ class ExportViewModel(
                     formatValidationMessage = mutableState.value.formatValidationMessage,
                     scopeValidationMessage = mutableState.value.scopeValidationMessage,
                     generalValidationMessage = mutableState.value.generalValidationMessage,
+                    warningMessages = mutableState.value.warningMessages,
                     requestMessage = mutableState.value.requestMessage,
                     isConfirming = mutableState.value.isConfirming,
+                    isReviewingWarnings = mutableState.value.isReviewingWarnings,
                     generatedExport = mutableState.value.generatedExport,
                     totalRecordCount = count
                 )
@@ -52,7 +60,7 @@ class ExportViewModel(
     fun onIntent(intent: ExportUiIntent) {
         when (intent) {
             is ExportUiIntent.SelectFormat -> {
-                if (mutableState.value.isConfirming) return
+                if (mutableState.value.isConfirming || mutableState.value.isReviewingWarnings) return
                 mutableState.value = createState(
                     selectedFormat = intent.format,
                     selectedScope = mutableState.value.selectedScope,
@@ -61,7 +69,7 @@ class ExportViewModel(
             }
 
             is ExportUiIntent.SelectScope -> {
-                if (mutableState.value.isConfirming) return
+                if (mutableState.value.isConfirming || mutableState.value.isReviewingWarnings) return
                 mutableState.value = createState(
                     selectedFormat = mutableState.value.selectedFormat,
                     selectedScope = intent.scope,
@@ -70,28 +78,105 @@ class ExportViewModel(
             }
 
             ExportUiIntent.ConfirmExportStart -> confirmExportStart()
+            ExportUiIntent.ContinueWarningReview -> continueWarningReview()
+            ExportUiIntent.CancelWarningReview -> cancelWarningReview()
         }
     }
 
     private fun confirmExportStart() {
-        if (mutableState.value.isConfirming) return
+        if (mutableState.value.isConfirming || mutableState.value.isReviewingWarnings) return
         when (val result = validateExportConfigurationUseCase(mutableState.value.selectedFormat, mutableState.value.selectedScope)) {
-            is AppResult.Success -> generateExport(result.value)
+            is AppResult.Success -> reviewExport(result.value)
             is AppResult.Error -> handleValidationError(result.error)
         }
     }
 
-    private fun generateExport(configuration: ExportConfiguration) {
-        mutableState.value = mutableState.value.copy(isConfirming = true)
+    private fun reviewExport(configuration: ExportConfiguration) {
+        pendingWarningConfiguration = null
+        pendingPreparedExport = null
+        mutableState.value = createState(
+            selectedFormat = configuration.format,
+            selectedScope = configuration.scope,
+            totalRecordCount = mutableState.value.totalRecordCount,
+            isConfirming = true
+        )
         viewModelScope.launch {
-            when (val result = generateVersionedJsonExportUseCase(configuration)) {
+            handlePreflightResult(
+                configuration = configuration,
+                review = generateVersionedJsonExportUseCase.review(configuration)
+            )
+        }
+    }
+
+    private fun continueWarningReview() {
+        val configuration = pendingWarningConfiguration ?: return
+        if (mutableState.value.isConfirming || !mutableState.value.isReviewingWarnings) return
+        generateExport(configuration, ExportWarningDecision.AcceptWarnings)
+    }
+
+    private fun cancelWarningReview() {
+        if (!mutableState.value.isReviewingWarnings) return
+        pendingWarningConfiguration = null
+        pendingPreparedExport = null
+        mutableState.value = createState(
+            selectedFormat = mutableState.value.selectedFormat,
+            selectedScope = mutableState.value.selectedScope,
+            totalRecordCount = mutableState.value.totalRecordCount
+        )
+    }
+
+    private fun generateExport(configuration: ExportConfiguration, warningDecision: ExportWarningDecision) {
+        pendingWarningConfiguration = configuration.takeIf { warningDecision == ExportWarningDecision.AcceptWarnings }
+        mutableState.value = mutableState.value.copy(isConfirming = true, isReviewingWarnings = false)
+        viewModelScope.launch {
+            when (
+                val result = generateVersionedJsonExportUseCase(
+                    configuration = configuration,
+                    warningDecision = warningDecision,
+                    preparedExport = pendingPreparedExport
+                )
+            ) {
                 is AppResult.Success -> handleGeneratedExport(result.value)
                 is AppResult.Error -> handleGenerationError(result.error, configuration)
             }
         }
     }
 
+    private fun handlePreflightResult(configuration: ExportConfiguration, review: ExportPreflightReview) {
+        when {
+            review.result.hasBlockingIssues() -> {
+                pendingWarningConfiguration = null
+                pendingPreparedExport = null
+                mutableState.value = createState(
+                    selectedFormat = configuration.format,
+                    selectedScope = configuration.scope,
+                    generalValidationMessage = review.result.blockingIssues.first().message,
+                    totalRecordCount = mutableState.value.totalRecordCount
+                )
+            }
+
+            review.result.requiresExplicitWarningAcceptance() -> {
+                pendingWarningConfiguration = configuration
+                pendingPreparedExport = review.preparedExport
+                mutableState.value = createState(
+                    selectedFormat = configuration.format,
+                    selectedScope = configuration.scope,
+                    warningMessages = review.result.warningIssues.map { it.message },
+                    totalRecordCount = mutableState.value.totalRecordCount,
+                    isReviewingWarnings = true
+                )
+            }
+
+            else -> {
+                pendingPreparedExport = review.preparedExport
+                generateExport(configuration, ExportWarningDecision.RequireCleanPass)
+            }
+        }
+    }
+
     private fun handleGeneratedExport(result: com.example.app.features.export.domain.GeneratedJsonExport) {
+        pendingWarningConfiguration = null
+        pendingPreparedExport = null
         mutableState.value = createState(
             selectedFormat = result.configuration.format,
             selectedScope = result.configuration.scope,
@@ -103,6 +188,8 @@ class ExportViewModel(
     }
 
     private fun handleGenerationError(error: DomainError, configuration: ExportConfiguration) {
+        pendingWarningConfiguration = null
+        pendingPreparedExport = null
         mutableState.value = createState(
             selectedFormat = configuration.format,
             selectedScope = configuration.scope,
@@ -129,8 +216,10 @@ class ExportViewModel(
         formatValidationMessage: String? = null,
         scopeValidationMessage: String? = null,
         generalValidationMessage: String? = null,
+        warningMessages: List<String> = emptyList(),
         requestMessage: String? = null,
         isConfirming: Boolean = false,
+        isReviewingWarnings: Boolean = false,
         generatedExport: com.example.app.features.export.domain.GeneratedJsonExport? = null,
         totalRecordCount: Int = 0
     ): ExportUiState {
@@ -158,8 +247,10 @@ class ExportViewModel(
             formatValidationMessage = formatValidationMessage,
             scopeValidationMessage = scopeValidationMessage,
             generalValidationMessage = generalValidationMessage,
+            warningMessages = warningMessages,
             requestMessage = requestMessage,
             isConfirming = isConfirming,
+            isReviewingWarnings = isReviewingWarnings,
             generatedExport = generatedExport,
             totalRecordCount = totalRecordCount
         )

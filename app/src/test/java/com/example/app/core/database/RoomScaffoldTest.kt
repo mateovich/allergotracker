@@ -1,6 +1,9 @@
 package com.example.app.core.database
 
 import com.example.app.core.database.migrations.Migration_1_2
+import com.example.app.core.database.migrations.Migration_10_11
+import com.example.app.core.database.migrations.Migration_11_12
+import com.example.app.core.database.migrations.Migration_12_13
 import com.example.app.core.database.migrations.Migration_2_3
 import com.example.app.core.database.migrations.Migration_3_4
 import com.example.app.core.database.migrations.Migration_4_5
@@ -8,9 +11,6 @@ import com.example.app.core.database.migrations.Migration_5_6
 import com.example.app.core.database.migrations.Migration_6_7
 import com.example.app.core.database.migrations.Migration_7_8
 import com.example.app.core.database.migrations.Migration_8_9
-import com.example.app.core.database.migrations.Migration_10_11
-import com.example.app.core.database.migrations.Migration_11_12
-import com.example.app.core.database.migrations.Migration_12_13
 import com.example.app.core.database.migrations.Migration_9_10
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -21,10 +21,7 @@ class RoomScaffoldTest {
 
     @Test
     fun app_database_source_declares_expected_room_metadata() {
-        val databaseFile = File(
-            System.getProperty("user.dir"),
-            "src/main/java/com/example/app/core/database/AppDatabase.kt"
-        )
+        val databaseFile = resolveProjectFile("src/main/java/com/example/app/core/database/AppDatabase.kt")
 
         assertTrue(databaseFile.exists())
         val source = databaseFile.readText()
@@ -47,10 +44,7 @@ class RoomScaffoldTest {
 
     @Test
     fun home_message_entity_uses_snake_case_table_and_columns() {
-        val entityFile = File(
-            System.getProperty("user.dir"),
-            "src/main/java/com/example/app/core/database/HomeMessageEntity.kt"
-        )
+        val entityFile = resolveProjectFile("src/main/java/com/example/app/core/database/HomeMessageEntity.kt")
 
         assertTrue(entityFile.exists())
         val source = entityFile.readText()
@@ -130,5 +124,16 @@ class RoomScaffoldTest {
     fun event_intensity_backfill_migration_12_13_is_declared() {
         assertEquals(12, Migration_12_13.startVersion)
         assertEquals(13, Migration_12_13.endVersion)
+    }
+
+    private fun resolveProjectFile(relativeToAppModule: String): File {
+        val workingDirectory = File(System.getProperty("user.dir") ?: ".")
+        val direct = File(workingDirectory, relativeToAppModule)
+        if (direct.exists()) return direct
+
+        val nested = File(workingDirectory, "app/$relativeToAppModule")
+        if (nested.exists()) return nested
+
+        return direct
     }
 }

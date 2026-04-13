@@ -31,8 +31,10 @@ data class ExportUiState(
     val formatValidationMessage: String? = null,
     val scopeValidationMessage: String? = null,
     val generalValidationMessage: String? = null,
+    val warningMessages: List<String> = emptyList(),
     val requestMessage: String? = null,
     val isConfirming: Boolean = false,
+    val isReviewingWarnings: Boolean = false,
     val generatedExport: GeneratedJsonExport? = null,
     val confirmActionLabel: String = "Start export",
     val privacyNotice: String = "Exports can contain sensitive local records. Review the summary before sharing.",
@@ -43,6 +45,8 @@ sealed interface ExportUiIntent {
     data class SelectFormat(val format: ExportFormat) : ExportUiIntent
     data class SelectScope(val scope: ExportScope) : ExportUiIntent
     data object ConfirmExportStart : ExportUiIntent
+    data object ContinueWarningReview : ExportUiIntent
+    data object CancelWarningReview : ExportUiIntent
 }
 
 sealed interface ExportUiEffect {

@@ -4,7 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -12,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,7 +50,6 @@ fun ExportScreen(
     AppScreenScaffold(title = state.title) { contentModifier ->
         Column(
             modifier = contentModifier
-                .fillMaxSize()
                 .testTag("export-screen")
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 16.dp),
@@ -139,15 +138,75 @@ fun ExportScreen(
                         modifier = Modifier.testTag("export-request-message")
                     )
                 }
-                Button(
-                    onClick = { viewModel.onIntent(ExportUiIntent.ConfirmExportStart) },
-                    enabled = !state.isConfirming,
+                if (state.isReviewingWarnings) {
+                    WarningReviewSection(
+                        warningMessages = state.warningMessages,
+                        isBusy = state.isConfirming,
+                        onContinue = { viewModel.onIntent(ExportUiIntent.ContinueWarningReview) },
+                        onCancel = { viewModel.onIntent(ExportUiIntent.CancelWarningReview) }
+                    )
+                } else {
+                    Button(
+                        onClick = { viewModel.onIntent(ExportUiIntent.ConfirmExportStart) },
+                        enabled = !state.isConfirming,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("export-confirm-action")
+                            .semantics { contentDescription = state.confirmActionLabel }
+                    ) {
+                        Text(text = state.confirmActionLabel)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WarningReviewSection(
+    warningMessages: List<String>,
+    isBusy: Boolean,
+    onContinue: () -> Unit,
+    onCancel: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("export-warning-review")
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(text = "Review warnings", style = MaterialTheme.typography.titleMedium)
+            warningMessages.forEachIndexed { index, message ->
+                Text(
+                    text = "• $message",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.testTag("export-warning-message-$index")
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onCancel,
+                    enabled = !isBusy,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("export-confirm-action")
-                        .semantics { contentDescription = state.confirmActionLabel }
+                        .weight(1f)
+                        .testTag("export-warning-cancel")
                 ) {
-                    Text(text = state.confirmActionLabel)
+                    Text(text = "Cancel")
+                }
+                Button(
+                    onClick = onContinue,
+                    enabled = !isBusy,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("export-warning-continue")
+                ) {
+                    Text(text = "Continue export")
                 }
             }
         }

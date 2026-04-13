@@ -3,18 +3,23 @@ package com.example.app.features.export.ui
 import com.example.app.MainDispatcherRule
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.core.export.schema.EXPORT_SCHEMA_VERSION
 import com.example.app.features.export.domain.ExportFormat
 import com.example.app.features.export.domain.ExportScope
 import com.example.app.features.export.domain.ExportArtifact
+import com.example.app.features.export.domain.ExportPreflightIssue
+import com.example.app.features.export.domain.ExportPreflightReview
+import com.example.app.features.export.domain.ExportPreflightResult
+import com.example.app.features.export.domain.ExportWarningDecision
 import com.example.app.features.export.domain.GenerateVersionedJsonExportUseCase
 import com.example.app.features.export.domain.GeneratedJsonExport
+import com.example.app.features.export.domain.PreparedExport
 import com.example.app.features.export.domain.ValidateExportConfigurationUseCase
 import com.example.app.features.records.domain.ObserveRecordCountUseCase
 import com.example.app.features.records.domain.RecordEventType
 import com.example.app.features.records.domain.RecordSummary
 import com.example.app.features.records.domain.RecordsFilter
 import com.example.app.features.records.domain.RecordsRepository
-import com.example.app.core.export.schema.EXPORT_SCHEMA_VERSION
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
@@ -43,6 +48,9 @@ class ExportViewModelTest {
     private val validateExportConfigurationUseCase = ValidateExportConfigurationUseCase()
     private var pendingGenerateResult: CompletableDeferred<AppResult<GeneratedJsonExport>>? = null
     private var generateInvocationCount: Int = 0
+    private var nextReviewResult: ExportPreflightReview? = null
+    private var reviewedPreparedExport: PreparedExport? = null
+    private var generatedPreparedExport: PreparedExport? = null
     private var nextGenerateResult: AppResult<GeneratedJsonExport> = AppResult.Success(
         GeneratedJsonExport(
             configuration = com.example.app.features.export.domain.ExportConfiguration(
@@ -70,9 +78,48 @@ class ExportViewModelTest {
             },
             currentTimeProvider = com.example.app.features.ingestion.domain.CurrentTimeProvider { 0L }
         ) {
-            override suspend fun invoke(configuration: com.example.app.features.export.domain.ExportConfiguration): AppResult<GeneratedJsonExport> {
+            override suspend fun review(configuration: com.example.app.features.export.domain.ExportConfiguration): ExportPreflightReview {
+                nextReviewResult?.let { queuedResult ->
+                    nextReviewResult = null
+                    reviewedPreparedExport = queuedResult.preparedExport
+                    return queuedResult
+                }
+                val preparedExport = PreparedExport(
+                    configuration = configuration,
+                    snapshot = sampleSnapshot(),
+                    normalizedBaseIngredients = emptyList()
+                )
+                reviewedPreparedExport = preparedExport
+                return when (configuration.scope) {
+                    ExportScope.AllRecords -> ExportPreflightReview(
+                        result = ExportPreflightResult(),
+                        preparedExport = preparedExport
+                    )
+                    is ExportScope.EventTypeRecords -> ExportPreflightReview(
+                        result = ExportPreflightResult(
+                            issues = listOf(
+                                ExportPreflightIssue.Warning(
+                                    "This export includes only ${configuration.scope.eventType.name.lowercase()} records. Continue only if you intentionally want a partial dataset."
+                                )
+                            )
+                        ),
+                        preparedExport = preparedExport
+                    )
+                }
+            }
+
+            override suspend fun invoke(
+                configuration: com.example.app.features.export.domain.ExportConfiguration,
+                warningDecision: ExportWarningDecision,
+                preparedExport: PreparedExport?
+            ): AppResult<GeneratedJsonExport> {
                 generateInvocationCount += 1
-                return pendingGenerateResult?.await() ?: nextGenerateResult
+                generatedPreparedExport = preparedExport
+                val result = pendingGenerateResult?.await() ?: nextGenerateResult
+                return when (result) {
+                    is AppResult.Success -> AppResult.Success(result.value.copy(configuration = configuration))
+                    is AppResult.Error -> result
+                }
             }
         }
         return ExportViewModel(observeRecordCountUseCase, validateExportConfigurationUseCase, fakeGenerateUseCase)
@@ -166,6 +213,73 @@ class ExportViewModelTest {
     }
 
     @Test
+    fun partial_scope_requires_explicit_warning_continuation_before_generation() = runBlocking {
+        val viewModel = createViewModel()
+
+        viewModel.onIntent(ExportUiIntent.SelectFormat(ExportFormat.JSON))
+        viewModel.onIntent(ExportUiIntent.SelectScope(ExportScope.EventTypeRecords(RecordEventType.EXPOSURE)))
+        viewModel.onIntent(ExportUiIntent.ConfirmExportStart)
+
+        assertEquals(0, generateInvocationCount)
+        assertTrue(viewModel.state.value.isReviewingWarnings)
+        assertEquals(1, viewModel.state.value.warningMessages.size)
+
+        val effect = async { viewModel.effects.first() }
+        viewModel.onIntent(ExportUiIntent.ContinueWarningReview)
+
+        assertEquals(1, generateInvocationCount)
+        assertEquals(reviewedPreparedExport, generatedPreparedExport)
+        assertEquals(
+            ExportUiEffect.ExportStartRequested(
+                configuration = com.example.app.features.export.domain.ExportConfiguration(
+                    format = ExportFormat.JSON,
+                    scope = ExportScope.EventTypeRecords(RecordEventType.EXPOSURE)
+                )
+            ),
+            effect.await()
+        )
+    }
+
+    @Test
+    fun canceling_warning_review_restores_editable_state_without_generation() {
+        val viewModel = createViewModel()
+
+        viewModel.onIntent(ExportUiIntent.SelectFormat(ExportFormat.JSON))
+        viewModel.onIntent(ExportUiIntent.SelectScope(ExportScope.EventTypeRecords(RecordEventType.EXPOSURE)))
+        viewModel.onIntent(ExportUiIntent.ConfirmExportStart)
+        viewModel.onIntent(ExportUiIntent.CancelWarningReview)
+
+        assertEquals(0, generateInvocationCount)
+        assertEquals(ExportFormat.JSON, viewModel.state.value.selectedFormat)
+        assertEquals(ExportScope.EventTypeRecords(RecordEventType.EXPOSURE), viewModel.state.value.selectedScope)
+        assertTrue(viewModel.state.value.warningMessages.isEmpty())
+        assertTrue(!viewModel.state.value.isReviewingWarnings)
+    }
+
+    @Test
+    fun blocking_preflight_failure_surfaces_actionable_error_without_generation() {
+        nextReviewResult = ExportPreflightReview(
+            result = ExportPreflightResult(
+                issues = listOf(
+                    ExportPreflightIssue.Blocking(DomainError.IntegrityError("Export blocked: fix missing references before retrying."))
+                )
+            ),
+            preparedExport = null
+        )
+        val viewModel = createViewModel()
+
+        viewModel.onIntent(ExportUiIntent.SelectFormat(ExportFormat.JSON))
+        viewModel.onIntent(ExportUiIntent.SelectScope(ExportScope.AllRecords))
+        viewModel.onIntent(ExportUiIntent.ConfirmExportStart)
+
+        assertEquals(0, generateInvocationCount)
+        assertEquals("Export blocked: fix missing references before retrying.", viewModel.state.value.generalValidationMessage)
+        assertNull(viewModel.state.value.requestMessage)
+        assertNull(viewModel.state.value.generatedExport)
+        assertTrue(!viewModel.state.value.isReviewingWarnings)
+    }
+
+    @Test
     fun generation_failure_surfaces_actionable_error_without_success_state() = runBlocking {
         nextGenerateResult = AppResult.Error(DomainError.ExportError("Could not generate the local JSON export. Try again."))
         val viewModel = createViewModel()
@@ -201,6 +315,26 @@ class ExportViewModelTest {
     }
 
     @Test
+    fun repeated_warning_continue_taps_do_not_start_duplicate_exports() {
+        runBlocking {
+            pendingGenerateResult = CompletableDeferred()
+            generateInvocationCount = 0
+            val viewModel = createViewModel()
+
+            viewModel.onIntent(ExportUiIntent.SelectFormat(ExportFormat.JSON))
+            viewModel.onIntent(ExportUiIntent.SelectScope(ExportScope.EventTypeRecords(RecordEventType.EXPOSURE)))
+            viewModel.onIntent(ExportUiIntent.ConfirmExportStart)
+            viewModel.onIntent(ExportUiIntent.ContinueWarningReview)
+            viewModel.onIntent(ExportUiIntent.ContinueWarningReview)
+
+            assertEquals(1, generateInvocationCount)
+            assertEquals(reviewedPreparedExport, generatedPreparedExport)
+
+            pendingGenerateResult?.complete(nextGenerateResult)
+        }
+    }
+
+    @Test
     fun selection_changes_are_ignored_while_export_generation_is_in_flight() {
         runBlocking {
             pendingGenerateResult = CompletableDeferred()
@@ -217,4 +351,13 @@ class ExportViewModelTest {
             pendingGenerateResult?.complete(nextGenerateResult)
         }
     }
+
+    private fun sampleSnapshot() = com.example.app.features.export.domain.ExportSnapshot(
+        ingestions = emptyList(),
+        exposures = emptyList(),
+        outbreaks = emptyList(),
+        reusableIngredients = emptyList(),
+        reusableCompounds = emptyList(),
+        reusableEventCatalogEntries = emptyList()
+    )
 }

@@ -91,6 +91,30 @@ class MainActivityTest {
     }
 
     @Test
+    fun export_warning_review_requires_explicit_continue_or_cancel_for_partial_scope() {
+        composeRule.onNodeWithContentDescription("Export").performClick()
+        composeRule.onNodeWithTag("export-format-json").performClick()
+        composeRule.onNodeWithTag("export-scope-ingestion").performClick()
+
+        composeRule.onNodeWithTag("export-confirm-action").performScrollTo().performClick()
+
+        composeRule.onNodeWithTag("export-warning-review").assertIsDisplayed()
+        composeRule.onNodeWithTag("export-warning-continue").assertIsDisplayed()
+        composeRule.onNodeWithTag("export-warning-cancel").assertIsDisplayed()
+        composeRule.onNodeWithText("Review warnings").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("export-warning-cancel").performClick()
+        composeRule.onNodeWithTag("export-confirm-action").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("export-request-message").assertCountEquals(0)
+
+        composeRule.onNodeWithTag("export-confirm-action").performScrollTo().performClick()
+        composeRule.onNodeWithTag("export-warning-continue").performClick()
+        composeRule.onNodeWithTag("export-request-message")
+            .assertIsDisplayed()
+            .assertTextContains("JSON export generated locally on this device.")
+    }
+
+    @Test
     fun add_action_opens_compact_picker_with_exact_three_options() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
 
