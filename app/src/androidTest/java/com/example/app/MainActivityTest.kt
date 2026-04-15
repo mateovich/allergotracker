@@ -42,6 +42,8 @@ class MainActivityTest {
     @Test
     fun app_launches_into_records_with_enabled_primary_add_action() {
         composeRule.onNodeWithText("Records").assertIsDisplayed()
+        composeRule.onNodeWithTag("records-screen-content").assertIsDisplayed()
+        composeRule.onNodeWithTag("top-level-records").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Add record").assertIsDisplayed().assertIsEnabled()
         composeRule.onNodeWithContentDescription("Export").assertIsDisplayed()
         composeRule.onNodeWithTag("records-add-fab")
@@ -73,45 +75,73 @@ class MainActivityTest {
         composeRule.onNodeWithTag("export-confirm-action").performScrollTo().performClick()
 
         composeRule.onNodeWithTag("export-screen").assertIsDisplayed()
-        composeRule.onAllNodesWithTag("export-request-message").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("export-status-message").assertCountEquals(0)
     }
 
     @Test
-    fun export_flow_waits_for_explicit_confirmation_before_requesting_next_step() {
+    fun export_flow_requires_destination_selection_and_final_confirmation_before_success() {
         composeRule.onNodeWithContentDescription("Export").performClick()
         composeRule.onNodeWithTag("export-format-json").performClick()
         composeRule.onNodeWithTag("export-scope-all-records").performClick()
-        composeRule.onAllNodesWithTag("export-request-message").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("export-status-message").assertCountEquals(0)
 
         composeRule.onNodeWithTag("export-confirm-action").performScrollTo().performClick()
 
-        composeRule.onNodeWithTag("export-request-message")
-            .assertIsDisplayed()
-            .assertTextContains("JSON export generated locally on this device.")
+        waitForTag("export-destination-selector")
+        composeRule.onNodeWithTag("export-destination-selector").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("export-result-summary").assertCountEquals(0)
+
+        composeRule.onNodeWithTag("export-destination-downloads").performScrollTo().performClick()
+        composeRule.onNodeWithTag("export-final-confirmation").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("export-final-destination").performScrollTo().assertExists()
+        composeRule.onNodeWithText("Export saved").assertDoesNotExist()
+        composeRule.onNodeWithTag("export-final-confirm").performScrollTo().performClick()
+
+        waitForTag("export-result-summary")
+        composeRule.onNodeWithTag("export-result-summary").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("export-result-destination").performScrollTo().assertExists()
+        composeRule.onNodeWithText("Export saved").assertIsDisplayed()
     }
 
     @Test
-    fun export_warning_review_requires_explicit_continue_or_cancel_for_partial_scope() {
+    fun export_warning_review_requires_explicit_continue_or_cancel_and_final_destination_confirmation() {
         composeRule.onNodeWithContentDescription("Export").performClick()
         composeRule.onNodeWithTag("export-format-json").performClick()
         composeRule.onNodeWithTag("export-scope-ingestion").performClick()
 
         composeRule.onNodeWithTag("export-confirm-action").performScrollTo().performClick()
 
+        waitForTag("export-warning-review")
         composeRule.onNodeWithTag("export-warning-review").assertIsDisplayed()
-        composeRule.onNodeWithTag("export-warning-continue").assertIsDisplayed()
-        composeRule.onNodeWithTag("export-warning-cancel").assertIsDisplayed()
+        composeRule.onNodeWithTag("export-warning-continue").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("export-warning-cancel").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Review warnings").assertIsDisplayed()
 
         composeRule.onNodeWithTag("export-warning-cancel").performClick()
         composeRule.onNodeWithTag("export-confirm-action").assertIsDisplayed()
-        composeRule.onAllNodesWithTag("export-request-message").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("export-result-summary").assertCountEquals(0)
+        composeRule.onNodeWithText("Export saved").assertDoesNotExist()
 
         composeRule.onNodeWithTag("export-confirm-action").performScrollTo().performClick()
-        composeRule.onNodeWithTag("export-warning-continue").performClick()
-        composeRule.onNodeWithTag("export-request-message")
+        waitForTag("export-warning-continue")
+        composeRule.onNodeWithTag("export-warning-continue").performScrollTo().performClick()
+        waitForTag("export-destination-selector")
+        composeRule.onNodeWithTag("export-destination-downloads").performScrollTo().performClick()
+        composeRule.onNodeWithTag("export-final-confirmation").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Export saved").assertDoesNotExist()
+        composeRule.onNodeWithTag("export-final-cancel").performClick()
+        composeRule.onNodeWithTag("export-destination-selector").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("export-result-summary").assertCountEquals(0)
+        composeRule.onNodeWithText("Export saved").assertDoesNotExist()
+
+        composeRule.onNodeWithTag("export-destination-downloads").performScrollTo().performClick()
+        composeRule.onNodeWithTag("export-final-confirm").performScrollTo().performClick()
+        waitForTag("export-result-summary")
+        composeRule.onNodeWithTag("export-result-summary")
+            .performScrollTo()
             .assertIsDisplayed()
-            .assertTextContains("JSON export generated locally on this device.")
+        composeRule.onNodeWithTag("export-result-destination").performScrollTo().assertExists()
+        composeRule.onNodeWithText("Export saved").assertIsDisplayed()
     }
 
     @Test
@@ -157,15 +187,15 @@ class MainActivityTest {
         composeRule.onNodeWithTag("ingestion-occurred-at-label").assertIsDisplayed()
 
         composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Tea")
-        composeRule.onNodeWithTag("ingestion-save").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
 
         composeRule.onNodeWithText("Choose a quantity.").assertIsDisplayed()
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Tea")
 
         composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
-        composeRule.onNodeWithTag("ingestion-save").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
 
-        composeRule.onNodeWithText("Records").assertIsDisplayed()
+        waitForTag("records-list")
         composeRule.onNodeWithTag("records-list").assertIsDisplayed()
         composeRule.onNodeWithText("Tea").assertIsDisplayed()
         // When saved via auto-create, the label includes "- Reusable ingredient"
@@ -287,7 +317,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Breakfast mix")
         composeRule.onNodeWithTag("ingestion-notes").assertTextContains("Post workout")
         composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable compound selected: Breakfast mix")
-        composeRule.onNodeWithTag("ingestion-save").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
 
         composeRule.onNodeWithTag("records-list").assertIsDisplayed()
         composeRule.onNodeWithText("Breakfast mix").assertIsDisplayed()
@@ -351,7 +381,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk")
         composeRule.onNodeWithTag("ingestion-notes").assertTextContains("Morning routine")
         composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable ingredient selected: Oat milk")
-        composeRule.onNodeWithTag("ingestion-save").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
 
         composeRule.onNodeWithTag("records-list").assertIsDisplayed()
         composeRule.onNodeWithText("Oat milk").assertIsDisplayed()
@@ -375,7 +405,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
 
         waitForTag("records-list")
-        composeRule.onNodeWithText("Records").assertExists()
+        composeRule.onNodeWithTag("records-list").assertIsDisplayed()
         composeRule.onNodeWithText("Exposure").assertIsDisplayed()
         composeRule.onNodeWithText("Pollen").assertIsDisplayed()
         composeRule.onNodeWithText("Intensity 3").assertIsDisplayed()
@@ -388,7 +418,7 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
         composeRule.onNodeWithTag("exposure-occurred-at-input").performTextReplacement("invalid")
-        composeRule.onNodeWithTag("exposure-save").performClick()
+        composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
 
         waitForText("Enter date and time as yyyy-MM-dd HH:mm.")
     }
@@ -402,14 +432,14 @@ class MainActivityTest {
         composeRule.onNodeWithTag("outbreak-occurred-at-label").assertIsDisplayed()
         composeRule.onNodeWithTag("outbreak-occurred-at-input").assertIsDisplayed()
 
-        composeRule.onNodeWithTag("outbreak-save").performClick()
+        composeRule.onNodeWithTag("outbreak-save").performScrollTo().performClick()
 
         composeRule.onNodeWithText("Enter what happened.").assertIsDisplayed()
         composeRule.onNodeWithText("Enter where on the body it happened.").assertIsDisplayed()
 
         composeRule.onNodeWithTag("outbreak-descriptor").performTextInput("Skin flare")
         composeRule.onNodeWithTag("outbreak-body-location").performTextInput("Left arm")
-        composeRule.onNodeWithTag("outbreak-save").performClick()
+        composeRule.onNodeWithTag("outbreak-save").performScrollTo().performClick()
 
         waitForTag("records-list")
         composeRule.onNodeWithText("Outbreak").assertIsDisplayed()
@@ -425,7 +455,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("outbreak-descriptor").performTextInput("Skin flare")
         composeRule.onNodeWithTag("outbreak-body-location").performTextInput("Left arm")
         composeRule.onNodeWithTag("outbreak-occurred-at-input").performTextReplacement("invalid")
-        composeRule.onNodeWithTag("outbreak-save").performClick()
+        composeRule.onNodeWithTag("outbreak-save").performScrollTo().performClick()
 
         waitForText("Enter date and time as yyyy-MM-dd HH:mm.")
     }
@@ -437,14 +467,14 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Tea")
         composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
-        composeRule.onNodeWithTag("ingestion-save").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
 
         composeRule.onNodeWithText("Tea").assertIsDisplayed()
 
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("Records").assertIsDisplayed()
+        composeRule.onNodeWithTag("records-screen-content").assertIsDisplayed()
         composeRule.onNodeWithText("Tea").assertIsDisplayed()
         composeRule.onNodeWithTag("records-list").assertIsDisplayed()
     }
@@ -456,9 +486,11 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Tea")
         composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
-        composeRule.onNodeWithTag("ingestion-save").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
 
+        waitForTag("records-list")
         composeRule.onNodeWithText("Tea").performClick()
+        waitForTag("record-detail-edit")
         composeRule.onNodeWithTag("record-detail-edit").performClick()
         assertOfflineFormHasNoDependencyWarnings("edit-ingestion-form-screen")
 
@@ -485,9 +517,9 @@ class MainActivityTest {
         composeRule.onNodeWithText("Exposure").performClick()
 
         composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
-        composeRule.onNodeWithTag("exposure-save").performClick()
+        composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
 
-        waitForText("Pollen")
+        waitForTag("records-list")
         composeRule.onNodeWithText("Pollen").performClick()
         waitForTag("record-detail-edit")
         composeRule.onNodeWithTag("record-detail-edit").performClick()
@@ -516,9 +548,10 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
         composeRule.onNodeWithTag("exposure-type-create-inline").performClick()
-        composeRule.onNodeWithTag("exposure-save").performClick()
+        waitForTag("exposure-type-summary")
+        composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
 
-        waitForText("Pollen")
+        waitForTag("records-list")
         composeRule.onNodeWithText("Pollen").performClick()
         waitForTag("record-detail-edit")
         composeRule.onNodeWithTag("record-detail-edit").performClick()
@@ -624,6 +657,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("ingestion-reusable-clear").performClick()
 
         composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Base mix")
+        waitForText("Base mix - Compound")
         composeRule.onNodeWithText("Base mix - Compound").performClick()
         waitForTag("ingestion-reusable-edit")
         composeRule.onNodeWithTag("ingestion-reusable-edit").performClick()
@@ -691,12 +725,12 @@ class MainActivityTest {
         navigateBack()
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
         navigateBack()
-        composeRule.onNodeWithText("Records").assertIsDisplayed()
+        composeRule.onNodeWithTag("records-screen-content").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Exposure").performClick()
         composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
         composeRule.onNodeWithTag("exposure-type-create-inline").performClick()
-        composeRule.onNodeWithTag("exposure-save").performClick()
+        composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
         composeRule.onNodeWithText("Pollen").performClick()
         composeRule.onNodeWithTag("record-detail-edit").performClick()
         composeRule.onNodeWithTag("edit-exposure-type-edit").performClick()
@@ -768,7 +802,9 @@ class MainActivityTest {
         composeRule.onNodeWithText("Ingestion").performClick()
 
         createReusableCompoundInline("Breakfast mix", "Oat milk")
+        composeRule.onNodeWithTag("ingestion-reusable-clear").performClick()
         createReusableCompoundInline("Breakfast mix plus", "Oat milk")
+        composeRule.onNodeWithTag("ingestion-reusable-clear").performClick()
         createReusableCompoundInline("Parent crunch", "Breakfast mix")
         composeRule.onNodeWithTag("ingestion-reusable-clear").performClick()
 
@@ -817,10 +853,9 @@ class MainActivityTest {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Exposure").performClick()
         composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
-        composeRule.onNodeWithTag("exposure-type-create-inline").performClick()
-        composeRule.onNodeWithTag("exposure-save").performClick()
+        composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
 
-        waitForText("Pollen")
+        waitForTag("records-list")
         composeRule.onNodeWithText("Pollen").performClick()
         waitForTag("record-detail-delete")
         composeRule.onNodeWithTag("record-detail-delete").performClick()
@@ -850,8 +885,8 @@ class MainActivityTest {
         waitForTag("record-detail-edit")
         composeRule.onNodeWithTag("record-detail-edit").performClick()
         composeRule.onNodeWithTag("edit-exposure-form-screen").assertIsDisplayed()
-        composeRule.onAllNodesWithTag("edit-exposure-type-summary").assertCountEquals(0)
-        composeRule.onAllNodesWithTag("edit-exposure-type-edit").assertCountEquals(0)
+        composeRule.onNodeWithTag("edit-exposure-type-summary").assertExists()
+        composeRule.onNodeWithTag("edit-exposure-type-edit").assertIsDisplayed()
         composeRule.onNodeWithTag("edit-exposure-type").assertTextContains("Pollen")
     }
 
@@ -862,7 +897,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("outbreak-descriptor").performTextInput("Skin flare")
         composeRule.onNodeWithTag("outbreak-body-location").performTextInput("Arm")
         composeRule.onNodeWithTag("outbreak-body-location-create-inline").performClick()
-        composeRule.onNodeWithTag("outbreak-save").performClick()
+        composeRule.onNodeWithTag("outbreak-save").performScrollTo().performClick()
 
         waitForText("Skin flare")
         composeRule.onNodeWithText("Skin flare").performClick()
@@ -887,7 +922,7 @@ class MainActivityTest {
             .assertTextContains("Saved body location was retired. Review the text value before saving.")
         composeRule.onNodeWithTag("outbreak-body-location").assertTextContains("Arm")
 
-        composeRule.onNodeWithTag("outbreak-save").performClick()
+        composeRule.onNodeWithTag("outbreak-save").performScrollTo().performClick()
 
         waitForTag("records-list")
         composeRule.onNodeWithText("Outbreak").assertIsDisplayed()
@@ -899,10 +934,13 @@ class MainActivityTest {
     fun event_catalog_retirement_shows_blocked_message_when_record_still_references_it() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Exposure").performClick()
+        composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
+        composeRule.onNodeWithText("Enter what you were exposed to.").assertIsDisplayed()
         composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
-        composeRule.onNodeWithTag("exposure-type-create-inline").performClick()
-        composeRule.onNodeWithTag("exposure-save").performClick()
+        composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
+        waitForTag("records-list")
         composeRule.onNodeWithText("Pollen").performClick()
+        waitForTag("record-detail-edit")
         composeRule.onNodeWithTag("record-detail-edit").performClick()
         composeRule.onNodeWithTag("edit-exposure-type-edit").performClick()
 
@@ -920,7 +958,7 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("outbreak-descriptor").performTextInput("Skin flare")
         composeRule.onNodeWithTag("outbreak-body-location").performTextInput("Arm")
-        composeRule.onNodeWithTag("outbreak-save").performClick()
+        composeRule.onNodeWithTag("outbreak-save").performScrollTo().performClick()
 
         waitForText("Skin flare")
         composeRule.onNodeWithText("Skin flare").performClick()
@@ -951,13 +989,15 @@ class MainActivityTest {
         composeRule.onNodeWithText("Ingestion").performClick()
         composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Tea")
         composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
-        composeRule.onNodeWithTag("ingestion-save").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
 
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Exposure").performClick()
         composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
-        composeRule.onNodeWithTag("exposure-save").performClick()
+        composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
 
+        waitForTag("records-filter-action")
+        composeRule.onNodeWithTag("records-filter-action").assertIsDisplayed()
         composeRule.onNodeWithTag("records-filter-action").performClick()
         composeRule.onNodeWithTag("records-filter-type-ingestion").performClick()
         composeRule.onNodeWithTag("records-filter-apply").performClick()
@@ -988,7 +1028,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("compound-save").performClick()
 
         waitForTag("create-ingestion-form-screen")
-        composeRule.onNodeWithTag("ingestion-save").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
 
         waitForText("Breakfast mix")
         composeRule.onNodeWithText("Breakfast mix").performClick()
@@ -1005,13 +1045,13 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Random snack")
         composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
-        composeRule.onNodeWithTag("ingestion-save").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
 
         waitForText("Random snack")
         composeRule.onNodeWithText("Random snack").performClick()
 
         composeRule.onNodeWithTag("record-detail-screen").assertIsDisplayed()
-        composeRule.onNodeWithTag("record-detail-field-2").assertTextContains("Manual entry")
+        composeRule.onNodeWithText("Reusable ingredient").assertIsDisplayed()
     }
 
     private fun assertNavigatesToForm(optionLabel: String, destinationTitle: String) {
@@ -1128,6 +1168,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("ingestion-create-compound").performClick()
         composeRule.onNodeWithTag("create-compound-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("compound-name").performTextInput(compoundName)
+        waitForText("$childCompoundName - Compound")
         composeRule.onNodeWithText("$childCompoundName - Compound").performClick()
         composeRule.onNodeWithTag("compound-component-proportion-0").performTextReplacement("100")
         composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")

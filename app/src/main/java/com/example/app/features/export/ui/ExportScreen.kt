@@ -28,13 +28,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.core.designsystem.AppScreenScaffold
 import com.example.app.core.designsystem.LocalOnlyNotice
-import com.example.app.features.export.domain.ExportConfiguration
 import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun ExportScreen(
     viewModelFactory: ViewModelProvider.Factory,
-    onExportStartRequested: (ExportConfiguration) -> Unit = {},
     viewModel: ExportViewModel = viewModel(factory = viewModelFactory)
 ) {
     val state by viewModel.state.collectAsState()
@@ -42,7 +40,7 @@ fun ExportScreen(
     LaunchedEffect(viewModel) {
         viewModel.effects.collectLatest { effect ->
             when (effect) {
-                is ExportUiEffect.ExportStartRequested -> onExportStartRequested(effect.configuration)
+                is ExportUiEffect.ExportDelivered -> Unit
             }
         }
     }
@@ -123,6 +121,39 @@ fun ExportScreen(
                 }
             }
 
+            if (state.stagedExport != null && state.deliveryResult == null) {
+                ExportSection(
+                    title = "Destination",
+                    testTag = "export-destination-selector"
+                ) {
+                    state.destinationOptions.forEach { option ->
+                        ExportChoiceRow(
+                            title = option.label,
+                            description = option.description,
+                            selected = option.isSelected,
+                            testTag = option.testTag,
+                            contentDescription = "Export destination ${option.label}",
+                            onClick = { viewModel.onIntent(ExportUiIntent.SelectDestination(option.destination)) }
+                        )
+                    }
+                }
+            }
+
+            if (state.stagedExport != null && state.selectedDestination != null && state.deliveryResult == null) {
+                FinalConfirmationSection(
+                    state = state,
+                    onConfirm = { viewModel.onIntent(ExportUiIntent.ConfirmFinalDelivery) },
+                    onCancel = { viewModel.onIntent(ExportUiIntent.CancelFinalDelivery) }
+                )
+            }
+
+            state.deliveryResult?.let { result ->
+                DeliveryResultSection(
+                    result = result,
+                    scopeSummary = state.summaryText
+                )
+            }
+
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -130,25 +161,25 @@ fun ExportScreen(
                 state.generalValidationMessage?.let { message ->
                     ValidationMessage(message = message, testTag = "export-general-validation")
                 }
-                state.requestMessage?.let { message ->
+                state.statusMessage?.let { message ->
                     Text(
                         text = message,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.testTag("export-request-message")
+                        modifier = Modifier.testTag("export-status-message")
                     )
                 }
                 if (state.isReviewingWarnings) {
                     WarningReviewSection(
                         warningMessages = state.warningMessages,
-                        isBusy = state.isConfirming,
+                        isBusy = state.isBusy,
                         onContinue = { viewModel.onIntent(ExportUiIntent.ContinueWarningReview) },
                         onCancel = { viewModel.onIntent(ExportUiIntent.CancelWarningReview) }
                     )
-                } else {
+                } else if (state.stagedExport == null) {
                     Button(
                         onClick = { viewModel.onIntent(ExportUiIntent.ConfirmExportStart) },
-                        enabled = !state.isConfirming,
+                        enabled = !state.isBusy,
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("export-confirm-action")
@@ -158,6 +189,99 @@ fun ExportScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun FinalConfirmationSection(
+    state: ExportUiState,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("export-final-confirmation")
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(text = "Final confirmation", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = state.summaryText,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.testTag("export-final-scope-summary")
+            )
+            Text(
+                text = "Destination: ${state.destinationOptions.firstOrNull { it.isSelected }?.label.orEmpty()}",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.testTag("export-final-destination")
+            )
+            Text(
+                text = "File: ${state.stagedExport?.artifact?.fileName.orEmpty()}",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.testTag("export-final-file-name")
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onCancel,
+                    enabled = !state.isBusy,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("export-final-cancel")
+                ) {
+                    Text(text = "Cancel")
+                }
+                Button(
+                    onClick = onConfirm,
+                    enabled = !state.isBusy,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("export-final-confirm")
+                ) {
+                    Text(text = "Confirm save")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeliveryResultSection(
+    result: com.example.app.features.export.domain.ExportDeliveryResult,
+    scopeSummary: String
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("export-result-summary")
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(text = "Export saved", style = MaterialTheme.typography.titleMedium)
+            Text(text = scopeSummary, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = "Destination: ${result.locationLabel}",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.testTag("export-result-destination")
+            )
+            Text(
+                text = "File: ${result.fileName}",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.testTag("export-result-file-name")
+            )
+            Text(
+                text = "Location: ${result.locationUri}",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("export-result-location")
+            )
         }
     }
 }

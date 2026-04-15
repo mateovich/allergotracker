@@ -38,8 +38,10 @@ import com.example.app.features.eventcatalog.domain.ReusableEventCatalogKind
 import com.example.app.features.eventcatalog.domain.RetireReusableEventCatalogUseCase
 import com.example.app.features.eventcatalog.domain.UpdateReusableEventCatalogUseCase
 import com.example.app.features.eventcatalog.ui.EditReusableEventCatalogViewModelFactory
+import com.example.app.features.export.domain.DeliverStagedExportUseCase
 import com.example.app.features.export.domain.ValidateExportConfigurationUseCase
 import com.example.app.features.export.domain.GenerateVersionedJsonExportUseCase
+import com.example.app.features.export.data.DownloadsExportDeliveryRepository
 import com.example.app.features.export.data.ExportSnapshotDataAccess
 import com.example.app.features.export.data.KotlinxVersionedJsonExportSerializer
 import com.example.app.features.export.data.LocalJsonExportArtifactWriter
@@ -453,11 +455,19 @@ class AppContainer(appContext: Context) {
         serializer = KotlinxVersionedJsonExportSerializer(),
         currentTimeProvider = systemCurrentTimeProvider
     )
+    private val deliverStagedExportUseCase = DeliverStagedExportUseCase(
+        repository = DownloadsExportDeliveryRepository(appContext)
+    )
 
     val recordsViewModelFactory: RecordsViewModelFactory =
         RecordsViewModelFactory(systemCurrentTimeProvider, observeRecordCountUseCase, observeRecordsUseCase)
     val exportViewModelFactory: ExportViewModelFactory =
-        ExportViewModelFactory(observeRecordCountUseCase, validateExportConfigurationUseCase, generateVersionedJsonExportUseCase)
+        ExportViewModelFactory(
+            observeRecordCountUseCase,
+            validateExportConfigurationUseCase,
+            generateVersionedJsonExportUseCase,
+            deliverStagedExportUseCase
+        )
     val createIngestionViewModelFactory: CreateIngestionViewModelFactory =
         CreateIngestionViewModelFactory(
             createIngestionDefaultsUseCase,
