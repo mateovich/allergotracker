@@ -1,5 +1,7 @@
 package com.example.app.features.export.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,12 +22,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.app.MainActivity
 import com.example.app.core.designsystem.AppScreenScaffold
 import com.example.app.core.designsystem.LocalOnlyNotice
 import kotlinx.coroutines.flow.collectLatest
@@ -36,6 +40,10 @@ fun ExportScreen(
     viewModel: ExportViewModel = viewModel(factory = viewModelFactory)
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
+    val importPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        viewModel.onIntent(ExportUiIntent.ImportDocumentSelected(uri?.toString()))
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collectLatest { effect ->
@@ -158,6 +166,19 @@ fun ExportScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                ImportSection(
+                    state = state,
+                    onSelectFile = {
+                        val testUri = (context as? MainActivity)?.consumeImportDocumentForTesting()
+                        if (testUri != null) {
+                            viewModel.onIntent(ExportUiIntent.ImportDocumentSelected(testUri))
+                        } else {
+                            importPickerLauncher.launch(arrayOf("application/json"))
+                        }
+                    },
+                    onConfirmImport = { viewModel.onIntent(ExportUiIntent.ConfirmImportApply) },
+                    onCancelImport = { viewModel.onIntent(ExportUiIntent.CancelImportReview) }
+                )
                 state.generalValidationMessage?.let { message ->
                     ValidationMessage(message = message, testTag = "export-general-validation")
                 }
@@ -187,6 +208,119 @@ fun ExportScreen(
                     ) {
                         Text(text = state.confirmActionLabel)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ImportSection(
+    state: ExportUiState,
+    onSelectFile: () -> Unit,
+    onConfirmImport: () -> Unit,
+    onCancelImport: () -> Unit
+) {
+    ExportSection(
+        title = "Import",
+        testTag = "import-section"
+    ) {
+        Text(
+            text = "Choose an exported JSON file to validate locally before anything is written.",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.testTag("import-copy")
+        )
+        Button(
+            onClick = onSelectFile,
+            enabled = !state.isBusy,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("import-select-file")
+        ) {
+            Text("Choose import file")
+        }
+        state.importValidationMessage?.let { message ->
+            ValidationMessage(message = message, testTag = "import-validation")
+        }
+        state.importStatusMessage?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.testTag("import-status-message")
+            )
+        }
+        state.importReview?.let { review ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("import-review-card")
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Import review", style = MaterialTheme.typography.titleMedium)
+                    Text("File: ${review.fileName}", modifier = Modifier.testTag("import-review-file-name"))
+                    Text("Schema: ${review.schemaVersion}", modifier = Modifier.testTag("import-review-schema"))
+                    Text(
+                        text = "Create ${review.summary.ingredientsToCreate} ingredients, ${review.summary.compoundsToCreate} compounds, and ${review.summary.eventCatalogEntriesToCreate} saved values.",
+                        modifier = Modifier.testTag("import-review-create-summary")
+                    )
+                    Text(
+                        text = "Reuse ${review.summary.ingredientsToReuse} ingredients, update ${review.summary.compoundsToUpdate} compounds, and create ${review.summary.ingestionsToCreate + review.summary.exposuresToCreate + review.summary.outbreaksToCreate} events.",
+                        modifier = Modifier.testTag("import-review-reuse-summary")
+                    )
+                    Text(
+                        text = "Reuse ${review.summary.eventCatalogEntriesToReuse} saved values and keep compound updates explicit before apply.",
+                        modifier = Modifier.testTag("import-review-catalog-summary")
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onCancelImport,
+                            enabled = !state.isBusy,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("import-cancel-review")
+                        ) {
+                            Text("Cancel")
+                        }
+                        Button(
+                            onClick = onConfirmImport,
+                            enabled = !state.isBusy,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("import-confirm-apply")
+                        ) {
+                            Text("Confirm import")
+                        }
+                    }
+                }
+            }
+        }
+        state.importResult?.let { result ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("import-result-card")
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Import completed", style = MaterialTheme.typography.titleMedium)
+                    Text("File: ${result.fileName}", modifier = Modifier.testTag("import-result-file-name"))
+                    Text(
+                        text = "Created ${result.summary.ingestionsToCreate + result.summary.exposuresToCreate + result.summary.outbreaksToCreate} events from the validated dataset.",
+                        modifier = Modifier.testTag("import-result-summary")
+                    )
+                    Text(
+                        text = "Ingredients: ${result.summary.ingredientsToCreate} new / ${result.summary.ingredientsToReuse} reused. Compounds: ${result.summary.compoundsToCreate} new / ${result.summary.compoundsToUpdate} updated. Saved values: ${result.summary.eventCatalogEntriesToCreate} new / ${result.summary.eventCatalogEntriesToReuse} reused.",
+                        modifier = Modifier.testTag("import-result-breakdown")
+                    )
                 }
             }
         }

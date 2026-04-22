@@ -8,4 +8,5 @@ sealed class DomainError(open val message: String) {
     data class IntegrityError(override val message: String) : DomainError(message)
     data class PersistenceError(override val message: String) : DomainError(message)
     data class ExportError(override val message: String) : DomainError(message)
+    data class ImportError(override val message: String) : DomainError(message)
 }

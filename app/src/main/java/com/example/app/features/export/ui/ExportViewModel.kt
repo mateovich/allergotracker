@@ -16,8 +16,12 @@ import com.example.app.features.export.domain.ExportWarningDecision
 import com.example.app.features.export.domain.GenerateVersionedJsonExportUseCase
 import com.example.app.features.export.domain.PreparedExport
 import com.example.app.features.export.domain.ValidateExportConfigurationUseCase
+import com.example.app.features.import.domain.ApplyStructuredImportUseCase
+import com.example.app.features.import.domain.ReviewStructuredImportUseCase
+import com.example.app.features.import.domain.StructuredImportReview
 import com.example.app.features.records.domain.ObserveRecordCountUseCase
 import com.example.app.features.records.domain.RecordEventType
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,13 +35,18 @@ class ExportViewModel(
     observeRecordCountUseCase: ObserveRecordCountUseCase,
     private val validateExportConfigurationUseCase: ValidateExportConfigurationUseCase,
     private val generateVersionedJsonExportUseCase: GenerateVersionedJsonExportUseCase,
-    private val deliverStagedExportUseCase: DeliverStagedExportUseCase
+    private val deliverStagedExportUseCase: DeliverStagedExportUseCase,
+    private val reviewStructuredImportUseCase: ReviewStructuredImportUseCase,
+    private val applyStructuredImportUseCase: ApplyStructuredImportUseCase
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(createState())
     val state: StateFlow<ExportUiState> = mutableState.asStateFlow()
 
     private var pendingWarningConfiguration: ExportConfiguration? = null
     private var pendingPreparedExport: PreparedExport? = null
+    private var pendingImportReview: StructuredImportReview? = null
+    private var importReviewJob: Job? = null
+    private var importReviewRequestToken: Long = 0L
 
     private val effectChannel = Channel<ExportUiEffect>(capacity = Channel.BUFFERED)
     val effects = effectChannel.receiveAsFlow()
@@ -55,10 +64,14 @@ class ExportViewModel(
                     generalValidationMessage = currentState.generalValidationMessage,
                     warningMessages = currentState.warningMessages,
                     statusMessage = currentState.statusMessage,
+                    importValidationMessage = currentState.importValidationMessage,
+                    importStatusMessage = currentState.importStatusMessage,
                     isBusy = currentState.isBusy,
                     isReviewingWarnings = currentState.isReviewingWarnings,
                     stagedExport = currentState.stagedExport,
                     deliveryResult = currentState.deliveryResult,
+                    importReview = currentState.importReview,
+                    importResult = currentState.importResult,
                     summaryText = currentState.summaryText.takeIf {
                         currentState.stagedExport != null || currentState.deliveryResult != null
                     },
@@ -94,6 +107,104 @@ class ExportViewModel(
             ExportUiIntent.CancelWarningReview -> cancelWarningReview()
             ExportUiIntent.ConfirmFinalDelivery -> confirmFinalDelivery()
             ExportUiIntent.CancelFinalDelivery -> cancelFinalDelivery()
+            ExportUiIntent.RequestImportSelection -> Unit
+            is ExportUiIntent.ImportDocumentSelected -> importDocumentSelected(intent.documentUri)
+            ExportUiIntent.ConfirmImportApply -> confirmImportApply()
+            ExportUiIntent.CancelImportReview -> cancelImportReview()
+        }
+    }
+
+    private fun importDocumentSelected(documentUri: String?) {
+        if (mutableState.value.isBusy && importReviewJob == null) return
+        if (documentUri.isNullOrBlank()) {
+            importReviewJob?.cancel()
+            importReviewJob = null
+            importReviewRequestToken += 1
+            pendingImportReview = null
+            mutableState.value = mutableState.value.copy(
+                isBusy = false,
+                importReview = null,
+                importResult = null,
+                importValidationMessage = null,
+                importStatusMessage = "Import selection canceled."
+            )
+            return
+        }
+        importReviewJob?.cancel()
+        importReviewRequestToken += 1
+        val requestToken = importReviewRequestToken
+        pendingImportReview = null
+        mutableState.value = mutableState.value.copy(
+            isBusy = true,
+            importValidationMessage = null,
+            importStatusMessage = null,
+            importResult = null,
+            importReview = null
+        )
+        importReviewJob = viewModelScope.launch {
+            when (val result = reviewStructuredImportUseCase(documentUri)) {
+                is AppResult.Success -> {
+                    if (requestToken != importReviewRequestToken) return@launch
+                    pendingImportReview = result.value
+                    mutableState.value = mutableState.value.copy(
+                        isBusy = false,
+                        importReview = result.value,
+                        importStatusMessage = "Import review ready. Confirm to apply the validated dataset locally."
+                    )
+                }
+
+                is AppResult.Error -> {
+                    if (requestToken != importReviewRequestToken) return@launch
+                    mutableState.value = mutableState.value.copy(
+                        isBusy = false,
+                        importValidationMessage = result.error.message,
+                        importReview = null
+                    )
+                }
+            }
+            if (requestToken == importReviewRequestToken) {
+                importReviewJob = null
+            }
+        }
+    }
+
+    private fun cancelImportReview() {
+        importReviewJob?.cancel()
+        importReviewJob = null
+        importReviewRequestToken += 1
+        pendingImportReview = null
+        mutableState.value = mutableState.value.copy(
+            isBusy = false,
+            importReview = null,
+            importResult = null,
+            importStatusMessage = "Import review canceled. Choose another file when ready.",
+            importValidationMessage = null
+        )
+    }
+
+    private fun confirmImportApply() {
+        val review = pendingImportReview ?: return
+        if (mutableState.value.isBusy) return
+        mutableState.value = mutableState.value.copy(isBusy = true, importValidationMessage = null)
+        viewModelScope.launch {
+            when (val result = applyStructuredImportUseCase(review)) {
+                is AppResult.Success -> {
+                    pendingImportReview = null
+                    mutableState.value = mutableState.value.copy(
+                        isBusy = false,
+                        importReview = null,
+                        importResult = result.value,
+                        importStatusMessage = "Import completed. The validated dataset was applied atomically."
+                    )
+                }
+
+                is AppResult.Error -> {
+                    mutableState.value = mutableState.value.copy(
+                        isBusy = false,
+                        importValidationMessage = result.error.message
+                    )
+                }
+            }
         }
     }
 
@@ -310,6 +421,8 @@ class ExportViewModel(
         formatValidationMessage: String? = null,
         scopeValidationMessage: String? = null,
         generalValidationMessage: String? = null,
+        importValidationMessage: String? = null,
+        importStatusMessage: String? = null,
         warningMessages: List<String> = emptyList(),
         statusMessage: String? = null,
         summaryText: String? = null,
@@ -317,6 +430,8 @@ class ExportViewModel(
         isReviewingWarnings: Boolean = false,
         stagedExport: com.example.app.features.export.domain.GeneratedJsonExport? = null,
         deliveryResult: ExportDeliveryResult? = null,
+        importReview: StructuredImportReview? = null,
+        importResult: com.example.app.features.import.domain.StructuredImportApplyResult? = null,
         totalRecordCount: Int = 0
     ): ExportUiState {
         return ExportUiState(
@@ -353,12 +468,16 @@ class ExportViewModel(
             formatValidationMessage = formatValidationMessage,
             scopeValidationMessage = scopeValidationMessage,
             generalValidationMessage = generalValidationMessage,
+            importValidationMessage = importValidationMessage,
+            importStatusMessage = importStatusMessage,
             warningMessages = warningMessages,
             statusMessage = statusMessage,
             isBusy = isBusy,
             isReviewingWarnings = isReviewingWarnings,
             stagedExport = stagedExport,
             deliveryResult = deliveryResult,
+            importReview = importReview,
+            importResult = importResult,
             totalRecordCount = totalRecordCount
         )
     }

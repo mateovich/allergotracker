@@ -6,6 +6,8 @@ import com.example.app.features.export.domain.ExportDestination
 import com.example.app.features.export.domain.ExportFormat
 import com.example.app.features.export.domain.ExportScope
 import com.example.app.features.export.domain.GeneratedJsonExport
+import com.example.app.features.import.domain.StructuredImportApplyResult
+import com.example.app.features.import.domain.StructuredImportReview
 import com.example.app.features.records.domain.RecordEventType
 
 data class ExportFormatOptionUiModel(
@@ -45,10 +47,14 @@ data class ExportUiState(
     val generalValidationMessage: String? = null,
     val warningMessages: List<String> = emptyList(),
     val statusMessage: String? = null,
+    val importValidationMessage: String? = null,
+    val importStatusMessage: String? = null,
     val isBusy: Boolean = false,
     val isReviewingWarnings: Boolean = false,
     val stagedExport: GeneratedJsonExport? = null,
     val deliveryResult: ExportDeliveryResult? = null,
+    val importReview: StructuredImportReview? = null,
+    val importResult: StructuredImportApplyResult? = null,
     val confirmActionLabel: String = "Stage export",
     val privacyNotice: String = "Exports can contain sensitive local records. Review the summary before sharing.",
     val totalRecordCount: Int = 0
@@ -63,6 +69,10 @@ sealed interface ExportUiIntent {
     data object CancelWarningReview : ExportUiIntent
     data object ConfirmFinalDelivery : ExportUiIntent
     data object CancelFinalDelivery : ExportUiIntent
+    data object RequestImportSelection : ExportUiIntent
+    data class ImportDocumentSelected(val documentUri: String?) : ExportUiIntent
+    data object ConfirmImportApply : ExportUiIntent
+    data object CancelImportReview : ExportUiIntent
 }
 
 sealed interface ExportUiEffect {

@@ -41,7 +41,7 @@ class MainActivityTest {
 
     @Test
     fun app_launches_into_records_with_enabled_primary_add_action() {
-        composeRule.onNodeWithText("Records").assertIsDisplayed()
+        composeRule.onNodeWithTag("top-level-records").assertIsDisplayed()
         composeRule.onNodeWithTag("records-screen-content").assertIsDisplayed()
         composeRule.onNodeWithTag("top-level-records").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Add record").assertIsDisplayed().assertIsEnabled()
@@ -142,6 +142,29 @@ class MainActivityTest {
             .assertIsDisplayed()
         composeRule.onNodeWithTag("export-result-destination").performScrollTo().assertExists()
         composeRule.onNodeWithText("Export saved").assertIsDisplayed()
+    }
+
+    @Test
+    fun import_flow_requires_explicit_file_selection_review_and_confirm_before_success() {
+        composeRule.activity.enqueueImportDocumentForTesting(
+            fileName = "import.json",
+            contents = validImportJson()
+        )
+
+        composeRule.onNodeWithContentDescription("Export").performClick()
+        composeRule.onNodeWithTag("import-select-file").performScrollTo().performClick()
+
+        waitForTag("import-review-card")
+        composeRule.onNodeWithTag("import-review-card").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("import-review-file-name").assertExists()
+        composeRule.onNodeWithTag("import-review-catalog-summary").assertExists()
+        composeRule.onAllNodesWithTag("import-result-card").assertCountEquals(0)
+        composeRule.onNodeWithTag("import-confirm-apply").performScrollTo().performClick()
+
+        waitForTag("import-result-card")
+        composeRule.onNodeWithTag("import-result-card").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("import-result-summary").assertExists()
+        composeRule.onNodeWithTag("import-result-breakdown").assertExists()
     }
 
     @Test
@@ -1205,5 +1228,39 @@ class MainActivityTest {
         composeRule.waitUntil(timeoutMillis = 15_000) {
             composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
         }
+    }
+
+    private fun validImportJson(): String {
+        return """
+            {
+              "schema_version": "2.0.0",
+              "exported_at": "2023-11-14T22:13:20Z",
+              "data": {
+                "ingestions": [
+                  {
+                    "id": 1,
+                    "item_name": "Oat milk",
+                    "quantity_level": 2,
+                    "occurred_at": "2023-11-14T22:13:20Z",
+                    "created_at": "2023-11-14T22:13:20Z",
+                    "reusable_entity_ref": { "kind": "ingredient", "id": 10 }
+                  }
+                ],
+                "exposures": [],
+                "outbreaks": [],
+                "reusable_ingredients": [
+                  {
+                    "id": 10,
+                    "name": "Oat milk",
+                    "created_at": "2023-11-14T22:13:20Z",
+                    "updated_at": "2023-11-14T22:13:20Z"
+                  }
+                ],
+                "reusable_compounds": [],
+                "reusable_event_catalog": [],
+                "normalized_base_ingredients": []
+              }
+            }
+        """.trimIndent()
     }
 }

@@ -12,6 +12,7 @@ class DomainErrorTest {
         assertEquals("i", DomainError.IntegrityError("i").message)
         assertEquals("p", DomainError.PersistenceError("p").message)
         assertEquals("e", DomainError.ExportError("e").message)
+        assertEquals("m", DomainError.ImportError("m").message)
         assertTrue(DomainError.ValidationError("v") != DomainError.IntegrityError("v"))
     }
 }

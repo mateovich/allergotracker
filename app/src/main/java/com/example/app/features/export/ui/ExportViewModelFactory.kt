@@ -5,13 +5,17 @@ import androidx.lifecycle.ViewModelProvider
 import com.example.app.features.export.domain.DeliverStagedExportUseCase
 import com.example.app.features.export.domain.GenerateVersionedJsonExportUseCase
 import com.example.app.features.export.domain.ValidateExportConfigurationUseCase
+import com.example.app.features.import.domain.ApplyStructuredImportUseCase
+import com.example.app.features.import.domain.ReviewStructuredImportUseCase
 import com.example.app.features.records.domain.ObserveRecordCountUseCase
 
 class ExportViewModelFactory(
     private val observeRecordCountUseCase: ObserveRecordCountUseCase,
     private val validateExportConfigurationUseCase: ValidateExportConfigurationUseCase,
     private val generateVersionedJsonExportUseCase: GenerateVersionedJsonExportUseCase,
-    private val deliverStagedExportUseCase: DeliverStagedExportUseCase
+    private val deliverStagedExportUseCase: DeliverStagedExportUseCase,
+    private val reviewStructuredImportUseCase: ReviewStructuredImportUseCase,
+    private val applyStructuredImportUseCase: ApplyStructuredImportUseCase
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -20,7 +24,9 @@ class ExportViewModelFactory(
                 observeRecordCountUseCase = observeRecordCountUseCase,
                 validateExportConfigurationUseCase = validateExportConfigurationUseCase,
                 generateVersionedJsonExportUseCase = generateVersionedJsonExportUseCase,
-                deliverStagedExportUseCase = deliverStagedExportUseCase
+                deliverStagedExportUseCase = deliverStagedExportUseCase,
+                reviewStructuredImportUseCase = reviewStructuredImportUseCase,
+                applyStructuredImportUseCase = applyStructuredImportUseCase
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")

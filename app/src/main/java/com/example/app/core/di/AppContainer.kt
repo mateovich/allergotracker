@@ -47,6 +47,11 @@ import com.example.app.features.export.data.KotlinxVersionedJsonExportSerializer
 import com.example.app.features.export.data.LocalJsonExportArtifactWriter
 import com.example.app.features.export.data.RoomExportSnapshotRepository
 import com.example.app.features.export.ui.ExportViewModelFactory
+import com.example.app.features.import.data.AndroidImportDocumentReader
+import com.example.app.features.import.data.KotlinxVersionedJsonImportParser
+import com.example.app.features.import.data.RoomStructuredImportRepository
+import com.example.app.features.import.domain.ApplyStructuredImportUseCase
+import com.example.app.features.import.domain.ReviewStructuredImportUseCase
 import com.example.app.features.exposure.data.RoomExposureRepository
 import com.example.app.features.exposure.domain.CreateExposureDefaultsUseCase
 import com.example.app.features.exposure.domain.CreateExposureEventUseCase
@@ -458,6 +463,25 @@ class AppContainer(appContext: Context) {
     private val deliverStagedExportUseCase = DeliverStagedExportUseCase(
         repository = DownloadsExportDeliveryRepository(appContext)
     )
+    private val structuredImportRepository = RoomStructuredImportRepository(
+        reusableIngredientDao = reusableIngredientDao,
+        reusableCompoundDao = reusableCompoundDao,
+        reusableEventCatalogDao = reusableEventCatalogDao,
+        createReusableIngredientUseCase = createReusableIngredientUseCase,
+        createReusableCompoundUseCase = createReusableCompoundUseCase,
+        updateReusableCompoundUseCase = updateReusableCompoundUseCase,
+        createIngestionEventUseCase = createIngestionEventUseCase,
+        createExposureEventUseCase = createExposureEventUseCase,
+        createOutbreakEventUseCase = createOutbreakEventUseCase,
+        nowEpochMillis = systemCurrentTimeProvider::nowEpochMillis,
+        runAtomically = { block -> appDatabase.withTransaction { block() } }
+    )
+    private val reviewStructuredImportUseCase = ReviewStructuredImportUseCase(
+        documentReader = AndroidImportDocumentReader(appContext.contentResolver),
+        parser = KotlinxVersionedJsonImportParser(),
+        repository = structuredImportRepository
+    )
+    private val applyStructuredImportUseCase = ApplyStructuredImportUseCase(structuredImportRepository)
 
     val recordsViewModelFactory: RecordsViewModelFactory =
         RecordsViewModelFactory(systemCurrentTimeProvider, observeRecordCountUseCase, observeRecordsUseCase)
@@ -466,7 +490,9 @@ class AppContainer(appContext: Context) {
             observeRecordCountUseCase,
             validateExportConfigurationUseCase,
             generateVersionedJsonExportUseCase,
-            deliverStagedExportUseCase
+            deliverStagedExportUseCase,
+            reviewStructuredImportUseCase,
+            applyStructuredImportUseCase
         )
     val createIngestionViewModelFactory: CreateIngestionViewModelFactory =
         CreateIngestionViewModelFactory(

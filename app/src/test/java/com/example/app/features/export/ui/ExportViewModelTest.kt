@@ -21,6 +21,16 @@ import com.example.app.features.export.domain.GenerateVersionedJsonExportUseCase
 import com.example.app.features.export.domain.GeneratedJsonExport
 import com.example.app.features.export.domain.PreparedExport
 import com.example.app.features.export.domain.ValidateExportConfigurationUseCase
+import com.example.app.features.import.domain.ApplyStructuredImportUseCase
+import com.example.app.features.import.domain.ImportDocumentContent
+import com.example.app.features.import.domain.ImportDocumentReader
+import com.example.app.features.import.domain.PreparedStructuredImport
+import com.example.app.features.import.domain.ReviewStructuredImportUseCase
+import com.example.app.features.import.domain.StructuredImportApplyResult
+import com.example.app.features.import.domain.StructuredImportRepository
+import com.example.app.features.import.domain.StructuredImportReview
+import com.example.app.features.import.domain.StructuredImportSummary
+import com.example.app.features.import.domain.VersionedJsonImportParser
 import com.example.app.features.records.domain.ObserveRecordCountUseCase
 import com.example.app.features.records.domain.RecordEventType
 import com.example.app.features.records.domain.RecordSummary
@@ -61,6 +71,8 @@ class ExportViewModelTest {
     private var nextReviewResult: ExportPreflightReview? = null
     private var reviewedPreparedExport: PreparedExport? = null
     private var generatedPreparedExport: PreparedExport? = null
+    private var importApplyInvocationCount: Int = 0
+    private var pendingImportReviewGate: CompletableDeferred<Unit>? = null
     private var nextGenerateResult: AppResult<GeneratedJsonExport> = AppResult.Success(
         GeneratedJsonExport(
             configuration = ExportConfiguration(
@@ -157,11 +169,72 @@ class ExportViewModelTest {
                 }
             }
         )
+        val structuredImportRepository = object : StructuredImportRepository {
+            override suspend fun review(
+                document: ImportDocumentContent,
+                envelope: com.example.app.core.export.schema.VersionedExportEnvelopeDto
+            ): AppResult<StructuredImportReview> {
+                pendingImportReviewGate?.await()
+                return AppResult.Success(
+                    StructuredImportReview(
+                        fileName = document.fileName,
+                        schemaVersion = envelope.schemaVersion,
+                        summary = StructuredImportSummary(
+                            ingredientsToCreate = 1,
+                            ingredientsToReuse = 0,
+                            compoundsToCreate = 1,
+                            compoundsToUpdate = 0,
+                            eventCatalogEntriesToCreate = 0,
+                            eventCatalogEntriesToReuse = 0,
+                            ingestionsToCreate = 1,
+                            exposuresToCreate = 0,
+                            outbreaksToCreate = 0
+                        ),
+                        preparedImport = PreparedStructuredImport(document, envelope)
+                    )
+                )
+            }
+
+            override suspend fun apply(review: StructuredImportReview): AppResult<StructuredImportApplyResult> {
+                importApplyInvocationCount += 1
+                return AppResult.Success(StructuredImportApplyResult(review.fileName, review.summary))
+            }
+        }
+        val reviewStructuredImportUseCase = ReviewStructuredImportUseCase(
+            documentReader = object : ImportDocumentReader {
+                override suspend fun readDocument(documentUri: String): AppResult<ImportDocumentContent> {
+                    return AppResult.Success(
+                        ImportDocumentContent(
+                            documentUri = documentUri,
+                            fileName = "import.json",
+                            rawJson = """
+                                {"schema_version":"2.0.0","exported_at":"2023-11-14T22:13:20Z","data":{"ingestions":[],"exposures":[],"outbreaks":[],"reusable_ingredients":[],"reusable_compounds":[],"reusable_event_catalog":[],"normalized_base_ingredients":[]}}
+                            """.trimIndent()
+                        )
+                    )
+                }
+            },
+            parser = object : VersionedJsonImportParser {
+                override fun parse(rawJson: String): AppResult<com.example.app.core.export.schema.VersionedExportEnvelopeDto> {
+                    return AppResult.Success(
+                        com.example.app.core.export.schema.VersionedExportEnvelopeDto(
+                            schemaVersion = "2.0.0",
+                            exportedAt = "2023-11-14T22:13:20Z",
+                            data = com.example.app.core.export.schema.VersionedExportDataDto()
+                        )
+                    )
+                }
+            },
+            repository = structuredImportRepository
+        )
+        val applyStructuredImportUseCase = ApplyStructuredImportUseCase(structuredImportRepository)
         return ExportViewModel(
             observeRecordCountUseCase = observeRecordCountUseCase,
             validateExportConfigurationUseCase = validateExportConfigurationUseCase,
             generateVersionedJsonExportUseCase = fakeGenerateUseCase,
-            deliverStagedExportUseCase = fakeDeliveryUseCase
+            deliverStagedExportUseCase = fakeDeliveryUseCase,
+            reviewStructuredImportUseCase = reviewStructuredImportUseCase,
+            applyStructuredImportUseCase = applyStructuredImportUseCase
         )
     }
 
@@ -447,6 +520,40 @@ class ExportViewModelTest {
         )
         assertNull(viewModel.state.value.deliveryResult)
         assertEquals(ExportDestination.DeviceDownloads, viewModel.state.value.selectedDestination)
+    }
+
+    @Test
+    fun canceling_replacement_import_selection_clears_review_and_blocks_stale_apply() {
+        val viewModel = createViewModel()
+
+        viewModel.onIntent(ExportUiIntent.ImportDocumentSelected("file:///tmp/import.json"))
+
+        assertTrue(viewModel.state.value.importReview != null)
+
+        viewModel.onIntent(ExportUiIntent.ImportDocumentSelected(null))
+        viewModel.onIntent(ExportUiIntent.ConfirmImportApply)
+
+        assertNull(viewModel.state.value.importReview)
+        assertNull(viewModel.state.value.importResult)
+        assertEquals(0, importApplyInvocationCount)
+        assertEquals("Import selection canceled.", viewModel.state.value.importStatusMessage)
+    }
+
+    @Test
+    fun canceling_in_flight_import_review_prevents_stale_review_from_resurfacing() = runBlocking {
+        pendingImportReviewGate = CompletableDeferred()
+        val viewModel = createViewModel()
+
+        viewModel.onIntent(ExportUiIntent.ImportDocumentSelected("file:///tmp/import.json"))
+
+        assertTrue(viewModel.state.value.isBusy)
+
+        viewModel.onIntent(ExportUiIntent.CancelImportReview)
+        pendingImportReviewGate?.complete(Unit)
+
+        assertNull(viewModel.state.value.importReview)
+        assertEquals("Import review canceled. Choose another file when ready.", viewModel.state.value.importStatusMessage)
+        assertTrue(!viewModel.state.value.isBusy)
     }
 
     @Test

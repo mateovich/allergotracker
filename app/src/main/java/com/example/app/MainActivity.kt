@@ -1,5 +1,6 @@
 package com.example.app
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -9,6 +10,7 @@ import com.example.app.navigation.AppNavGraph
 
 class MainActivity : ComponentActivity() {
     private lateinit var appContainer: AppContainer
+    private var pendingImportDocumentUri: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,5 +39,17 @@ class MainActivity : ComponentActivity() {
 
     fun resetAppStateForTesting() {
         appContainer.clearAllDataForTesting()
+    }
+
+    fun enqueueImportDocumentForTesting(fileName: String, contents: String) {
+        val file = cacheDir.resolve(fileName)
+        file.writeText(contents)
+        pendingImportDocumentUri = Uri.fromFile(file).toString()
+    }
+
+    fun consumeImportDocumentForTesting(): String? {
+        val documentUri = pendingImportDocumentUri
+        pendingImportDocumentUri = null
+        return documentUri
     }
 }
