@@ -1,0 +1,11 @@
+Allergotracker helps capture ingestion, exposure, and outbreak events on-device
+without mandatory Play, Firebase, billing, or other proprietary mobile-service
+dependencies.
+
+The app preserves explicit export confirmation, platform-scoped import access,
+and a minimal permission surface so alternative distribution remains practical
+without weakening privacy boundaries.
+
+The current publication package is prepared for F-Droid review, with the
+remaining publication blocker documented explicitly: provide the production
+signing certificate fingerprint for AllowedAPKSigningKeys.

@@ -1,0 +1,19 @@
+RepoType: git
+Repo: https://github.com/mateovich/allergotracker.git
+SourceCode: https://github.com/mateovich/allergotracker
+IssueTracker: https://github.com/mateovich/allergotracker/issues
+License: MIT
+Summary: Offline delayed-allergy tracking with structured export and import.
+Description: |-
+  Allergotracker is an Android-native, offline-first app for logging ingestion,
+  exposure, and outbreak events without mandatory dependence on store services.
+
+  The app keeps capture, review, structured export, and structured import
+  available on-device while preserving scoped file access and a minimal
+  permission surface.
+
+  Story 7.5 remediated the placeholder package identity and added F-Droid-ready
+  publication structure, but final publication still depends on supplying the
+  production signing certificate fingerprint for AllowedAPKSigningKeys.
+CurrentVersion: "1.0"
+CurrentVersionCode: 1

@@ -1,0 +1,1 @@
+Initial 1.0 release candidate for alternative distribution and F-Droid compliance review.

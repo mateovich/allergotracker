@@ -1,0 +1,237 @@
+package io.github.mateovich.allergotracker.features.outbreak.domain
+
+import io.github.mateovich.allergotracker.core.common.error.DomainError
+import io.github.mateovich.allergotracker.core.common.result.AppResult
+import io.github.mateovich.allergotracker.features.eventcatalog.domain.ReusableEventCatalog
+import io.github.mateovich.allergotracker.features.eventcatalog.domain.ReusableEventCatalogKind
+import io.github.mateovich.allergotracker.features.ingestion.domain.CurrentTimeProvider
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class CreateOutbreakEventUseCaseTest {
+
+    private val fixedNow = 1_700_000_000_000L
+
+    @Test
+    fun returns_field_errors_when_required_values_are_missing() = runBlocking {
+        val repository = FakeOutbreakRepository()
+        val useCase = CreateOutbreakEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow)
+        )
+
+        val result = useCase(
+            CreateOutbreakEventCommand(
+                outbreakDescriptor = "   ",
+                bodyLocation = " ",
+                intensityLevel = 3,
+                occurredAtEpochMs = fixedNow,
+                notes = ""
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Enter what happened.", error.fieldErrors["outbreakDescriptor"])
+        assertEquals("Enter where on the body it happened.", error.fieldErrors["bodyLocation"])
+        assertTrue(repository.savedCommands.isEmpty())
+    }
+
+    @Test
+    fun rejects_future_occurrence_time() = runBlocking {
+        val useCase = CreateOutbreakEventUseCase(
+            repository = FakeOutbreakRepository(),
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow)
+        )
+
+        val result = useCase(
+            CreateOutbreakEventCommand(
+                outbreakDescriptor = "Rash flare",
+                bodyLocation = "Left arm",
+                intensityLevel = 3,
+                occurredAtEpochMs = fixedNow + 60_000L,
+                notes = null
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Time cannot be in the future.", error.fieldErrors["occurredAtEpochMs"])
+    }
+
+    @Test
+    fun rejects_non_positive_occurrence_time() = runBlocking {
+        val useCase = CreateOutbreakEventUseCase(
+            repository = FakeOutbreakRepository(),
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow)
+        )
+
+        val result = useCase(
+            CreateOutbreakEventCommand(
+                outbreakDescriptor = "Rash flare",
+                bodyLocation = "Left arm",
+                intensityLevel = 3,
+                occurredAtEpochMs = 0L,
+                notes = null
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Choose a valid time.", error.fieldErrors["occurredAtEpochMs"])
+    }
+
+    @Test
+    fun persists_trimmed_valid_outbreak_through_repository() = runBlocking {
+        val repository = FakeOutbreakRepository()
+        val useCase = CreateOutbreakEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow)
+        )
+
+        val result = useCase(
+            CreateOutbreakEventCommand(
+                outbreakDescriptor = "  Rash flare  ",
+                bodyLocation = "  Left arm  ",
+                intensityLevel = 4,
+                occurredAtEpochMs = fixedNow,
+                notes = "  after workout  "
+            )
+        )
+
+        val success = result as AppResult.Success
+        assertEquals("Rash flare", success.value.outbreakDescriptor)
+        assertEquals("Left arm", success.value.bodyLocation)
+        assertEquals(4, success.value.intensityLevel)
+        assertEquals("Rash flare", repository.savedCommands.single().outbreakDescriptor)
+        assertEquals("Left arm", repository.savedCommands.single().bodyLocation)
+        assertEquals(4, repository.savedCommands.single().intensityLevel)
+        assertEquals("after workout", repository.savedCommands.single().notes)
+    }
+
+    @Test
+    fun rejects_intensity_outside_supported_range() = runBlocking {
+        val repository = FakeOutbreakRepository()
+        val useCase = CreateOutbreakEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow)
+        )
+
+        val result = useCase(
+            CreateOutbreakEventCommand(
+                outbreakDescriptor = "Rash flare",
+                bodyLocation = "Left arm",
+                intensityLevel = 0,
+                occurredAtEpochMs = fixedNow,
+                notes = null
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Choose a valid intensity.", error.fieldErrors["intensityLevel"])
+        assertTrue(repository.savedCommands.isEmpty())
+    }
+
+    @Test
+    fun rejects_missing_saved_catalog_references_before_repository_write() = runBlocking {
+        val repository = FakeOutbreakRepository()
+        val useCase = CreateOutbreakEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow),
+            outbreakDescriptorCatalogExists = { false },
+            bodyLocationCatalogExists = { false }
+        )
+
+        val result = useCase(
+            CreateOutbreakEventCommand(
+                outbreakDescriptor = "Rash flare",
+                bodyLocation = "Left arm",
+                intensityLevel = 3,
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                outbreakDescriptorCatalogId = 7L,
+                bodyLocationCatalogId = 8L
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals("Choose a saved outbreak descriptor that still exists.", error.fieldErrors["outbreakDescriptor"])
+        assertEquals("Choose a saved body location that still exists.", error.fieldErrors["bodyLocation"])
+        assertTrue(repository.savedCommands.isEmpty())
+    }
+
+    @Test
+    fun rejects_mismatched_saved_catalog_labels_before_repository_write() = runBlocking {
+        val repository = FakeOutbreakRepository()
+        val useCase = CreateOutbreakEventUseCase(
+            repository = repository,
+            currentTimeProvider = FakeCurrentTimeProvider(fixedNow),
+            outbreakDescriptorCatalogExists = { true },
+            bodyLocationCatalogExists = { true },
+            getOutbreakDescriptorCatalogEntry = {
+                ReusableEventCatalog(it, ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR, "Skin flare", 1, 1L, 1L, 1L)
+            },
+            getBodyLocationCatalogEntry = {
+                ReusableEventCatalog(it, ReusableEventCatalogKind.BODY_LOCATION, "Left arm", 1, 1L, 1L, 1L)
+            }
+        )
+
+        val result = useCase(
+            CreateOutbreakEventCommand(
+                outbreakDescriptor = "Heat rash",
+                bodyLocation = "Right arm",
+                intensityLevel = 3,
+                occurredAtEpochMs = fixedNow,
+                notes = null,
+                outbreakDescriptorCatalogId = 7L,
+                bodyLocationCatalogId = 8L
+            )
+        )
+
+        val error = (result as AppResult.Error).error as DomainError.ValidationError
+        assertEquals(
+            "Use the saved outbreak descriptor exactly as selected, or clear it before editing.",
+            error.fieldErrors["outbreakDescriptor"]
+        )
+        assertEquals(
+            "Use the saved body location exactly as selected, or clear it before editing.",
+            error.fieldErrors["bodyLocation"]
+        )
+        assertTrue(repository.savedCommands.isEmpty())
+    }
+}
+
+private class FakeOutbreakRepository : OutbreakRepository {
+    val savedCommands = mutableListOf<CreateOutbreakEventCommand>()
+
+    override suspend fun createOutbreak(command: CreateOutbreakEventCommand): AppResult<OutbreakEvent> {
+        savedCommands += command
+        return AppResult.Success(
+            OutbreakEvent(
+                id = 1L,
+                outbreakDescriptor = command.outbreakDescriptor,
+                bodyLocation = command.bodyLocation,
+                intensityLevel = command.intensityLevel,
+                occurredAtEpochMs = command.occurredAtEpochMs,
+                notes = command.notes
+            )
+        )
+    }
+
+    override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> {
+        return AppResult.Error(DomainError.IntegrityError("unused"))
+    }
+
+    override suspend fun updateOutbreak(command: UpdateOutbreakEventCommand): AppResult<OutbreakEvent> {
+        return AppResult.Error(DomainError.IntegrityError("unused"))
+    }
+
+    override suspend fun deleteOutbreak(id: Long): AppResult<Unit> {
+        return AppResult.Error(DomainError.IntegrityError("unused"))
+    }
+}
+
+private class FakeCurrentTimeProvider(
+    private val nowEpochMs: Long
+) : CurrentTimeProvider {
+    override fun nowEpochMillis(): Long = nowEpochMs
+}

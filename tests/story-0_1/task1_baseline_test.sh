@@ -8,7 +8,7 @@ fail() {
 
 [ -f "settings.gradle.kts" ] || fail "missing settings.gradle.kts"
 [ -f "app/build.gradle.kts" ] || fail "missing app/build.gradle.kts"
-[ -f "app/src/main/java/com/example/app/MainActivity.kt" ] || fail "missing MainActivity.kt"
+[ -f "app/src/main/java/io/github/mateovich/allergotracker/MainActivity.kt" ] || fail "missing MainActivity.kt"
 
 grep -q 'kotlin("android") version "2.3.10"' build.gradle.kts || fail "kotlin 2.3.10 not configured"
 grep -q 'platform("androidx.compose:compose-bom:2026.02.01")' app/build.gradle.kts || fail "Compose BOM not configured"

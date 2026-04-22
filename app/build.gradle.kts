@@ -10,11 +10,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.app"
+    namespace = "io.github.mateovich.allergotracker"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.app"
+        applicationId = "io.github.mateovich.allergotracker"
         minSdk = 28
         targetSdk = 36
         versionCode = 1

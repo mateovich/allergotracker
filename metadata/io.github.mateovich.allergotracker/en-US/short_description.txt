@@ -1,0 +1,1 @@
+Offline delayed-allergy tracking with structured export and import.
