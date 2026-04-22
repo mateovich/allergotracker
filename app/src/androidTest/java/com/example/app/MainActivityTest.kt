@@ -56,6 +56,7 @@ class MainActivityTest {
         composeRule.onNodeWithContentDescription("Export").performClick()
 
         composeRule.onNodeWithTag("export-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("local-only-notice").assertIsDisplayed()
         composeRule.onNodeWithTag("export-format-selector").assertIsDisplayed()
         composeRule.onNodeWithTag("export-scope-selector").assertIsDisplayed()
         composeRule.onNodeWithTag("export-summary").assertIsDisplayed()
@@ -94,6 +95,9 @@ class MainActivityTest {
         composeRule.onNodeWithTag("export-destination-downloads").performScrollTo().performClick()
         composeRule.onNodeWithTag("export-final-confirmation").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("export-final-destination").performScrollTo().assertExists()
+        composeRule.onNodeWithTag("export-final-privacy-note")
+            .performScrollTo()
+            .assertTextContains("Nothing is saved outside the app until you confirm this destination.")
         composeRule.onNodeWithText("Export saved").assertDoesNotExist()
         composeRule.onNodeWithTag("export-final-confirm").performScrollTo().performClick()
 
@@ -158,6 +162,9 @@ class MainActivityTest {
         composeRule.onNodeWithTag("import-review-card").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("import-review-file-name").assertExists()
         composeRule.onNodeWithTag("import-review-catalog-summary").assertExists()
+        composeRule.onNodeWithTag("import-review-privacy-note")
+            .performScrollTo()
+            .assertTextContains("Nothing is written until you confirm import.")
         composeRule.onAllNodesWithTag("import-result-card").assertCountEquals(0)
         composeRule.onNodeWithTag("import-confirm-apply").performScrollTo().performClick()
 

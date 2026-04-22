@@ -201,7 +201,7 @@ class RoomStructuredImportRepositoryTest {
 
         assertTrue(review is AppResult.Error)
         review as AppResult.Error
-        assertEquals("Unsupported event catalog kind unsupported_kind.", review.error.message)
+        assertEquals("This import file uses an unsupported saved-value type.", review.error.message)
     }
 
     @Test
@@ -211,7 +211,19 @@ class RoomStructuredImportRepositoryTest {
         assertTrue(review is AppResult.Error)
         review as AppResult.Error
         assertEquals(
-            "Import file has invalid timestamp 'ingestion occurred_at for Oat milk'. Use ISO-8601 UTC values from the export contract.",
+            "Import file has an invalid ingestion occurred_at timestamp. Use ISO-8601 UTC values from the export contract.",
+            review.error.message
+        )
+    }
+
+    @Test
+    fun review_rejects_missing_import_reference_without_echoing_sensitive_payload_details() = runBlocking {
+        val review = repository.review(document(), missingIngredientReferenceEnvelope())
+
+        assertTrue(review is AppResult.Error)
+        review as AppResult.Error
+        assertEquals(
+            "An ingestion record references an ingredient that is not present in the import file.",
             review.error.message
         )
     }
@@ -384,6 +396,26 @@ class RoomStructuredImportRepositoryTest {
                         createdAt = "2023-11-14T22:13:20Z",
                         updatedAt = "2023-11-14T22:13:20Z",
                         lastUsedAt = "2023-11-14T22:13:20Z"
+                    )
+                )
+            )
+        )
+    }
+
+    private fun missingIngredientReferenceEnvelope(): VersionedExportEnvelopeDto {
+        return VersionedExportEnvelopeDto(
+            schemaVersion = "2.0.0",
+            exportedAt = "2023-11-14T22:13:20Z",
+            data = VersionedExportDataDto(
+                ingestions = listOf(
+                    IngestionExportDto(
+                        id = 10L,
+                        itemName = "Private smoothie",
+                        quantityLevel = 2,
+                        occurredAt = "2023-11-14T22:13:20Z",
+                        notes = "contains personal context",
+                        reusableEntityRef = ReusableEntityReferenceDto(kind = "ingredient", id = 999L),
+                        createdAt = "2023-11-14T22:13:20Z"
                     )
                 )
             )

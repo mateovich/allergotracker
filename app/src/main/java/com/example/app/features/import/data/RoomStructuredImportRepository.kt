@@ -130,7 +130,7 @@ class RoomStructuredImportRepository(
 
                 for (entry in envelope.data.reusableEventCatalog) {
                     val kind = ReusableEventCatalogKind.fromStorageValue(entry.kind)
-                        ?: throw StructuredImportRollback(DomainError.ImportError("Unsupported event catalog kind ${entry.kind}."))
+                        ?: throw StructuredImportRollback(unsupportedCatalogKindError())
                     val local = when (val result = upsertCatalogEntry(kind, entry)) {
                         is AppResult.Success -> result.value
                         is AppResult.Error -> throw StructuredImportRollback(result.error)
@@ -256,7 +256,7 @@ class RoomStructuredImportRepository(
             }
             if (mappedId == null) {
                 return AppResult.Error(
-                    DomainError.ImportError("Compound ${dto.name} references a reusable item that could not be mapped locally.")
+                    missingReusableMappingError()
                 )
             }
             MappedComponent(
@@ -368,7 +368,7 @@ class RoomStructuredImportRepository(
         val catalogByKey = mutableMapOf<CatalogKey, ReusableEventCatalogExportDto>()
         for (dto in envelope.data.reusableEventCatalog) {
             val key = CatalogKey.fromStorageValue(dto.kind, dto.id)
-                ?: return DomainError.ImportError("Unsupported event catalog kind ${dto.kind}.")
+                ?: return unsupportedCatalogKindError()
             catalogByKey[key] = dto
         }
 
@@ -386,14 +386,20 @@ class RoomStructuredImportRepository(
             for (component in compound.components) {
                 when (component.componentRef.kind) {
                     ReusableEntityKind.INGREDIENT.storageValue -> if (component.componentRef.id !in ingredientsById) {
-                        return DomainError.ImportError("Compound ${compound.name} references an ingredient that is not present in the import file.")
+                        return missingImportReferenceError(
+                            ownerLabel = "A reusable compound",
+                            referencedLabel = "ingredient"
+                        )
                     }
 
                     ReusableEntityKind.COMPOUND.storageValue -> if (component.componentRef.id !in compoundsById) {
-                        return DomainError.ImportError("Compound ${compound.name} references a child compound that is not present in the import file.")
+                        return missingImportReferenceError(
+                            ownerLabel = "A reusable compound",
+                            referencedLabel = "child compound"
+                        )
                     }
 
-                    else -> return DomainError.ImportError("Compound ${compound.name} uses unsupported reusable kind ${component.componentRef.kind}.")
+                    else -> return unsupportedReusableKindError("A reusable compound")
                 }
             }
         }
@@ -402,14 +408,20 @@ class RoomStructuredImportRepository(
             val ref = ingestion.reusableEntityRef ?: continue
             when (ref.kind) {
                 ReusableEntityKind.INGREDIENT.storageValue -> if (ref.id !in ingredientsById) {
-                    return DomainError.ImportError("Ingestion ${ingestion.itemName} references an ingredient that is not present in the import file.")
+                    return missingImportReferenceError(
+                        ownerLabel = "An ingestion record",
+                        referencedLabel = "ingredient"
+                    )
                 }
 
                 ReusableEntityKind.COMPOUND.storageValue -> if (ref.id !in compoundsById) {
-                    return DomainError.ImportError("Ingestion ${ingestion.itemName} references a compound that is not present in the import file.")
+                    return missingImportReferenceError(
+                        ownerLabel = "An ingestion record",
+                        referencedLabel = "compound"
+                    )
                 }
 
-                else -> return DomainError.ImportError("Ingestion ${ingestion.itemName} uses unsupported reusable kind ${ref.kind}.")
+                else -> return unsupportedReusableKindError("An ingestion record")
             }
         }
 
@@ -425,9 +437,12 @@ class RoomStructuredImportRepository(
         for (exposure in exposures) {
             val ref = exposure.exposureTypeCatalogRef ?: continue
             val key = CatalogKey.fromStorageValue(ref.kind, ref.id)
-                ?: return DomainError.ImportError("Exposure ${exposure.exposureType} uses unsupported catalog kind ${ref.kind}.")
+                ?: return unsupportedCatalogKindError("An exposure record")
             if (key !in catalogByKey) {
-                return DomainError.ImportError("Exposure ${exposure.exposureType} references a saved value that is not present in the import file.")
+                return missingImportReferenceError(
+                    ownerLabel = "An exposure record",
+                    referencedLabel = "saved value"
+                )
             }
         }
         return null
@@ -441,18 +456,24 @@ class RoomStructuredImportRepository(
             val descriptor = outbreak.outbreakDescriptorCatalogRef
             val descriptorKey = descriptor?.let { CatalogKey.fromStorageValue(it.kind, it.id) }
             if (descriptor != null && descriptorKey == null) {
-                return DomainError.ImportError("Outbreak ${outbreak.outbreakDescriptor} uses unsupported descriptor catalog kind ${descriptor.kind}.")
+                return unsupportedCatalogKindError("An outbreak record")
             }
             if (descriptorKey != null && descriptorKey !in catalogByKey) {
-                return DomainError.ImportError("Outbreak ${outbreak.outbreakDescriptor} references a saved descriptor that is not present in the import file.")
+                return missingImportReferenceError(
+                    ownerLabel = "An outbreak record",
+                    referencedLabel = "saved descriptor"
+                )
             }
             val bodyLocation = outbreak.bodyLocationCatalogRef
             val bodyLocationKey = bodyLocation?.let { CatalogKey.fromStorageValue(it.kind, it.id) }
             if (bodyLocation != null && bodyLocationKey == null) {
-                return DomainError.ImportError("Outbreak ${outbreak.outbreakDescriptor} uses unsupported body-location catalog kind ${bodyLocation.kind}.")
+                return unsupportedCatalogKindError("An outbreak record")
             }
             if (bodyLocationKey != null && bodyLocationKey !in catalogByKey) {
-                return DomainError.ImportError("Outbreak ${outbreak.outbreakDescriptor} references a saved body location that is not present in the import file.")
+                return missingImportReferenceError(
+                    ownerLabel = "An outbreak record",
+                    referencedLabel = "saved body location"
+                )
             }
         }
         return null
@@ -523,50 +544,66 @@ private fun duplicateCatalogIds(entries: List<ReusableEventCatalogExportDto>): S
 }
 
 private fun validateContractTimestamps(envelope: VersionedExportEnvelopeDto): DomainError? {
-    parseTimestamp(envelope.exportedAt, "exported_at")?.let { return it }
+    parseTimestamp(envelope.exportedAt, "export", "exported_at")?.let { return it }
 
     envelope.data.ingestions.forEach { ingestion ->
-        parseTimestamp(ingestion.occurredAt, "ingestion occurred_at for ${ingestion.itemName}")?.let { return it }
-        parseTimestamp(ingestion.createdAt, "ingestion created_at for ${ingestion.itemName}")?.let { return it }
+        parseTimestamp(ingestion.occurredAt, "ingestion", "occurred_at")?.let { return it }
+        parseTimestamp(ingestion.createdAt, "ingestion", "created_at")?.let { return it }
     }
     envelope.data.exposures.forEach { exposure ->
-        parseTimestamp(exposure.occurredAt, "exposure occurred_at for ${exposure.exposureType}")?.let { return it }
-        parseTimestamp(exposure.createdAt, "exposure created_at for ${exposure.exposureType}")?.let { return it }
+        parseTimestamp(exposure.occurredAt, "exposure", "occurred_at")?.let { return it }
+        parseTimestamp(exposure.createdAt, "exposure", "created_at")?.let { return it }
     }
     envelope.data.outbreaks.forEach { outbreak ->
-        parseTimestamp(outbreak.occurredAt, "outbreak occurred_at for ${outbreak.outbreakDescriptor}")?.let { return it }
-        parseTimestamp(outbreak.createdAt, "outbreak created_at for ${outbreak.outbreakDescriptor}")?.let { return it }
+        parseTimestamp(outbreak.occurredAt, "outbreak", "occurred_at")?.let { return it }
+        parseTimestamp(outbreak.createdAt, "outbreak", "created_at")?.let { return it }
     }
     envelope.data.reusableIngredients.forEach { ingredient ->
-        parseTimestamp(ingredient.createdAt, "reusable ingredient created_at for ${ingredient.name}")?.let { return it }
-        parseTimestamp(ingredient.updatedAt, "reusable ingredient updated_at for ${ingredient.name}")?.let { return it }
+        parseTimestamp(ingredient.createdAt, "reusable ingredient", "created_at")?.let { return it }
+        parseTimestamp(ingredient.updatedAt, "reusable ingredient", "updated_at")?.let { return it }
     }
     envelope.data.reusableCompounds.forEach { compound ->
-        parseTimestamp(compound.createdAt, "reusable compound created_at for ${compound.name}")?.let { return it }
-        parseTimestamp(compound.updatedAt, "reusable compound updated_at for ${compound.name}")?.let { return it }
+        parseTimestamp(compound.createdAt, "reusable compound", "created_at")?.let { return it }
+        parseTimestamp(compound.updatedAt, "reusable compound", "updated_at")?.let { return it }
     }
     envelope.data.reusableEventCatalog.forEach { entry ->
-        parseTimestamp(entry.createdAt, "saved value created_at for ${entry.name}")?.let { return it }
-        parseTimestamp(entry.updatedAt, "saved value updated_at for ${entry.name}")?.let { return it }
-        parseTimestamp(entry.lastUsedAt, "saved value last_used_at for ${entry.name}")?.let { return it }
+        parseTimestamp(entry.createdAt, "saved value", "created_at")?.let { return it }
+        parseTimestamp(entry.updatedAt, "saved value", "updated_at")?.let { return it }
+        parseTimestamp(entry.lastUsedAt, "saved value", "last_used_at")?.let { return it }
     }
     envelope.data.normalizedBaseIngredients.forEach { normalized ->
-        parseTimestamp(
-            normalized.sourceEvent.occurredAt,
-            "normalized_base_ingredients source_event.occurred_at for ${normalized.sourceEvent.itemName}"
-        )?.let { return it }
+        parseTimestamp(normalized.sourceEvent.occurredAt, "normalized base ingredient source event", "occurred_at")?.let { return it }
     }
 
     return null
 }
 
-private fun parseTimestamp(value: String, label: String): DomainError? {
+private fun parseTimestamp(value: String, ownerLabel: String, fieldLabel: String): DomainError? {
     return try {
         Instant.parse(value)
         null
     } catch (_: Exception) {
-        DomainError.ImportError("Import file has invalid timestamp '$label'. Use ISO-8601 UTC values from the export contract.")
+        DomainError.ImportError(
+            "Import file has an invalid $ownerLabel $fieldLabel timestamp. Use ISO-8601 UTC values from the export contract."
+        )
     }
+}
+
+private fun unsupportedCatalogKindError(ownerLabel: String = "This import file"): DomainError.ImportError {
+    return DomainError.ImportError("$ownerLabel uses an unsupported saved-value type.")
+}
+
+private fun unsupportedReusableKindError(ownerLabel: String): DomainError.ImportError {
+    return DomainError.ImportError("$ownerLabel uses an unsupported reusable reference type.")
+}
+
+private fun missingImportReferenceError(ownerLabel: String, referencedLabel: String): DomainError.ImportError {
+    val article = if (referencedLabel.firstOrNull()?.lowercaseChar() in setOf('a', 'e', 'i', 'o', 'u')) "an" else "a"
+    return DomainError.ImportError("$ownerLabel references $article $referencedLabel that is not present in the import file.")
+}
+
+private fun missingReusableMappingError(): DomainError.ImportError {
+    return DomainError.ImportError("A reusable item in the import file could not be mapped locally.")
 }
 
 private fun componentRefResolved(

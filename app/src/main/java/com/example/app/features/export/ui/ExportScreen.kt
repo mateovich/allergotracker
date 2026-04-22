@@ -275,6 +275,11 @@ private fun ImportSection(
                         text = "Reuse ${review.summary.eventCatalogEntriesToReuse} saved values and keep compound updates explicit before apply.",
                         modifier = Modifier.testTag("import-review-catalog-summary")
                     )
+                    Text(
+                        text = "Nothing is written until you confirm import.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("import-review-privacy-note")
+                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -352,6 +357,11 @@ private fun FinalConfirmationSection(
                 text = "Destination: ${state.destinationOptions.firstOrNull { it.isSelected }?.label.orEmpty()}",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.testTag("export-final-destination")
+            )
+            Text(
+                text = "Nothing is saved outside the app until you confirm this destination.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("export-final-privacy-note")
             )
             Text(
                 text = "File: ${state.stagedExport?.artifact?.fileName.orEmpty()}",
