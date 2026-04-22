@@ -149,6 +149,24 @@ class MainActivityTest {
     }
 
     @Test
+    fun canceling_export_confirmation_keeps_records_capture_available() {
+        composeRule.onNodeWithContentDescription("Export").performClick()
+        composeRule.onNodeWithTag("export-format-json").performClick()
+        composeRule.onNodeWithTag("export-scope-all-records").performClick()
+        composeRule.onNodeWithTag("export-confirm-action").performScrollTo().performClick()
+
+        waitForTag("export-destination-selector")
+        composeRule.onNodeWithTag("export-destination-downloads").performScrollTo().performClick()
+        composeRule.onNodeWithTag("export-final-cancel").performScrollTo().performClick()
+        composeRule.onNodeWithTag("export-status-message").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("top-level-records").performClick()
+        composeRule.onNodeWithTag("records-screen-content").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithContentDescription("Choose event type").assertIsDisplayed()
+    }
+
+    @Test
     fun import_flow_requires_explicit_file_selection_review_and_confirm_before_success() {
         composeRule.activity.enqueueImportDocumentForTesting(
             fileName = "import.json",

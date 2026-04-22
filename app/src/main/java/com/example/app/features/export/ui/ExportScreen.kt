@@ -144,6 +144,11 @@ fun ExportScreen(
                             onClick = { viewModel.onIntent(ExportUiIntent.SelectDestination(option.destination)) }
                         )
                     }
+                    Text(
+                        text = "Save access stays scoped to the destination you confirm for this staged file.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("export-destination-scope-note")
+                    )
                 }
             }
 
@@ -226,7 +231,7 @@ private fun ImportSection(
         testTag = "import-section"
     ) {
         Text(
-            text = "Choose an exported JSON file to validate locally before anything is written.",
+            text = "Choose an exported JSON file to validate locally before anything is written. Android grants access only to the file you choose here.",
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.testTag("import-copy")
         )

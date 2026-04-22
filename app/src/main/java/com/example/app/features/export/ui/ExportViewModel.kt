@@ -126,7 +126,7 @@ class ExportViewModel(
                 importReview = null,
                 importResult = null,
                 importValidationMessage = null,
-                importStatusMessage = "Import selection canceled."
+                importStatusMessage = "Import selection canceled. Choose a file to review when ready."
             )
             return
         }
@@ -346,7 +346,7 @@ class ExportViewModel(
             stagedExport = stagedExport,
             summaryText = mutableState.value.summaryText,
             totalRecordCount = mutableState.value.totalRecordCount,
-            statusMessage = "Final confirmation canceled. The staged export remains local until you confirm delivery."
+            statusMessage = "Final confirmation canceled. The staged export remains local. Choose a destination again when ready."
         )
     }
 

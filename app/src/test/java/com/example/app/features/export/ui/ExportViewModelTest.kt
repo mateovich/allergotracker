@@ -414,7 +414,7 @@ class ExportViewModelTest {
         assertTrue(viewModel.state.value.stagedExport != null)
         assertNull(viewModel.state.value.selectedDestination)
         assertEquals(
-            "Final confirmation canceled. The staged export remains local until you confirm delivery.",
+            "Final confirmation canceled. The staged export remains local. Choose a destination again when ready.",
             viewModel.state.value.statusMessage
         )
     }
@@ -536,7 +536,10 @@ class ExportViewModelTest {
         assertNull(viewModel.state.value.importReview)
         assertNull(viewModel.state.value.importResult)
         assertEquals(0, importApplyInvocationCount)
-        assertEquals("Import selection canceled.", viewModel.state.value.importStatusMessage)
+        assertEquals(
+            "Import selection canceled. Choose a file to review when ready.",
+            viewModel.state.value.importStatusMessage
+        )
     }
 
     @Test
@@ -554,6 +557,24 @@ class ExportViewModelTest {
         assertNull(viewModel.state.value.importReview)
         assertEquals("Import review canceled. Choose another file when ready.", viewModel.state.value.importStatusMessage)
         assertTrue(!viewModel.state.value.isBusy)
+    }
+
+    @Test
+    fun canceling_import_selection_does_not_block_unrelated_export_flow() {
+        val viewModel = createViewModel()
+
+        viewModel.onIntent(ExportUiIntent.ImportDocumentSelected("file:///tmp/import.json"))
+        assertTrue(viewModel.state.value.importReview != null)
+
+        viewModel.onIntent(ExportUiIntent.ImportDocumentSelected(null))
+        viewModel.onIntent(ExportUiIntent.SelectFormat(ExportFormat.JSON))
+        viewModel.onIntent(ExportUiIntent.SelectScope(ExportScope.AllRecords))
+        viewModel.onIntent(ExportUiIntent.ConfirmExportStart)
+
+        assertTrue(viewModel.state.value.stagedExport != null)
+        assertEquals(1, generateInvocationCount)
+        assertNull(viewModel.state.value.importReview)
+        assertNull(viewModel.state.value.importResult)
     }
 
     @Test
