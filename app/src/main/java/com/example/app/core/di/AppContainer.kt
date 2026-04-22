@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.room.withTransaction
 import com.example.app.core.database.AppDatabase
 import com.example.app.core.database.HomeDao
+import com.example.app.core.distribution.AppDistributionFactory
 import com.example.app.core.database.migrations.Migration_1_2
 import com.example.app.core.database.migrations.Migration_2_3
 import com.example.app.core.database.migrations.Migration_3_4
@@ -107,6 +108,7 @@ import kotlinx.coroutines.runBlocking
  * Application composition root. Core event flows are wired only to Room-backed repositories.
  */
 class AppContainer(appContext: Context) {
+    private val appDistribution = AppDistributionFactory.fromBuildConfig()
     private val systemCurrentTimeProvider = CurrentTimeProvider { System.currentTimeMillis() }
     private val appDatabase: AppDatabase = Room.databaseBuilder(
         appContext,
@@ -487,6 +489,7 @@ class AppContainer(appContext: Context) {
         RecordsViewModelFactory(systemCurrentTimeProvider, observeRecordCountUseCase, observeRecordsUseCase)
     val exportViewModelFactory: ExportViewModelFactory =
         ExportViewModelFactory(
+            appDistribution,
             observeRecordCountUseCase,
             validateExportConfigurationUseCase,
             generateVersionedJsonExportUseCase,

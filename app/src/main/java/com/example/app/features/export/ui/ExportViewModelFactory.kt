@@ -2,6 +2,7 @@ package com.example.app.features.export.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.example.app.core.distribution.AppDistribution
 import com.example.app.features.export.domain.DeliverStagedExportUseCase
 import com.example.app.features.export.domain.GenerateVersionedJsonExportUseCase
 import com.example.app.features.export.domain.ValidateExportConfigurationUseCase
@@ -10,6 +11,7 @@ import com.example.app.features.import.domain.ReviewStructuredImportUseCase
 import com.example.app.features.records.domain.ObserveRecordCountUseCase
 
 class ExportViewModelFactory(
+    private val appDistribution: AppDistribution,
     private val observeRecordCountUseCase: ObserveRecordCountUseCase,
     private val validateExportConfigurationUseCase: ValidateExportConfigurationUseCase,
     private val generateVersionedJsonExportUseCase: GenerateVersionedJsonExportUseCase,
@@ -21,6 +23,7 @@ class ExportViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ExportViewModel::class.java)) {
             return ExportViewModel(
+                appDistribution = appDistribution,
                 observeRecordCountUseCase = observeRecordCountUseCase,
                 validateExportConfigurationUseCase = validateExportConfigurationUseCase,
                 generateVersionedJsonExportUseCase = generateVersionedJsonExportUseCase,

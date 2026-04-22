@@ -67,6 +67,18 @@ fun ExportScreen(
             ) {
                 LocalOnlyNotice()
                 Text(
+                    text = state.distributionNotice,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.testTag("distribution-notice")
+                )
+                state.unavailableCapabilityMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("distribution-capability-notice")
+                    )
+                }
+                Text(
                     text = state.privacyNotice,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.testTag("export-privacy-copy")

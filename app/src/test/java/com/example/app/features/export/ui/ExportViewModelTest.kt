@@ -4,6 +4,7 @@ import android.os.Build
 import com.example.app.MainDispatcherRule
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.core.distribution.AppDistribution
 import com.example.app.core.export.schema.EXPORT_SCHEMA_VERSION
 import com.example.app.features.export.domain.DeliverStagedExportUseCase
 import com.example.app.features.export.domain.ExportConfiguration
@@ -229,6 +230,11 @@ class ExportViewModelTest {
         )
         val applyStructuredImportUseCase = ApplyStructuredImportUseCase(structuredImportRepository)
         return ExportViewModel(
+            appDistribution = AppDistribution(
+                channel = "store-agnostic",
+                supportsStoreServices = false,
+                unavailableCapabilityMessage = null
+            ),
             observeRecordCountUseCase = observeRecordCountUseCase,
             validateExportConfigurationUseCase = validateExportConfigurationUseCase,
             generateVersionedJsonExportUseCase = fakeGenerateUseCase,
@@ -249,6 +255,10 @@ class ExportViewModelTest {
         val viewModel = createViewModel()
 
         assertNull(viewModel.state.value.statusMessage)
+        assertEquals(
+            "This build keeps capture, review, export, and import available without Play or store services.",
+            viewModel.state.value.distributionNotice
+        )
         assertEquals(
             "Choose an export format and scope to review what will be included.",
             viewModel.state.value.summaryText

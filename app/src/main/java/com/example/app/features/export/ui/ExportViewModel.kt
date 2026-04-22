@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.app.core.common.error.DomainError
 import com.example.app.core.common.result.AppResult
+import com.example.app.core.distribution.AppDistribution
 import com.example.app.features.export.domain.DeliverStagedExportUseCase
 import com.example.app.features.export.domain.ExportConfiguration
 import com.example.app.features.export.domain.ExportDeliveryResult
@@ -32,6 +33,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 class ExportViewModel(
+    private val appDistribution: AppDistribution,
     observeRecordCountUseCase: ObserveRecordCountUseCase,
     private val validateExportConfigurationUseCase: ValidateExportConfigurationUseCase,
     private val generateVersionedJsonExportUseCase: GenerateVersionedJsonExportUseCase,
@@ -435,6 +437,8 @@ class ExportViewModel(
         totalRecordCount: Int = 0
     ): ExportUiState {
         return ExportUiState(
+            distributionNotice = appDistribution.distributionNotice,
+            unavailableCapabilityMessage = appDistribution.unavailableCapabilityMessage,
             formatOptions = ExportFormat.entries.map { format ->
                 ExportFormatOptionUiModel(
                     format = format,

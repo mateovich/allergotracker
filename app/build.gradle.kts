@@ -1,3 +1,4 @@
+import org.gradle.api.tasks.Copy
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -20,6 +21,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "DISTRIBUTION_CHANNEL", "\"store-agnostic\"")
+        buildConfigField("boolean", "SUPPORTS_STORE_SERVICES", "false")
+        buildConfigField("String", "UNAVAILABLE_CAPABILITY_MESSAGE", "null")
     }
 
     buildTypes {
@@ -30,6 +35,11 @@ android {
                 "proguard-rules.pro"
             )
         }
+
+        create("alternativeRelease") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+        }
     }
 
     compileOptions {
@@ -39,8 +49,18 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
+}
+
+tasks.register<Copy>("prepareAlternativeRelease") {
+    group = "distribution"
+    description = "Copies the installable alternative release APK into a deterministic output path"
+    dependsOn("assembleAlternativeRelease")
+    from(layout.buildDirectory.file("outputs/apk/alternativeRelease/app-alternativeRelease.apk"))
+    into(layout.buildDirectory.dir("outputs/alternative/release"))
+    rename { "app-alternative-release.apk" }
 }
 
 kotlin {

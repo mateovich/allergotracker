@@ -57,6 +57,7 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("export-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("local-only-notice").assertIsDisplayed()
+        composeRule.onNodeWithTag("distribution-notice").assertIsDisplayed()
         composeRule.onNodeWithTag("export-format-selector").assertIsDisplayed()
         composeRule.onNodeWithTag("export-scope-selector").assertIsDisplayed()
         composeRule.onNodeWithTag("export-summary").assertIsDisplayed()
