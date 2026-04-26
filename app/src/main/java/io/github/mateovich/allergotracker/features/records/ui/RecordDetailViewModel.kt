@@ -70,7 +70,7 @@ class RecordDetailViewModel(
 
     private fun navigateToDeleteRoute() {
         val route = when (eventType) {
-            RecordEventType.INGESTION -> AppRoutes.editIngestion(recordId)
+            RecordEventType.INGESTION -> AppRoutes.editIngestion(recordId, openDelete = true)
             RecordEventType.EXPOSURE -> AppRoutes.editExposure(recordId, openDelete = true)
             RecordEventType.OUTBREAK -> AppRoutes.editOutbreak(recordId, openDelete = true)
         }

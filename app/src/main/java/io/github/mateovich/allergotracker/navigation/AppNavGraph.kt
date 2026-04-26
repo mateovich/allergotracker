@@ -276,12 +276,23 @@ fun AppNavGraph(
         }
         composable(
             route = AppRoutes.EDIT_INGESTION,
-            arguments = listOf(navArgument(AppRoutes.RECORD_ID_ARG) { type = NavType.LongType })
+            arguments = listOf(
+                navArgument(AppRoutes.RECORD_ID_ARG) { type = NavType.LongType },
+                navArgument(AppRoutes.OPEN_DELETE_ARG) {
+                    type = NavType.BoolType
+                    defaultValue = false
+                }
+            )
         ) { backStackEntry ->
             val recordId = backStackEntry.arguments?.getLong(AppRoutes.RECORD_ID_ARG) ?: return@composable
             val savedStateHandle = backStackEntry.savedStateHandle
+            val openDeleteOnStart = consumeOpenDeleteOnStart(
+                savedStateHandle = savedStateHandle,
+                defaultValue = backStackEntry.arguments?.getBoolean(AppRoutes.OPEN_DELETE_ARG) == true
+            )
             EditIngestionScreen(
                 viewModelFactory = editIngestionViewModelFactoryProvider(recordId),
+                openDeleteOnStart = openDeleteOnStart,
                 selectedReusableEntity = savedStateHandle.toIngestionReusableSelectionResult(),
                 retiredReusableSelection = savedStateHandle.consumeRetiredReusableSelection(),
                 onReusableEntityConsumed = {
@@ -304,8 +315,11 @@ fun AppNavGraph(
             )
         ) { backStackEntry ->
             val recordId = backStackEntry.arguments?.getLong(AppRoutes.RECORD_ID_ARG) ?: return@composable
-            val openDeleteOnStart = backStackEntry.arguments?.getBoolean(AppRoutes.OPEN_DELETE_ARG) == true
             val savedStateHandle = backStackEntry.savedStateHandle
+            val openDeleteOnStart = consumeOpenDeleteOnStart(
+                savedStateHandle = savedStateHandle,
+                defaultValue = backStackEntry.arguments?.getBoolean(AppRoutes.OPEN_DELETE_ARG) == true
+            )
             EditExposureScreen(
                 viewModelFactory = editExposureViewModelFactoryProvider(recordId),
                 openDeleteOnStart = openDeleteOnStart,
@@ -331,8 +345,11 @@ fun AppNavGraph(
             )
         ) { backStackEntry ->
             val recordId = backStackEntry.arguments?.getLong(AppRoutes.RECORD_ID_ARG) ?: return@composable
-            val openDeleteOnStart = backStackEntry.arguments?.getBoolean(AppRoutes.OPEN_DELETE_ARG) == true
             val savedStateHandle = backStackEntry.savedStateHandle
+            val openDeleteOnStart = consumeOpenDeleteOnStart(
+                savedStateHandle = savedStateHandle,
+                defaultValue = backStackEntry.arguments?.getBoolean(AppRoutes.OPEN_DELETE_ARG) == true
+            )
             EditOutbreakScreen(
                 viewModelFactory = editOutbreakViewModelFactoryProvider(recordId),
                 openDeleteOnStart = openDeleteOnStart,
@@ -357,6 +374,15 @@ private fun navigateToRouteOrReturnToRecords(navController: NavHostController, r
     } else {
         navController.navigate(route)
     }
+}
+
+private fun consumeOpenDeleteOnStart(savedStateHandle: SavedStateHandle, defaultValue: Boolean): Boolean {
+    val consumedKey = "${AppRoutes.OPEN_DELETE_ARG}_consumed"
+    if (savedStateHandle.get<Boolean>(consumedKey) == true) return false
+
+    savedStateHandle[consumedKey] = true
+    savedStateHandle.remove<Boolean>(AppRoutes.OPEN_DELETE_ARG)
+    return defaultValue
 }
 
 internal fun SavedStateHandle.toIngestionReusableSelectionResult(): IngestionReusableSelectionResult? {

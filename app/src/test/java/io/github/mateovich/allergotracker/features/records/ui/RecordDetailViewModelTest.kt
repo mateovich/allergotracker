@@ -7,6 +7,7 @@ import io.github.mateovich.allergotracker.features.records.domain.RecordDetail
 import io.github.mateovich.allergotracker.features.records.domain.RecordEventType
 import io.github.mateovich.allergotracker.features.records.domain.RecordSummary
 import io.github.mateovich.allergotracker.features.records.domain.RecordsRepository
+import io.github.mateovich.allergotracker.navigation.AppRoutes
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -292,6 +293,102 @@ class RecordDetailViewModelTest {
 
         assertEquals(
             RecordDetailUiEffect.NavigateToRoute("edit/outbreak/9?openDelete=false"),
+            effect
+        )
+    }
+
+    @Test
+    fun open_delete_routes_ingestion_through_explicit_open_delete_path() = runBlocking {
+        val viewModel = RecordDetailViewModel(
+            recordId = 13L,
+            eventType = RecordEventType.INGESTION,
+            observeRecordDetailUseCase = ObserveRecordDetailUseCase(
+                detailRepository(
+                    AppResult.Success(
+                        RecordDetail.Ingestion(
+                            recordId = 13L,
+                            occurredAtEpochMs = 1_700_000_000_000L,
+                            itemName = "Tea",
+                            quantityLabel = "2 Light snack",
+                            reusableEntityKind = null,
+                            reusableEntityId = null,
+                            notes = null
+                        )
+                    )
+                )
+            )
+        )
+
+        viewModel.onIntent(RecordDetailUiIntent.Load)
+        val deferred = async { viewModel.effects.first() }
+        viewModel.onIntent(RecordDetailUiIntent.OpenDelete)
+        val effect = deferred.await()
+
+        assertEquals(
+            RecordDetailUiEffect.NavigateToRoute(AppRoutes.editIngestion(13L, openDelete = true)),
+            effect
+        )
+    }
+
+    @Test
+    fun open_delete_keeps_exposure_route_stable() = runBlocking {
+        val viewModel = RecordDetailViewModel(
+            recordId = 5L,
+            eventType = RecordEventType.EXPOSURE,
+            observeRecordDetailUseCase = ObserveRecordDetailUseCase(
+                detailRepository(
+                    AppResult.Success(
+                        RecordDetail.Exposure(
+                            recordId = 5L,
+                            occurredAtEpochMs = 1_700_000_000_000L,
+                            exposureType = "Pollen",
+                            intensityLabel = "Intensity 2",
+                            notes = "outside"
+                        )
+                    )
+                )
+            )
+        )
+
+        viewModel.onIntent(RecordDetailUiIntent.Load)
+        val deferred = async { viewModel.effects.first() }
+        viewModel.onIntent(RecordDetailUiIntent.OpenDelete)
+        val effect = deferred.await()
+
+        assertEquals(
+            RecordDetailUiEffect.NavigateToRoute(AppRoutes.editExposure(5L, openDelete = true)),
+            effect
+        )
+    }
+
+    @Test
+    fun open_delete_keeps_outbreak_route_stable() = runBlocking {
+        val viewModel = RecordDetailViewModel(
+            recordId = 9L,
+            eventType = RecordEventType.OUTBREAK,
+            observeRecordDetailUseCase = ObserveRecordDetailUseCase(
+                detailRepository(
+                    AppResult.Success(
+                        RecordDetail.Outbreak(
+                            recordId = 9L,
+                            occurredAtEpochMs = 1_700_000_000_000L,
+                            outbreakDescriptor = "Skin flare",
+                            bodyLocation = "Left arm",
+                            intensityLabel = "Intensity 4",
+                            notes = "after workout"
+                        )
+                    )
+                )
+            )
+        )
+
+        viewModel.onIntent(RecordDetailUiIntent.Load)
+        val deferred = async { viewModel.effects.first() }
+        viewModel.onIntent(RecordDetailUiIntent.OpenDelete)
+        val effect = deferred.await()
+
+        assertEquals(
+            RecordDetailUiEffect.NavigateToRoute(AppRoutes.editOutbreak(9L, openDelete = true)),
             effect
         )
     }

@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -380,7 +381,6 @@ class RecordsScreenTest {
 
         composeRule.onNodeWithTag("record-item-ingestion-7").performClick()
         composeRule.onNodeWithTag("record-detail-delete").performClick()
-        composeRule.onNodeWithTag("edit-ingestion-delete").performClick()
         composeRule.onNodeWithText("Delete ingestion record \"Tea\"? This cannot be undone.").assertIsDisplayed()
         composeRule.onNodeWithTag("edit-ingestion-delete-confirm").performClick()
 
@@ -419,7 +419,6 @@ class RecordsScreenTest {
 
         composeRule.onNodeWithTag("record-item-exposure-5").performClick()
         composeRule.onNodeWithTag("record-detail-delete").performClick()
-        composeRule.onNodeWithTag("edit-exposure-delete").performClick()
         composeRule.onNodeWithText("Delete exposure record \"Pollen\"? This cannot be undone.").assertIsDisplayed()
         composeRule.onNodeWithTag("edit-exposure-delete-confirm").performClick()
 
@@ -458,7 +457,6 @@ class RecordsScreenTest {
 
         composeRule.onNodeWithTag("record-item-outbreak-9").performClick()
         composeRule.onNodeWithTag("record-detail-delete").performClick()
-        composeRule.onNodeWithTag("edit-outbreak-delete").performClick()
         composeRule.onNodeWithText("Delete outbreak record \"Skin flare at Arm\"? This cannot be undone.").assertIsDisplayed()
         composeRule.onNodeWithTag("edit-outbreak-delete-confirm").performClick()
 
@@ -528,6 +526,117 @@ class RecordsScreenTest {
             recordTag = "record-item-exposure-5",
             formTag = "edit-exposure-form-screen"
         )
+    }
+
+    @Test
+    fun exposure_delete_cancel_from_detail_stays_closed_until_explicit_retry() {
+        val fixedNow = 1_700_000_000_000L
+        val store = ReactiveRecordStore(
+            exposure = ExposureEvent(5L, "Pollen", fixedNow - 120_000L, "outside")
+        )
+
+        composeRule.setContent {
+            ExposureEditJourneyHost(
+                recordsFactory = recordsFactoryFor(store.recordsRepository(), fixedNow),
+                detailFactoryProvider = detailFactoryProviderFor(store.detailRepository(), fixedNow),
+                editFactory = object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return EditExposureViewModel(
+                            recordId = 5L,
+                            getExposureEventUseCase = GetExposureEventUseCase(store.exposureRepository()),
+                            deleteExposureEventUseCase = DeleteExposureEventUseCase(store.exposureRepository()),
+                            updateExposureEventUseCase = UpdateExposureEventUseCase(store.exposureRepository(), CurrentTimeProvider { fixedNow }),
+                            currentTimeProvider = CurrentTimeProvider { fixedNow }
+                        ) as T
+                    }
+                }
+            )
+        }
+
+        composeRule.onNodeWithTag("record-item-exposure-5").performClick()
+        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        composeRule.onNodeWithTag("edit-exposure-delete-cancel").performClick()
+
+        composeRule.onNodeWithTag("edit-exposure-form-screen").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("edit-exposure-delete-confirm").assertCountEquals(0)
+
+        composeRule.onNodeWithTag("edit-exposure-delete").performClick()
+        composeRule.onNodeWithTag("edit-exposure-delete-confirm").assertIsDisplayed()
+    }
+
+    @Test
+    fun ingestion_delete_cancel_from_detail_stays_closed_until_explicit_retry() {
+        val fixedNow = 1_700_000_000_000L
+        val store = ReactiveRecordStore(
+            ingestion = IngestionEvent(7L, "Tea", 2, fixedNow - 60_000L, "with honey")
+        )
+
+        composeRule.setContent {
+            IngestionEditJourneyHost(
+                recordsFactory = recordsFactoryFor(store.recordsRepository(), fixedNow),
+                detailFactoryProvider = detailFactoryProviderFor(store.detailRepository(), fixedNow),
+                editFactory = object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return EditIngestionViewModel(
+                            recordId = 7L,
+                            getIngestionEventUseCase = GetIngestionEventUseCase(store.ingestionRepository()),
+                            deleteIngestionEventUseCase = DeleteIngestionEventUseCase(store.ingestionRepository()),
+                            updateIngestionEventUseCase = UpdateIngestionEventUseCase(store.ingestionRepository(), CurrentTimeProvider { fixedNow }),
+                            currentTimeProvider = CurrentTimeProvider { fixedNow }
+                        ) as T
+                    }
+                }
+            )
+        }
+
+        composeRule.onNodeWithTag("record-item-ingestion-7").performClick()
+        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        composeRule.onNodeWithTag("edit-ingestion-delete-cancel").performClick()
+
+        composeRule.onNodeWithTag("edit-ingestion-form-screen").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("edit-ingestion-delete-confirm").assertCountEquals(0)
+
+        composeRule.onNodeWithTag("edit-ingestion-delete").performClick()
+        composeRule.onNodeWithTag("edit-ingestion-delete-confirm").assertIsDisplayed()
+    }
+
+    @Test
+    fun outbreak_delete_cancel_from_detail_stays_closed_until_explicit_retry() {
+        val fixedNow = 1_700_000_000_000L
+        val store = ReactiveRecordStore(
+            outbreak = OutbreakEvent(9L, "Skin flare", "Arm", fixedNow - 180_000L, "after workout")
+        )
+
+        composeRule.setContent {
+            OutbreakEditJourneyHost(
+                recordsFactory = recordsFactoryFor(store.recordsRepository(), fixedNow),
+                detailFactoryProvider = detailFactoryProviderFor(store.detailRepository(), fixedNow),
+                editFactory = object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return EditOutbreakViewModel(
+                            recordId = 9L,
+                            getOutbreakEventUseCase = GetOutbreakEventUseCase(store.outbreakRepository()),
+                            deleteOutbreakEventUseCase = DeleteOutbreakEventUseCase(store.outbreakRepository()),
+                            updateOutbreakEventUseCase = UpdateOutbreakEventUseCase(store.outbreakRepository(), CurrentTimeProvider { fixedNow }),
+                            currentTimeProvider = CurrentTimeProvider { fixedNow }
+                        ) as T
+                    }
+                }
+            )
+        }
+
+        composeRule.onNodeWithTag("record-item-outbreak-9").performClick()
+        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        composeRule.onNodeWithTag("edit-outbreak-delete-cancel").performClick()
+
+        composeRule.onNodeWithTag("edit-outbreak-form-screen").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("edit-outbreak-delete-confirm").assertCountEquals(0)
+
+        composeRule.onNodeWithTag("edit-outbreak-delete").performClick()
+        composeRule.onNodeWithTag("edit-outbreak-delete-confirm").assertIsDisplayed()
     }
 
     @Test
@@ -879,8 +988,9 @@ private fun IngestionEditJourneyHost(
             viewModelFactory = detailFactoryProvider(7L, RecordEventType.INGESTION)
         )
 
-        AppRoutes.editIngestion(7L) -> EditIngestionScreen(
+        AppRoutes.editIngestion(7L), AppRoutes.editIngestion(7L, openDelete = true) -> EditIngestionScreen(
             onNavigateToRoute = { currentRoute = it },
+            openDeleteOnStart = currentRoute == AppRoutes.editIngestion(7L, openDelete = true),
             viewModelFactory = editFactory
         )
 

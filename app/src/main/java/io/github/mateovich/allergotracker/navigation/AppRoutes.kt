@@ -17,7 +17,7 @@ object AppRoutes {
     const val EDIT_INGREDIENT = "edit/ingredient/{$REUSABLE_ID_ARG}"
     const val EDIT_COMPOUND = "edit/compound/{$REUSABLE_ID_ARG}"
     const val EDIT_EVENT_CATALOG = "edit/catalog/{$CATALOG_KIND_ARG}/{$REUSABLE_ID_ARG}"
-    const val EDIT_INGESTION = "edit/ingestion/{$RECORD_ID_ARG}"
+    const val EDIT_INGESTION = "edit/ingestion/{$RECORD_ID_ARG}?$OPEN_DELETE_ARG={$OPEN_DELETE_ARG}"
     const val EDIT_EXPOSURE = "edit/exposure/{$RECORD_ID_ARG}?$OPEN_DELETE_ARG={$OPEN_DELETE_ARG}"
     const val EDIT_OUTBREAK = "edit/outbreak/{$RECORD_ID_ARG}?$OPEN_DELETE_ARG={$OPEN_DELETE_ARG}"
     const val REUSABLE_ENTITY_ID_RESULT = "reusableEntityId"
@@ -35,7 +35,13 @@ object AppRoutes {
 
     fun editEventCatalog(kind: String, reusableId: Long): String = "edit/catalog/$kind/$reusableId"
 
-    fun editIngestion(recordId: Long): String = "edit/ingestion/$recordId"
+    fun editIngestion(recordId: Long, openDelete: Boolean = false): String {
+        return if (openDelete) {
+            "edit/ingestion/$recordId?$OPEN_DELETE_ARG=true"
+        } else {
+            "edit/ingestion/$recordId"
+        }
+    }
 
     fun editExposure(recordId: Long, openDelete: Boolean = false): String = "edit/exposure/$recordId?$OPEN_DELETE_ARG=$openDelete"
 

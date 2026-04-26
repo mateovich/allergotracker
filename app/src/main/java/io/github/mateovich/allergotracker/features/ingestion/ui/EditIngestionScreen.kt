@@ -24,6 +24,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -39,6 +42,7 @@ import kotlinx.coroutines.flow.collectLatest
 fun EditIngestionScreen(
     onNavigateToRoute: (String) -> Unit,
     viewModelFactory: ViewModelProvider.Factory,
+    openDeleteOnStart: Boolean = false,
     selectedReusableEntity: IngestionReusableSelectionResult? = null,
     retiredReusableSelection: Boolean = false,
     onReusableEntityConsumed: () -> Unit = {},
@@ -46,6 +50,7 @@ fun EditIngestionScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val focusManager = LocalFocusManager.current
+    var shouldAutoOpenDelete by remember(openDeleteOnStart) { mutableStateOf(openDeleteOnStart) }
 
     LaunchedEffect(selectedReusableEntity) {
         selectedReusableEntity?.let {
@@ -73,6 +78,13 @@ fun EditIngestionScreen(
                     }
                 )
             }
+        }
+    }
+
+    LaunchedEffect(shouldAutoOpenDelete, state.isLoading, state.canDelete) {
+        if (shouldAutoOpenDelete && !state.isLoading && state.canDelete) {
+            shouldAutoOpenDelete = false
+            viewModel.onIntent(EditIngestionUiIntent.ShowDeleteConfirmation)
         }
     }
 

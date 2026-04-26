@@ -580,7 +580,6 @@ class MainActivityTest {
 
         composeRule.onNodeWithText("Green tea").performClick()
         composeRule.onNodeWithTag("record-detail-delete").performClick()
-        composeRule.onNodeWithTag("edit-ingestion-delete").performClick()
         composeRule.onNodeWithTag("edit-ingestion-delete-confirm").performClick()
 
         composeRule.onNodeWithTag("records-empty-state").assertIsDisplayed()
@@ -619,7 +618,6 @@ class MainActivityTest {
         composeRule.onNodeWithText("2023-11-13").assertIsDisplayed()
         navigateBack()
         composeRule.onNodeWithTag("record-detail-delete").performClick()
-        composeRule.onNodeWithTag("edit-exposure-delete").performClick()
         composeRule.onNodeWithTag("edit-exposure-delete-confirm").performClick()
 
         composeRule.onNodeWithTag("records-empty-state").assertIsDisplayed()
@@ -944,7 +942,6 @@ class MainActivityTest {
         composeRule.onNodeWithText("Pollen").performClick()
         waitForTag("record-detail-delete")
         composeRule.onNodeWithTag("record-detail-delete").performClick()
-        composeRule.onNodeWithTag("edit-exposure-delete").performClick()
         composeRule.onNodeWithTag("edit-exposure-delete-confirm").performClick()
 
         composeRule.onNodeWithContentDescription("Add record").performClick()
@@ -988,7 +985,6 @@ class MainActivityTest {
         composeRule.onNodeWithText("Skin flare").performClick()
         waitForTag("record-detail-delete")
         composeRule.onNodeWithTag("record-detail-delete").performClick()
-        composeRule.onNodeWithTag("edit-outbreak-delete").performClick()
         composeRule.onNodeWithTag("edit-outbreak-delete-confirm").performClick()
 
         composeRule.onNodeWithContentDescription("Add record").performClick()
@@ -1070,11 +1066,92 @@ class MainActivityTest {
         composeRule.onNodeWithText("2023-11-13").assertIsDisplayed()
         navigateBack()
         composeRule.onNodeWithTag("record-detail-delete").performClick()
-        composeRule.onNodeWithTag("edit-outbreak-delete").performClick()
         composeRule.onNodeWithTag("edit-outbreak-delete-confirm").performClick()
 
         composeRule.onNodeWithTag("records-empty-state").assertIsDisplayed()
         composeRule.onAllNodesWithText("Skin rash").assertCountEquals(0)
+    }
+
+    @Test
+    fun ingestion_delete_cancel_from_detail_does_not_reopen_until_delete_is_tapped_again() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        composeRule.onNodeWithTag("ingestion-item-name").performTextInput("Green tea")
+        composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
+
+        waitForTag("records-list")
+        composeRule.onNodeWithText("Green tea").performClick()
+        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        composeRule.onNodeWithTag("edit-ingestion-delete-cancel").performClick()
+
+        composeRule.onNodeWithTag("edit-ingestion-form-screen").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("edit-ingestion-delete-confirm").assertCountEquals(0)
+
+        composeRule.onNodeWithTag("edit-ingestion-delete").performClick()
+        composeRule.onNodeWithTag("edit-ingestion-delete-confirm").assertIsDisplayed()
+    }
+
+    @Test
+    fun exposure_delete_cancel_from_detail_does_not_reopen_until_delete_is_tapped_again() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Exposure").performClick()
+
+        composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
+        composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
+
+        waitForTag("records-list")
+        composeRule.onNodeWithText("Pollen").performClick()
+        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        composeRule.onNodeWithTag("edit-exposure-delete-cancel").performClick()
+
+        composeRule.onNodeWithTag("edit-exposure-form-screen").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("edit-exposure-delete-confirm").assertCountEquals(0)
+
+        composeRule.onNodeWithTag("edit-exposure-delete").performClick()
+        composeRule.onNodeWithTag("edit-exposure-delete-confirm").assertIsDisplayed()
+    }
+
+    @Test
+    fun exposure_delete_dismiss_from_detail_does_not_reopen_until_delete_is_tapped_again() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Exposure").performClick()
+
+        composeRule.onNodeWithTag("exposure-type").performTextInput("Dust")
+        composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
+
+        waitForTag("records-list")
+        composeRule.onNodeWithText("Dust").performClick()
+        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        navigateBack()
+
+        composeRule.onNodeWithTag("edit-exposure-form-screen").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("edit-exposure-delete-confirm").assertCountEquals(0)
+
+        composeRule.onNodeWithTag("edit-exposure-delete").performClick()
+        composeRule.onNodeWithTag("edit-exposure-delete-confirm").assertIsDisplayed()
+    }
+
+    @Test
+    fun outbreak_delete_cancel_from_detail_does_not_reopen_until_delete_is_tapped_again() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Outbreak").performClick()
+
+        composeRule.onNodeWithTag("outbreak-descriptor").performTextInput("Skin flare")
+        composeRule.onNodeWithTag("outbreak-body-location").performTextInput("Arm")
+        composeRule.onNodeWithTag("outbreak-save").performScrollTo().performClick()
+
+        waitForText("Skin flare")
+        composeRule.onNodeWithText("Skin flare").performClick()
+        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        composeRule.onNodeWithTag("edit-outbreak-delete-cancel").performClick()
+
+        composeRule.onNodeWithTag("edit-outbreak-form-screen").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("edit-outbreak-delete-confirm").assertCountEquals(0)
+
+        composeRule.onNodeWithTag("edit-outbreak-delete").performClick()
+        composeRule.onNodeWithTag("edit-outbreak-delete-confirm").assertIsDisplayed()
     }
 
     @Test

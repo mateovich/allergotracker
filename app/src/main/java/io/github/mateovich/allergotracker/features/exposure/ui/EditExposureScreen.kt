@@ -27,6 +27,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalFocusManager
@@ -54,6 +57,7 @@ fun EditExposureScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val focusManager = LocalFocusManager.current
+    var shouldAutoOpenDelete by remember(openDeleteOnStart) { mutableStateOf(openDeleteOnStart) }
 
     LaunchedEffect(editedCatalogSelection) {
         editedCatalogSelection?.takeIf { it.kind == ReusableEventCatalogKind.EXPOSURE_TYPE }?.let {
@@ -81,8 +85,9 @@ fun EditExposureScreen(
         }
     }
 
-    LaunchedEffect(openDeleteOnStart, state.isLoading, state.canDelete, state.isDeleteConfirmationVisible) {
-        if (openDeleteOnStart && !state.isLoading && state.canDelete && !state.isDeleteConfirmationVisible) {
+    LaunchedEffect(shouldAutoOpenDelete, state.isLoading, state.canDelete) {
+        if (shouldAutoOpenDelete && !state.isLoading && state.canDelete) {
+            shouldAutoOpenDelete = false
             viewModel.onIntent(EditExposureUiIntent.ShowDeleteConfirmation)
         }
     }
