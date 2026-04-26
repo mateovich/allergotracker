@@ -14,6 +14,9 @@ import io.github.mateovich.allergotracker.features.outbreak.domain.OutbreakEvent
 import io.github.mateovich.allergotracker.features.outbreak.domain.OutbreakRepository
 import io.github.mateovich.allergotracker.features.outbreak.domain.UpdateOutbreakEventCommand
 import io.github.mateovich.allergotracker.features.outbreak.domain.UpdateOutbreakEventUseCase
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
@@ -39,6 +42,11 @@ class EditOutbreakViewModelTest {
     @Test
     fun load_prefills_state_from_existing_record() = runBlocking {
         val viewModel = buildViewModel()
+        val expectedLocalDateTime = LocalDateTime.ofInstant(
+            Instant.ofEpochMilli(existingOccurredAt),
+            ZoneId.systemDefault()
+        ).withSecond(0).withNano(0)
+        val expectedOccurredAt = expectedLocalDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
         viewModel.onIntent(EditOutbreakUiIntent.Load)
 
@@ -47,6 +55,11 @@ class EditOutbreakViewModelTest {
         assertEquals("Skin flare at Left arm", viewModel.state.value.deleteRecordLabel)
         assertEquals("after workout", viewModel.state.value.notes)
         assertEquals(3, viewModel.state.value.selectedIntensityLevel)
+        assertEquals(expectedOccurredAt, viewModel.state.value.occurredAtEpochMs)
+        assertEquals("${expectedLocalDateTime.toLocalDate()} ${expectedLocalDateTime.toLocalTime()}", viewModel.state.value.occurredAtInput)
+        assertEquals(expectedLocalDateTime.toLocalDate(), viewModel.state.value.selectedOccurredOn)
+        assertEquals(expectedLocalDateTime.toLocalTime(), viewModel.state.value.selectedOccurredTime)
+        assertEquals(null, viewModel.state.value.selectedTimePreset)
         assertTrue(viewModel.state.value.canDelete)
     }
 
@@ -250,10 +263,53 @@ class EditOutbreakViewModelTest {
     fun time_preset_reanchors_edit_time_from_current_time() = runBlocking {
         val viewModel = buildViewModel()
         viewModel.onIntent(EditOutbreakUiIntent.Load)
+        val expectedEpochMs = Instant.ofEpochMilli(fixedNow - (60L * 60L * 1000L))
+            .atZone(ZoneId.systemDefault())
+            .withSecond(0)
+            .withNano(0)
+            .toInstant()
+            .toEpochMilli()
 
         viewModel.onIntent(EditOutbreakUiIntent.SelectTimePreset(OutbreakTimePreset.ONE_HOUR_AGO))
 
-        assertEquals(fixedNow - (60L * 60L * 1000L), viewModel.state.value.occurredAtEpochMs)
+        assertEquals(expectedEpochMs, viewModel.state.value.occurredAtEpochMs)
+        assertEquals(OutbreakTimePreset.ONE_HOUR_AGO, viewModel.state.value.selectedTimePreset)
+    }
+
+    @Test
+    fun picker_selection_updates_loaded_time_and_save_command() = runBlocking {
+        var savedCommand: UpdateOutbreakEventCommand? = null
+        val repository = object : OutbreakRepository {
+            override suspend fun createOutbreak(command: io.github.mateovich.allergotracker.features.outbreak.domain.CreateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
+            override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> = AppResult.Success(OutbreakEvent(id, "Skin flare", "Left arm", existingOccurredAt, "after workout"))
+            override suspend fun updateOutbreak(command: UpdateOutbreakEventCommand): AppResult<OutbreakEvent> {
+                savedCommand = command
+                return AppResult.Success(OutbreakEvent(command.id, command.outbreakDescriptor, command.bodyLocation, command.occurredAtEpochMs, command.notes))
+            }
+            override suspend fun deleteOutbreak(id: Long): AppResult<Unit> = AppResult.Success(Unit)
+        }
+        val viewModel = EditOutbreakViewModel(
+            recordId = 9L,
+            getOutbreakEventUseCase = GetOutbreakEventUseCase(repository),
+            deleteOutbreakEventUseCase = DeleteOutbreakEventUseCase(repository),
+            updateOutbreakEventUseCase = UpdateOutbreakEventUseCase(repository, CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = CurrentTimeProvider { fixedNow }
+        )
+        val zoneId = ZoneId.systemDefault()
+        val updatedLocalDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(existingOccurredAt), zoneId)
+            .minusDays(1)
+            .withHour(7)
+            .withMinute(10)
+            .withSecond(0)
+            .withNano(0)
+
+        viewModel.onIntent(EditOutbreakUiIntent.Load)
+        viewModel.onIntent(EditOutbreakUiIntent.SelectOccurredOn(updatedLocalDateTime.toLocalDate()))
+        viewModel.onIntent(EditOutbreakUiIntent.SelectOccurredTime(updatedLocalDateTime.toLocalTime()))
+        viewModel.onIntent(EditOutbreakUiIntent.Save)
+
+        assertEquals("07:10", viewModel.state.value.occurredAtLabel)
+        assertEquals(updatedLocalDateTime.atZone(zoneId).toInstant().toEpochMilli(), savedCommand?.occurredAtEpochMs)
     }
 
     @Test

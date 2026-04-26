@@ -16,10 +16,11 @@ import io.github.mateovich.allergotracker.features.exposure.domain.UpdateExposur
 import io.github.mateovich.allergotracker.features.exposure.domain.UpdateExposureEventUseCase
 import io.github.mateovich.allergotracker.features.ingestion.domain.CurrentTimeProvider
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,7 +36,9 @@ class EditExposureViewModel(
     private val currentTimeProvider: CurrentTimeProvider,
     private val observeReusableEventCatalogUseCase: ObserveReusableEventCatalogUseCase = emptyObserveReusableEventCatalogUseCase()
 ) : ViewModel() {
-    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+    private val zoneId = ZoneId.systemDefault()
+    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(zoneId)
+    private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     private val mutableState = MutableStateFlow(
         EditExposureUiState(
@@ -140,29 +143,16 @@ class EditExposureViewModel(
                     formMessage = ""
                 )
             }
-            is EditExposureUiIntent.UpdateOccurredAtInput -> {
-                val parsedOccurredAt = parseOccurredAtInput(intent.value)
-                updateState {
-                    it.copy(
-                        occurredAtInput = intent.value,
-                        occurredAtEpochMs = parsedOccurredAt ?: it.occurredAtEpochMs,
-                        occurredAtLabel = parsedOccurredAt?.let(::formatTime).orEmpty(),
-                        occurredAtError = null,
-                        formMessage = ""
-                    )
-                }
+            is EditExposureUiIntent.SelectOccurredOn -> updateState {
+                it.withOccurredAt(composeOccurredAt(intent.value, it.selectedOccurredTime))
+            }
+            is EditExposureUiIntent.SelectOccurredTime -> updateState {
+                it.withOccurredAt(composeOccurredAt(it.selectedOccurredOn, intent.value))
             }
             is EditExposureUiIntent.SelectTimePreset -> {
                 val nextOccurredAt = currentTimeProvider.nowEpochMillis() - intent.preset.offsetMillis
                 updateState {
-                    it.copy(
-                        selectedTimePreset = intent.preset,
-                        occurredAtEpochMs = nextOccurredAt,
-                        occurredAtInput = formatDateTimeInput(nextOccurredAt),
-                        occurredAtLabel = formatTime(nextOccurredAt),
-                        occurredAtError = null,
-                        formMessage = ""
-                    )
+                    it.withOccurredAt(nextOccurredAt, intent.preset)
                 }
             }
             EditExposureUiIntent.ShowDeleteConfirmation -> showDeleteConfirmation()
@@ -186,19 +176,16 @@ class EditExposureViewModel(
                             deleteRecordLabel = event.exposureType,
                             notes = event.notes.orEmpty(),
                             selectedIntensityLevel = event.intensityLevel,
-                            occurredAtEpochMs = event.occurredAtEpochMs,
-                            occurredAtInput = formatDateTimeInput(event.occurredAtEpochMs),
-                            occurredAtLabel = formatTime(event.occurredAtEpochMs),
                             selectedExposureTypeCatalogId = event.exposureTypeCatalogId,
                             selectedExposureTypeSummary = event.exposureTypeCatalogId
                                 ?.takeIf { selectedId -> it.availableExposureTypes.any { option -> option.id == selectedId } }
                                 ?.let { _ ->
-                                "Saved exposure type selected: ${event.exposureType}"
-                            },
+                                    "Saved exposure type selected: ${event.exposureType}"
+                                },
                             isLoading = false,
                             canSave = event.exposureType.isNotBlank(),
                             canDelete = event.exposureType.isNotBlank()
-                        ).withFilteredExposureTypes()
+                        ).withOccurredAt(event.occurredAtEpochMs).withFilteredExposureTypes()
                     }
                 }
                 is AppResult.Error -> updateState { it.copy(isLoading = false, formMessage = result.error.message) }
@@ -209,17 +196,6 @@ class EditExposureViewModel(
     private fun save() {
         val currentState = mutableState.value
         if (!currentState.canSave || currentState.isSaving || currentState.isDeleting || currentState.isLoading) return
-        val parsedOccurredAt = parseOccurredAtInput(currentState.occurredAtInput)
-        if (parsedOccurredAt == null) {
-            updateState {
-                it.copy(
-                    isSaving = false,
-                    occurredAtError = "Enter date and time as yyyy-MM-dd HH:mm.",
-                    formMessage = "Please fix the highlighted fields."
-                )
-            }
-            return
-        }
         updateState { it.copy(isSaving = true, formMessage = "") }
         viewModelScope.launch {
             when (
@@ -227,7 +203,7 @@ class EditExposureViewModel(
                     UpdateExposureEventCommand(
                         id = recordId,
                         exposureType = currentState.exposureType,
-                        occurredAtEpochMs = parsedOccurredAt,
+                        occurredAtEpochMs = currentState.occurredAtEpochMs,
                         notes = currentState.notes,
                         intensityLevel = currentState.selectedIntensityLevel,
                         exposureTypeCatalogId = currentState.selectedExposureTypeCatalogId
@@ -290,18 +266,20 @@ class EditExposureViewModel(
         updateState { it.copy(isDeleteConfirmationVisible = true, formMessage = "") }
     }
 
-    private fun formatTime(epochMillis: Long): String = timeFormatter.format(Instant.ofEpochMilli(epochMillis))
-
-    private fun formatDateTimeInput(epochMillis: Long): String {
-        return dateTimeFormatter.format(Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).toLocalDateTime())
+    private fun composeOccurredAt(date: LocalDate, time: LocalTime): Long {
+        return LocalDateTime.of(date, time.withSecond(0).withNano(0))
+            .atZone(zoneId)
+            .toInstant()
+            .toEpochMilli()
     }
 
-    private fun parseOccurredAtInput(value: String): Long? {
-        return try {
-            LocalDateTime.parse(value.trim(), dateTimeFormatter).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        } catch (_: DateTimeParseException) {
-            null
-        }
+    private fun normalizeOccurredAt(epochMillis: Long): Long {
+        return Instant.ofEpochMilli(epochMillis)
+            .atZone(zoneId)
+            .withSecond(0)
+            .withNano(0)
+            .toInstant()
+            .toEpochMilli()
     }
 
     private fun updateState(transform: (EditExposureUiState) -> EditExposureUiState) {
@@ -322,6 +300,28 @@ class EditExposureViewModel(
             showCreateExposureTypeOption = exposureType.trim().isNotBlank() && !availableExposureTypes.hasExactName(exposureType)
         )
     }
+
+    private fun EditExposureUiState.withOccurredAt(
+        epochMillis: Long,
+        selectedPreset: ExposureTimePreset? = null
+    ): EditExposureUiState {
+        val normalizedEpochMs = normalizeOccurredAt(epochMillis)
+        val occurredAt = Instant.ofEpochMilli(normalizedEpochMs).atZone(zoneId)
+        return copy(
+            occurredAtEpochMs = normalizedEpochMs,
+            occurredAtInput = dateTimeFormatter.format(occurredAt.toLocalDateTime()),
+            occurredAtLabel = timeFormatter.format(occurredAt),
+            selectedOccurredOn = occurredAt.toLocalDate(),
+            selectedOccurredTime = occurredAt.toLocalTime().withSecond(0).withNano(0),
+            selectedTimePreset = selectedPreset,
+            occurredAtError = null,
+            formMessage = ""
+        )
+    }
+
+    fun formatOccurredOnLabel(value: LocalDate): String = dateFormatter.format(value)
+
+    fun formatOccurredTimeLabel(value: LocalTime): String = value.withSecond(0).withNano(0).format(timeFormatter)
 
     private fun exposureIntensityOptions(): List<ExposureIntensityOptionUiModel> {
         return (1..5).map { level ->

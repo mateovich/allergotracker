@@ -1,6 +1,8 @@
 package io.github.mateovich.allergotracker.features.outbreak.ui
 
 import io.github.mateovich.allergotracker.features.eventcatalog.ui.ReusableEventCatalogOptionUiModel
+import java.time.LocalDate
+import java.time.LocalTime
 
 data class EditOutbreakUiState(
     val title: String = "Edit Outbreak",
@@ -11,7 +13,9 @@ data class EditOutbreakUiState(
     val occurredAtEpochMs: Long = 0L,
     val occurredAtInput: String = "",
     val occurredAtLabel: String = "",
-    val selectedTimePreset: OutbreakTimePreset = OutbreakTimePreset.NOW,
+    val selectedOccurredOn: LocalDate = LocalDate.now(),
+    val selectedOccurredTime: LocalTime = LocalTime.MIDNIGHT,
+    val selectedTimePreset: OutbreakTimePreset? = null,
     val timeOptions: List<OutbreakTimeOptionUiModel> = emptyList(),
     val selectedOutbreakDescriptorCatalogId: Long? = null,
     val selectedOutbreakDescriptorSummary: String? = null,
@@ -54,7 +58,8 @@ sealed interface EditOutbreakUiIntent {
     data object EditSelectedBodyLocationCatalog : EditOutbreakUiIntent
     data class SelectIntensityLevel(val level: Int) : EditOutbreakUiIntent
     data class UpdateNotes(val value: String) : EditOutbreakUiIntent
-    data class UpdateOccurredAtInput(val value: String) : EditOutbreakUiIntent
+    data class SelectOccurredOn(val value: LocalDate) : EditOutbreakUiIntent
+    data class SelectOccurredTime(val value: LocalTime) : EditOutbreakUiIntent
     data class SelectTimePreset(val preset: OutbreakTimePreset) : EditOutbreakUiIntent
     data object ShowDeleteConfirmation : EditOutbreakUiIntent
     data object DismissDeleteConfirmation : EditOutbreakUiIntent

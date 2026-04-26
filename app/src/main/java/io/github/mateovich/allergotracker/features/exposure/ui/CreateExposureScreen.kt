@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.mateovich.allergotracker.core.designsystem.AppScreenScaffold
+import io.github.mateovich.allergotracker.core.designsystem.DateTimePickerSection
 import io.github.mateovich.allergotracker.core.designsystem.LocalOnlyNotice
 import io.github.mateovich.allergotracker.features.eventcatalog.domain.ReusableEventCatalogKind
 import io.github.mateovich.allergotracker.features.eventcatalog.ui.EditedEventCatalogSelectionResult
@@ -153,35 +154,33 @@ fun CreateExposureScreen(
                 }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "When did it happen?", style = MaterialTheme.typography.titleSmall)
-                OutlinedTextField(
-                    value = state.occurredAtInput,
-                    onValueChange = { viewModel.onIntent(CreateExposureUiIntent.UpdateOccurredAtInput(it)) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("exposure-occurred-at-input"),
-                    label = { Text("Date and time") },
-                    supportingText = {
-                        state.occurredAtError?.let { Text(it) }
-                    },
-                    isError = state.occurredAtError != null,
-                    singleLine = true
-                )
-                Text(
-                    text = state.occurredAtLabel,
-                    modifier = Modifier.testTag("exposure-occurred-at-label")
-                )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ExposureTimePreset.entries.forEach { preset ->
-                        AssistChip(
-                            onClick = { viewModel.onIntent(CreateExposureUiIntent.SelectTimePreset(preset)) },
-                            label = { Text(preset.label) },
-                            modifier = Modifier.testTag("exposure-time-${preset.name.lowercase()}")
-                        )
+            DateTimePickerSection(
+                title = "When did it happen?",
+                value = state.occurredAtInput,
+                timeLabel = state.occurredAtLabel,
+                dateButtonLabel = viewModel.formatOccurredOnLabel(state.selectedOccurredOn),
+                timeButtonLabel = viewModel.formatOccurredTimeLabel(state.selectedOccurredTime),
+                selectedDate = state.selectedOccurredOn,
+                selectedTime = state.selectedOccurredTime,
+                inputTag = "exposure-occurred-at-input",
+                labelTag = "exposure-occurred-at-label",
+                dateButtonTag = "exposure-occurred-at-date-picker",
+                timeButtonTag = "exposure-occurred-at-time-picker",
+                error = state.occurredAtError,
+                onDateSelected = { viewModel.onIntent(CreateExposureUiIntent.SelectOccurredOn(it)) },
+                onTimeSelected = { viewModel.onIntent(CreateExposureUiIntent.SelectOccurredTime(it)) },
+                presetContent = {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ExposureTimePreset.entries.forEach { preset ->
+                            AssistChip(
+                                onClick = { viewModel.onIntent(CreateExposureUiIntent.SelectTimePreset(preset)) },
+                                label = { Text(preset.label) },
+                                modifier = Modifier.testTag("exposure-time-${preset.name.lowercase()}")
+                            )
+                        }
                     }
                 }
-            }
+            )
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = "How intense was it?", style = MaterialTheme.typography.titleSmall)

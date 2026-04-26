@@ -17,10 +17,11 @@ import io.github.mateovich.allergotracker.features.outbreak.domain.GetOutbreakEv
 import io.github.mateovich.allergotracker.features.outbreak.domain.UpdateOutbreakEventCommand
 import io.github.mateovich.allergotracker.features.outbreak.domain.UpdateOutbreakEventUseCase
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,7 +37,9 @@ class EditOutbreakViewModel(
     private val currentTimeProvider: CurrentTimeProvider,
     private val observeReusableEventCatalogUseCase: ObserveReusableEventCatalogUseCase = emptyObserveReusableEventCatalogUseCase()
 ) : ViewModel() {
-    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+    private val zoneId = ZoneId.systemDefault()
+    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(zoneId)
+    private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     private val mutableState = MutableStateFlow(
         EditOutbreakUiState(
@@ -220,29 +223,16 @@ class EditOutbreakViewModel(
                 )
             }
             is EditOutbreakUiIntent.UpdateNotes -> updateState { it.copy(notes = intent.value) }
-            is EditOutbreakUiIntent.UpdateOccurredAtInput -> {
-                val parsedOccurredAt = parseOccurredAtInput(intent.value)
-                updateState {
-                    it.copy(
-                        occurredAtInput = intent.value,
-                        occurredAtEpochMs = parsedOccurredAt ?: it.occurredAtEpochMs,
-                        occurredAtLabel = parsedOccurredAt?.let(::formatTime).orEmpty(),
-                        occurredAtError = null,
-                        formMessage = ""
-                    )
-                }
+            is EditOutbreakUiIntent.SelectOccurredOn -> updateState {
+                it.withOccurredAt(composeOccurredAt(intent.value, it.selectedOccurredTime))
+            }
+            is EditOutbreakUiIntent.SelectOccurredTime -> updateState {
+                it.withOccurredAt(composeOccurredAt(it.selectedOccurredOn, intent.value))
             }
             is EditOutbreakUiIntent.SelectTimePreset -> {
                 val nextOccurredAt = currentTimeProvider.nowEpochMillis() - intent.preset.offsetMillis
                 updateState {
-                    it.copy(
-                        selectedTimePreset = intent.preset,
-                        occurredAtEpochMs = nextOccurredAt,
-                        occurredAtInput = formatDateTimeInput(nextOccurredAt),
-                        occurredAtLabel = formatTime(nextOccurredAt),
-                        occurredAtError = null,
-                        formMessage = ""
-                    )
+                    it.withOccurredAt(nextOccurredAt, intent.preset)
                 }
             }
             EditOutbreakUiIntent.ShowDeleteConfirmation -> showDeleteConfirmation()
@@ -267,25 +257,22 @@ class EditOutbreakViewModel(
                             deleteRecordLabel = deleteRecordLabel(event.outbreakDescriptor, event.bodyLocation),
                             notes = event.notes.orEmpty(),
                             selectedIntensityLevel = event.intensityLevel,
-                            occurredAtEpochMs = event.occurredAtEpochMs,
-                            occurredAtInput = formatDateTimeInput(event.occurredAtEpochMs),
-                            occurredAtLabel = formatTime(event.occurredAtEpochMs),
                             selectedOutbreakDescriptorCatalogId = event.outbreakDescriptorCatalogId,
                             selectedOutbreakDescriptorSummary = event.outbreakDescriptorCatalogId
                                 ?.takeIf { selectedId -> it.availableOutbreakDescriptors.any { option -> option.id == selectedId } }
                                 ?.let { _ ->
-                                "Saved outbreak descriptor selected: ${event.outbreakDescriptor}"
-                            },
+                                    "Saved outbreak descriptor selected: ${event.outbreakDescriptor}"
+                                },
                             selectedBodyLocationCatalogId = event.bodyLocationCatalogId,
                             selectedBodyLocationSummary = event.bodyLocationCatalogId
                                 ?.takeIf { selectedId -> it.availableBodyLocations.any { option -> option.id == selectedId } }
                                 ?.let { _ ->
-                                "Saved body location selected: ${event.bodyLocation}"
-                            },
+                                    "Saved body location selected: ${event.bodyLocation}"
+                                },
                             isLoading = false,
                             canSave = canSave(event.outbreakDescriptor, event.bodyLocation, event.intensityLevel),
                             canDelete = true
-                        ).withFilteredCatalogs()
+                        ).withOccurredAt(event.occurredAtEpochMs).withFilteredCatalogs()
                     }
                 }
                 is AppResult.Error -> updateState { it.copy(isLoading = false, formMessage = result.error.message) }
@@ -296,17 +283,6 @@ class EditOutbreakViewModel(
     private fun save() {
         val currentState = mutableState.value
         if (!currentState.canSave || currentState.isSaving || currentState.isDeleting || currentState.isLoading) return
-        val parsedOccurredAt = parseOccurredAtInput(currentState.occurredAtInput)
-        if (parsedOccurredAt == null) {
-            updateState {
-                it.copy(
-                    isSaving = false,
-                    occurredAtError = "Enter date and time as yyyy-MM-dd HH:mm.",
-                    formMessage = "Please fix the highlighted fields."
-                )
-            }
-            return
-        }
         updateState { it.copy(isSaving = true, formMessage = "") }
         viewModelScope.launch {
             when (
@@ -315,7 +291,7 @@ class EditOutbreakViewModel(
                         id = recordId,
                         outbreakDescriptor = currentState.outbreakDescriptor,
                         bodyLocation = currentState.bodyLocation,
-                        occurredAtEpochMs = parsedOccurredAt,
+                        occurredAtEpochMs = currentState.occurredAtEpochMs,
                         notes = currentState.notes,
                         intensityLevel = currentState.selectedIntensityLevel,
                         outbreakDescriptorCatalogId = currentState.selectedOutbreakDescriptorCatalogId,
@@ -392,18 +368,20 @@ class EditOutbreakViewModel(
             IngestionQuantityOption.fromLevel(intensityLevel) != null
     }
 
-    private fun formatTime(epochMillis: Long): String = timeFormatter.format(Instant.ofEpochMilli(epochMillis))
-
-    private fun formatDateTimeInput(epochMillis: Long): String {
-        return dateTimeFormatter.format(Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).toLocalDateTime())
+    private fun composeOccurredAt(date: LocalDate, time: LocalTime): Long {
+        return LocalDateTime.of(date, time.withSecond(0).withNano(0))
+            .atZone(zoneId)
+            .toInstant()
+            .toEpochMilli()
     }
 
-    private fun parseOccurredAtInput(value: String): Long? {
-        return try {
-            LocalDateTime.parse(value.trim(), dateTimeFormatter).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        } catch (_: DateTimeParseException) {
-            null
-        }
+    private fun normalizeOccurredAt(epochMillis: Long): Long {
+        return Instant.ofEpochMilli(epochMillis)
+            .atZone(zoneId)
+            .withSecond(0)
+            .withNano(0)
+            .toInstant()
+            .toEpochMilli()
     }
 
     private fun updateState(transform: (EditOutbreakUiState) -> EditOutbreakUiState) {
@@ -425,4 +403,26 @@ class EditOutbreakViewModel(
             showCreateBodyLocationOption = bodyLocation.trim().isNotBlank() && !availableBodyLocations.hasExactName(bodyLocation)
         )
     }
+
+    private fun EditOutbreakUiState.withOccurredAt(
+        epochMillis: Long,
+        selectedPreset: OutbreakTimePreset? = null
+    ): EditOutbreakUiState {
+        val normalizedEpochMs = normalizeOccurredAt(epochMillis)
+        val occurredAt = Instant.ofEpochMilli(normalizedEpochMs).atZone(zoneId)
+        return copy(
+            occurredAtEpochMs = normalizedEpochMs,
+            occurredAtInput = dateTimeFormatter.format(occurredAt.toLocalDateTime()),
+            occurredAtLabel = timeFormatter.format(occurredAt),
+            selectedOccurredOn = occurredAt.toLocalDate(),
+            selectedOccurredTime = occurredAt.toLocalTime().withSecond(0).withNano(0),
+            selectedTimePreset = selectedPreset,
+            occurredAtError = null,
+            formMessage = ""
+        )
+    }
+
+    fun formatOccurredOnLabel(value: LocalDate): String = dateFormatter.format(value)
+
+    fun formatOccurredTimeLabel(value: LocalTime): String = value.withSecond(0).withNano(0).format(timeFormatter)
 }

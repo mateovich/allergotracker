@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,14 +20,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.imePadding
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.mateovich.allergotracker.core.designsystem.AppScreenScaffold
+import io.github.mateovich.allergotracker.core.designsystem.DateTimePickerSection
 import io.github.mateovich.allergotracker.core.designsystem.LocalOnlyNotice
 import io.github.mateovich.allergotracker.features.eventcatalog.domain.ReusableEventCatalogKind
 import io.github.mateovich.allergotracker.features.eventcatalog.ui.EditedEventCatalogSelectionResult
@@ -144,59 +145,34 @@ fun CreateOutbreakScreen(
                 onEditSelection = { viewModel.onIntent(CreateOutbreakUiIntent.EditSelectedBodyLocationCatalog) }
             )
 
-            if (state.formMessage.isNotBlank()) {
-                Text(
-                    text = state.formMessage,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.testTag("outbreak-form-message")
-                )
-            }
-
-            Button(
-                onClick = {
-                    focusManager.clearFocus(force = true)
-                    viewModel.onIntent(CreateOutbreakUiIntent.Save)
-                },
-                enabled = !state.isSaving,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("outbreak-save")
-            ) {
-                Text(if (state.isSaving) "Saving..." else "Save outbreak")
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "When did it happen?", style = MaterialTheme.typography.titleSmall)
-                OutlinedTextField(
-                    value = state.occurredAtInput,
-                    onValueChange = { viewModel.onIntent(CreateOutbreakUiIntent.UpdateOccurredAtInput(it)) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("outbreak-occurred-at-input"),
-                    label = { Text("Date and time") },
-                    supportingText = {
-                        state.occurredAtError?.let { Text(it) }
-                    },
-                    isError = state.occurredAtError != null,
-                    singleLine = true
-                )
-                if (state.occurredAtLabel.isNotBlank()) {
-                    Text(
-                        text = state.occurredAtLabel,
-                        modifier = Modifier.testTag("outbreak-occurred-at-label")
-                    )
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.timeOptions.forEach { option ->
-                        val preset = OutbreakTimePreset.valueOf(option.key)
-                        AssistChip(
-                            onClick = { viewModel.onIntent(CreateOutbreakUiIntent.SelectTimePreset(preset)) },
-                            label = { Text(option.label) },
-                            modifier = Modifier.testTag("outbreak-time-${preset.name.lowercase()}")
-                        )
+            DateTimePickerSection(
+                title = "When did it happen?",
+                value = state.occurredAtInput,
+                timeLabel = state.occurredAtLabel,
+                dateButtonLabel = viewModel.formatOccurredOnLabel(state.selectedOccurredOn),
+                timeButtonLabel = viewModel.formatOccurredTimeLabel(state.selectedOccurredTime),
+                selectedDate = state.selectedOccurredOn,
+                selectedTime = state.selectedOccurredTime,
+                inputTag = "outbreak-occurred-at-input",
+                labelTag = "outbreak-occurred-at-label",
+                dateButtonTag = "outbreak-occurred-at-date-picker",
+                timeButtonTag = "outbreak-occurred-at-time-picker",
+                error = state.occurredAtError,
+                onDateSelected = { viewModel.onIntent(CreateOutbreakUiIntent.SelectOccurredOn(it)) },
+                onTimeSelected = { viewModel.onIntent(CreateOutbreakUiIntent.SelectOccurredTime(it)) },
+                presetContent = {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        state.timeOptions.forEach { option ->
+                            val preset = OutbreakTimePreset.valueOf(option.key)
+                            AssistChip(
+                                onClick = { viewModel.onIntent(CreateOutbreakUiIntent.SelectTimePreset(preset)) },
+                                label = { Text(option.label) },
+                                modifier = Modifier.testTag("outbreak-time-${preset.name.lowercase()}")
+                            )
+                        }
                     }
                 }
-            }
+            )
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = "How intense was it?", style = MaterialTheme.typography.titleSmall)
@@ -222,6 +198,27 @@ fun CreateOutbreakScreen(
                 label = { Text("Notes (optional)") },
                 minLines = 3
             )
+
+            if (state.formMessage.isNotBlank()) {
+                Text(
+                    text = state.formMessage,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("outbreak-form-message")
+                )
+            }
+
+            Button(
+                onClick = {
+                    focusManager.clearFocus(force = true)
+                    viewModel.onIntent(CreateOutbreakUiIntent.Save)
+                },
+                enabled = !state.isSaving,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("outbreak-save")
+            ) {
+                Text(if (state.isSaving) "Saving..." else "Save outbreak")
+            }
         }
     }
 }

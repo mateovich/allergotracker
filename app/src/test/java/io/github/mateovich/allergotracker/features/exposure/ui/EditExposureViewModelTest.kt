@@ -14,6 +14,9 @@ import io.github.mateovich.allergotracker.features.exposure.domain.GetExposureEv
 import io.github.mateovich.allergotracker.features.exposure.domain.UpdateExposureEventCommand
 import io.github.mateovich.allergotracker.features.exposure.domain.UpdateExposureEventUseCase
 import io.github.mateovich.allergotracker.features.ingestion.domain.CurrentTimeProvider
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
@@ -39,6 +42,11 @@ class EditExposureViewModelTest {
     @Test
     fun load_prefills_state_from_existing_record() = runBlocking {
         val viewModel = buildViewModel()
+        val expectedLocalDateTime = LocalDateTime.ofInstant(
+            Instant.ofEpochMilli(existingOccurredAt),
+            ZoneId.systemDefault()
+        ).withSecond(0).withNano(0)
+        val expectedOccurredAt = expectedLocalDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
         viewModel.onIntent(EditExposureUiIntent.Load)
 
@@ -46,7 +54,11 @@ class EditExposureViewModelTest {
         assertEquals("Pollen", viewModel.state.value.deleteRecordLabel)
         assertEquals("outside", viewModel.state.value.notes)
         assertEquals(4, viewModel.state.value.selectedIntensityLevel)
-        assertTrue(viewModel.state.value.occurredAtInput.isNotBlank())
+        assertEquals(expectedOccurredAt, viewModel.state.value.occurredAtEpochMs)
+        assertEquals("${expectedLocalDateTime.toLocalDate()} ${expectedLocalDateTime.toLocalTime()}", viewModel.state.value.occurredAtInput)
+        assertEquals(expectedLocalDateTime.toLocalDate(), viewModel.state.value.selectedOccurredOn)
+        assertEquals(expectedLocalDateTime.toLocalTime(), viewModel.state.value.selectedOccurredTime)
+        assertEquals(null, viewModel.state.value.selectedTimePreset)
         assertTrue(viewModel.state.value.canDelete)
     }
 
@@ -195,11 +207,17 @@ class EditExposureViewModelTest {
     }
 
     @Test
-    fun valid_manual_datetime_input_updates_visible_time_label() = runBlocking {
+    fun picker_selection_updates_visible_time_label() = runBlocking {
         val viewModel = buildViewModel()
         viewModel.onIntent(EditExposureUiIntent.Load)
 
-        viewModel.onIntent(EditExposureUiIntent.UpdateOccurredAtInput("2023-11-14 21:13"))
+        val updatedLocalDateTime = LocalDateTime.ofInstant(
+            Instant.ofEpochMilli(existingOccurredAt),
+            ZoneId.systemDefault()
+        ).withHour(21).withMinute(13).withSecond(0).withNano(0)
+
+        viewModel.onIntent(EditExposureUiIntent.SelectOccurredOn(updatedLocalDateTime.toLocalDate()))
+        viewModel.onIntent(EditExposureUiIntent.SelectOccurredTime(updatedLocalDateTime.toLocalTime()))
 
         assertEquals("21:13", viewModel.state.value.occurredAtLabel)
     }
@@ -208,10 +226,52 @@ class EditExposureViewModelTest {
     fun time_preset_reanchors_edit_time_from_current_time() = runBlocking {
         val viewModel = buildViewModel()
         viewModel.onIntent(EditExposureUiIntent.Load)
+        val expectedEpochMs = Instant.ofEpochMilli(fixedNow - (60L * 60L * 1000L))
+            .atZone(ZoneId.systemDefault())
+            .withSecond(0)
+            .withNano(0)
+            .toInstant()
+            .toEpochMilli()
 
         viewModel.onIntent(EditExposureUiIntent.SelectTimePreset(ExposureTimePreset.ONE_HOUR_AGO))
 
-        assertEquals(fixedNow - (60L * 60L * 1000L), viewModel.state.value.occurredAtEpochMs)
+        assertEquals(expectedEpochMs, viewModel.state.value.occurredAtEpochMs)
+        assertEquals(ExposureTimePreset.ONE_HOUR_AGO, viewModel.state.value.selectedTimePreset)
+    }
+
+    @Test
+    fun save_uses_picker_selected_timestamp_instead_of_now() = runBlocking {
+        var savedCommand: UpdateExposureEventCommand? = null
+        val repository = object : ExposureRepository {
+            override suspend fun createExposure(command: io.github.mateovich.allergotracker.features.exposure.domain.CreateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
+            override suspend fun getExposure(id: Long): AppResult<ExposureEvent> = AppResult.Success(ExposureEvent(id, "Pollen", existingOccurredAt, "outside"))
+            override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> {
+                savedCommand = command
+                return AppResult.Success(ExposureEvent(command.id, command.exposureType, command.occurredAtEpochMs, command.notes))
+            }
+            override suspend fun deleteExposure(id: Long): AppResult<Unit> = AppResult.Success(Unit)
+        }
+        val viewModel = EditExposureViewModel(
+            recordId = 5L,
+            getExposureEventUseCase = GetExposureEventUseCase(repository),
+            deleteExposureEventUseCase = DeleteExposureEventUseCase(repository),
+            updateExposureEventUseCase = UpdateExposureEventUseCase(repository, CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = CurrentTimeProvider { fixedNow }
+        )
+        val zoneId = ZoneId.systemDefault()
+        val updatedLocalDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(existingOccurredAt), zoneId)
+            .minusDays(1)
+            .withHour(7)
+            .withMinute(10)
+            .withSecond(0)
+            .withNano(0)
+
+        viewModel.onIntent(EditExposureUiIntent.Load)
+        viewModel.onIntent(EditExposureUiIntent.SelectOccurredOn(updatedLocalDateTime.toLocalDate()))
+        viewModel.onIntent(EditExposureUiIntent.SelectOccurredTime(updatedLocalDateTime.toLocalTime()))
+        viewModel.onIntent(EditExposureUiIntent.Save)
+
+        assertEquals(updatedLocalDateTime.atZone(zoneId).toInstant().toEpochMilli(), savedCommand?.occurredAtEpochMs)
     }
 
     @Test

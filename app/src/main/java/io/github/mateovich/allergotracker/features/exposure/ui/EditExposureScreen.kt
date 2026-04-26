@@ -27,14 +27,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.mateovich.allergotracker.core.designsystem.AppScreenScaffold
+import io.github.mateovich.allergotracker.core.designsystem.DateTimePickerSection
 import io.github.mateovich.allergotracker.core.designsystem.LocalOnlyNotice
 import io.github.mateovich.allergotracker.features.eventcatalog.domain.ReusableEventCatalogKind
 import io.github.mateovich.allergotracker.features.eventcatalog.ui.EditedEventCatalogSelectionResult
@@ -227,53 +228,35 @@ fun EditExposureScreen(
                     }
                 }
             }
-            if (state.formMessage.isNotBlank()) {
-                Text(text = state.formMessage, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("edit-exposure-form-message"))
-            }
-            Button(
-                onClick = {
-                    focusManager.clearFocus(force = true)
-                    viewModel.onIntent(EditExposureUiIntent.Save)
-                },
-                enabled = state.canSave && !state.isSaving && !state.isDeleting,
-                modifier = Modifier.fillMaxWidth().testTag("edit-exposure-save")
-            ) {
-                Text(if (state.isSaving) "Saving..." else "Save changes")
-            }
-            OutlinedButton(
-                onClick = {
-                    focusManager.clearFocus(force = true)
-                    viewModel.onIntent(EditExposureUiIntent.ShowDeleteConfirmation)
-                },
-                enabled = state.canDelete && !state.isSaving && !state.isDeleting,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(if (state.isDeleteConfirmationVisible) "edit-exposure-delete-button" else "edit-exposure-delete")
-            ) {
-                Text(if (state.isDeleting) "Deleting..." else "Delete record", color = MaterialTheme.colorScheme.error)
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "When did it happen?", style = MaterialTheme.typography.titleSmall)
-                OutlinedTextField(
-                    value = state.occurredAtInput,
-                    onValueChange = { viewModel.onIntent(EditExposureUiIntent.UpdateOccurredAtInput(it)) },
-                    modifier = Modifier.fillMaxWidth().testTag("edit-exposure-occurred-at-input"),
-                    label = { Text("Date and time") },
-                    supportingText = { state.occurredAtError?.let { Text(it) } },
-                    isError = state.occurredAtError != null,
-                    singleLine = true
-                )
-                Text(text = state.occurredAtLabel, modifier = Modifier.testTag("edit-exposure-occurred-at-label"))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ExposureTimePreset.entries.forEach { preset ->
-                        AssistChip(
-                            onClick = { viewModel.onIntent(EditExposureUiIntent.SelectTimePreset(preset)) },
-                            label = { Text(preset.label) },
-                            modifier = Modifier.testTag("edit-exposure-time-${preset.name.lowercase()}")
-                        )
+
+            DateTimePickerSection(
+                title = "When did it happen?",
+                value = state.occurredAtInput,
+                timeLabel = state.occurredAtLabel,
+                dateButtonLabel = viewModel.formatOccurredOnLabel(state.selectedOccurredOn),
+                timeButtonLabel = viewModel.formatOccurredTimeLabel(state.selectedOccurredTime),
+                selectedDate = state.selectedOccurredOn,
+                selectedTime = state.selectedOccurredTime,
+                inputTag = "edit-exposure-occurred-at-input",
+                labelTag = "edit-exposure-occurred-at-label",
+                dateButtonTag = "edit-exposure-occurred-at-date-picker",
+                timeButtonTag = "edit-exposure-occurred-at-time-picker",
+                error = state.occurredAtError,
+                onDateSelected = { viewModel.onIntent(EditExposureUiIntent.SelectOccurredOn(it)) },
+                onTimeSelected = { viewModel.onIntent(EditExposureUiIntent.SelectOccurredTime(it)) },
+                presetContent = {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ExposureTimePreset.entries.forEach { preset ->
+                            AssistChip(
+                                onClick = { viewModel.onIntent(EditExposureUiIntent.SelectTimePreset(preset)) },
+                                label = { Text(preset.label) },
+                                modifier = Modifier.testTag("edit-exposure-time-${preset.name.lowercase()}")
+                            )
+                        }
                     }
                 }
-            }
+            )
+
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = "How intense was it?", style = MaterialTheme.typography.titleSmall)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -301,6 +284,31 @@ fun EditExposureScreen(
                 label = { Text("Notes (optional)") },
                 minLines = 3
             )
+            if (state.formMessage.isNotBlank()) {
+                Text(text = state.formMessage, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("edit-exposure-form-message"))
+            }
+            Button(
+                onClick = {
+                    focusManager.clearFocus(force = true)
+                    viewModel.onIntent(EditExposureUiIntent.Save)
+                },
+                enabled = state.canSave && !state.isSaving && !state.isDeleting,
+                modifier = Modifier.fillMaxWidth().testTag("edit-exposure-save")
+            ) {
+                Text(if (state.isSaving) "Saving..." else "Save changes")
+            }
+            OutlinedButton(
+                onClick = {
+                    focusManager.clearFocus(force = true)
+                    viewModel.onIntent(EditExposureUiIntent.ShowDeleteConfirmation)
+                },
+                enabled = state.canDelete && !state.isSaving && !state.isDeleting,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(if (state.isDeleteConfirmationVisible) "edit-exposure-delete-button" else "edit-exposure-delete")
+            ) {
+                Text(if (state.isDeleting) "Deleting..." else "Delete record", color = MaterialTheme.colorScheme.error)
+            }
         }
     }
 }

@@ -1,17 +1,17 @@
 package io.github.mateovich.allergotracker.features.outbreak.ui
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -25,15 +25,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.imePadding
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.mateovich.allergotracker.core.designsystem.AppScreenScaffold
+import io.github.mateovich.allergotracker.core.designsystem.DateTimePickerSection
 import io.github.mateovich.allergotracker.core.designsystem.LocalOnlyNotice
 import io.github.mateovich.allergotracker.features.eventcatalog.domain.ReusableEventCatalogKind
 import io.github.mateovich.allergotracker.features.eventcatalog.ui.EditedEventCatalogSelectionResult
@@ -215,6 +215,55 @@ fun EditOutbreakScreen(
                 onClearSelection = { viewModel.onIntent(EditOutbreakUiIntent.ClearBodyLocationCatalogSelection) },
                 onEditSelection = { viewModel.onIntent(EditOutbreakUiIntent.EditSelectedBodyLocationCatalog) }
             )
+            DateTimePickerSection(
+                title = "When did it happen?",
+                value = state.occurredAtInput,
+                timeLabel = state.occurredAtLabel,
+                dateButtonLabel = viewModel.formatOccurredOnLabel(state.selectedOccurredOn),
+                timeButtonLabel = viewModel.formatOccurredTimeLabel(state.selectedOccurredTime),
+                selectedDate = state.selectedOccurredOn,
+                selectedTime = state.selectedOccurredTime,
+                inputTag = "edit-outbreak-occurred-at-input",
+                labelTag = "edit-outbreak-occurred-at-label",
+                dateButtonTag = "edit-outbreak-occurred-at-date-picker",
+                timeButtonTag = "edit-outbreak-occurred-at-time-picker",
+                error = state.occurredAtError,
+                onDateSelected = { viewModel.onIntent(EditOutbreakUiIntent.SelectOccurredOn(it)) },
+                onTimeSelected = { viewModel.onIntent(EditOutbreakUiIntent.SelectOccurredTime(it)) },
+                presetContent = {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        state.timeOptions.forEach { option ->
+                            val preset = OutbreakTimePreset.valueOf(option.key)
+                            androidx.compose.material3.AssistChip(
+                                onClick = { viewModel.onIntent(EditOutbreakUiIntent.SelectTimePreset(preset)) },
+                                label = { Text(option.label) },
+                                modifier = Modifier.testTag("edit-outbreak-time-${preset.name.lowercase()}")
+                            )
+                        }
+                    }
+                }
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = "How intense was it?", style = MaterialTheme.typography.titleSmall)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.intensityOptions.forEach { option ->
+                        FilterChip(
+                            selected = state.selectedIntensityLevel == option.level,
+                            onClick = { viewModel.onIntent(EditOutbreakUiIntent.SelectIntensityLevel(option.level)) },
+                            label = { Text(option.label) },
+                            modifier = Modifier.testTag("edit-outbreak-intensity-${option.level}")
+                        )
+                    }
+                }
+                state.intensityError?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
+            }
+            OutlinedTextField(
+                value = state.notes,
+                onValueChange = { viewModel.onIntent(EditOutbreakUiIntent.UpdateNotes(it)) },
+                modifier = Modifier.fillMaxWidth().testTag("edit-outbreak-notes"),
+                label = { Text("Notes (optional)") },
+                minLines = 3
+            )
             if (state.formMessage.isNotBlank()) {
                 Text(text = state.formMessage, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("edit-outbreak-form-message"))
             }
@@ -240,52 +289,6 @@ fun EditOutbreakScreen(
             ) {
                 Text(if (state.isDeleting) "Deleting..." else "Delete record", color = MaterialTheme.colorScheme.error)
             }
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "When did it happen?", style = MaterialTheme.typography.titleSmall)
-                OutlinedTextField(
-                    value = state.occurredAtInput,
-                    onValueChange = { viewModel.onIntent(EditOutbreakUiIntent.UpdateOccurredAtInput(it)) },
-                    modifier = Modifier.fillMaxWidth().testTag("edit-outbreak-occurred-at-input"),
-                    label = { Text("Date and time") },
-                    supportingText = { state.occurredAtError?.let { Text(it) } },
-                    isError = state.occurredAtError != null,
-                    singleLine = true
-                )
-                if (state.occurredAtLabel.isNotBlank()) {
-                    Text(text = state.occurredAtLabel, modifier = Modifier.testTag("edit-outbreak-occurred-at-label"))
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.timeOptions.forEach { option ->
-                        val preset = OutbreakTimePreset.valueOf(option.key)
-                        AssistChip(
-                            onClick = { viewModel.onIntent(EditOutbreakUiIntent.SelectTimePreset(preset)) },
-                            label = { Text(option.label) },
-                            modifier = Modifier.testTag("edit-outbreak-time-${preset.name.lowercase()}")
-                        )
-                    }
-                }
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "How intense was it?", style = MaterialTheme.typography.titleSmall)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.intensityOptions.forEach { option ->
-                        FilterChip(
-                            selected = state.selectedIntensityLevel == option.level,
-                            onClick = { viewModel.onIntent(EditOutbreakUiIntent.SelectIntensityLevel(option.level)) },
-                            label = { Text(option.label) },
-                            modifier = Modifier.testTag("edit-outbreak-intensity-${option.level}")
-                        )
-                    }
-                }
-                state.intensityError?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
-            }
-            OutlinedTextField(
-                value = state.notes,
-                onValueChange = { viewModel.onIntent(EditOutbreakUiIntent.UpdateNotes(it)) },
-                modifier = Modifier.fillMaxWidth().testTag("edit-outbreak-notes"),
-                label = { Text("Notes (optional)") },
-                minLines = 3
-            )
         }
     }
 }

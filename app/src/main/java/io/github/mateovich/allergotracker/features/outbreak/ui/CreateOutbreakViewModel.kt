@@ -1,4 +1,5 @@
 package io.github.mateovich.allergotracker.features.outbreak.ui
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.mateovich.allergotracker.core.common.error.DomainError
@@ -9,15 +10,16 @@ import io.github.mateovich.allergotracker.features.eventcatalog.domain.emptyObse
 import io.github.mateovich.allergotracker.features.eventcatalog.ui.ReusableEventCatalogOptionUiModel
 import io.github.mateovich.allergotracker.features.eventcatalog.ui.filterForQuery
 import io.github.mateovich.allergotracker.features.eventcatalog.ui.hasExactName
+import io.github.mateovich.allergotracker.features.ingestion.domain.IngestionQuantityOption
 import io.github.mateovich.allergotracker.features.outbreak.domain.CreateOutbreakDefaultsUseCase
 import io.github.mateovich.allergotracker.features.outbreak.domain.CreateOutbreakEventCommand
 import io.github.mateovich.allergotracker.features.outbreak.domain.CreateOutbreakEventUseCase
-import io.github.mateovich.allergotracker.features.ingestion.domain.IngestionQuantityOption
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,7 +32,9 @@ class CreateOutbreakViewModel(
     private val createOutbreakEventUseCase: CreateOutbreakEventUseCase,
     private val observeReusableEventCatalogUseCase: ObserveReusableEventCatalogUseCase = emptyObserveReusableEventCatalogUseCase()
 ) : ViewModel() {
-    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+    private val zoneId = ZoneId.systemDefault()
+    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(zoneId)
+    private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     private val mutableState = MutableStateFlow(buildInitialState())
     val state: StateFlow<CreateOutbreakUiState> = mutableState.asStateFlow()
@@ -214,30 +218,18 @@ class CreateOutbreakViewModel(
                 it.copy(notes = intent.value)
             }
 
-            is CreateOutbreakUiIntent.UpdateOccurredAtInput -> updateState {
-                val parsedOccurredAt = parseOccurredAtInput(intent.value)
-                it.copy(
-                    occurredAtInput = intent.value,
-                    occurredAtEpochMs = parsedOccurredAt ?: it.occurredAtEpochMs,
-                    occurredAtLabel = parsedOccurredAt?.let(::formatTime).orEmpty(),
-                    isOccurredAtManuallyEdited = true,
-                    occurredAtError = null,
-                    formMessage = ""
-                )
+            is CreateOutbreakUiIntent.SelectOccurredOn -> updateState {
+                it.withOccurredAt(composeOccurredAt(intent.value, it.selectedOccurredTime))
+            }
+
+            is CreateOutbreakUiIntent.SelectOccurredTime -> updateState {
+                it.withOccurredAt(composeOccurredAt(it.selectedOccurredOn, intent.value))
             }
 
             is CreateOutbreakUiIntent.SelectTimePreset -> {
                 val nextOccurredAt = createOutbreakDefaultsUseCase().occurredAtEpochMs - intent.preset.offsetMillis
                 updateState {
-                    it.copy(
-                        selectedTimePreset = intent.preset,
-                        occurredAtEpochMs = nextOccurredAt,
-                        occurredAtInput = formatDateTimeInput(nextOccurredAt),
-                        occurredAtLabel = formatTime(nextOccurredAt),
-                        isOccurredAtManuallyEdited = false,
-                        occurredAtError = null,
-                        formMessage = ""
-                    )
+                    it.withOccurredAt(nextOccurredAt, intent.preset)
                 }
             }
 
@@ -248,22 +240,6 @@ class CreateOutbreakViewModel(
     private fun save() {
         val currentState = mutableState.value
         if (currentState.isSaving) return
-        val occurredAtEpochMs = if (currentState.isOccurredAtManuallyEdited) {
-            val parsedOccurredAt = parseOccurredAtInput(currentState.occurredAtInput)
-            if (parsedOccurredAt == null) {
-                updateState {
-                    it.copy(
-                        isSaving = false,
-                        occurredAtError = "Enter date and time as yyyy-MM-dd HH:mm.",
-                        formMessage = "Please fix the highlighted fields."
-                    )
-                }
-                return
-            }
-            parsedOccurredAt
-        } else {
-            currentState.occurredAtEpochMs
-        }
 
         updateState { it.copy(isSaving = true, formMessage = "") }
         viewModelScope.launch {
@@ -272,7 +248,7 @@ class CreateOutbreakViewModel(
                     CreateOutbreakEventCommand(
                         outbreakDescriptor = currentState.outbreakDescriptor,
                         bodyLocation = currentState.bodyLocation,
-                        occurredAtEpochMs = occurredAtEpochMs,
+                        occurredAtEpochMs = currentState.occurredAtEpochMs,
                         notes = currentState.notes,
                         intensityLevel = currentState.selectedIntensityLevel,
                         outbreakDescriptorCatalogId = currentState.selectedOutbreakDescriptorCatalogId,
@@ -306,14 +282,10 @@ class CreateOutbreakViewModel(
     private fun buildInitialState(): CreateOutbreakUiState {
         val defaults = createOutbreakDefaultsUseCase()
         return CreateOutbreakUiState(
-            occurredAtEpochMs = defaults.occurredAtEpochMs,
-            occurredAtInput = formatDateTimeInput(defaults.occurredAtEpochMs),
-            occurredAtLabel = formatTime(defaults.occurredAtEpochMs),
             intensityOptions = IngestionQuantityOption.entries.map { option ->
                 OutbreakIntensityOptionUiModel(level = option.level, label = option.label)
             },
             selectedIntensityLevel = defaults.intensityLevel,
-            isOccurredAtManuallyEdited = false,
             timeOptions = OutbreakTimePreset.entries.map { preset ->
                 OutbreakTimeOptionUiModel(
                     key = preset.name,
@@ -321,29 +293,24 @@ class CreateOutbreakViewModel(
                     offsetMillis = preset.offsetMillis
                 )
             }
-        ).withFilteredCatalogs()
+        ).withOccurredAt(defaults.occurredAtEpochMs, OutbreakTimePreset.NOW)
+            .withFilteredCatalogs()
     }
 
-    private fun formatTime(epochMillis: Long): String {
-        return timeFormatter.format(Instant.ofEpochMilli(epochMillis))
+    private fun composeOccurredAt(date: LocalDate, time: LocalTime): Long {
+        return LocalDateTime.of(date, time.withSecond(0).withNano(0))
+            .atZone(zoneId)
+            .toInstant()
+            .toEpochMilli()
     }
 
-    private fun formatDateTimeInput(epochMillis: Long): String {
-        return dateTimeFormatter.format(Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).toLocalDateTime())
-    }
-
-    private fun parseOccurredAtInput(value: String): Long? {
-        return try {
-            val zoneId = ZoneId.systemDefault()
-            LocalDateTime.parse(value.trim(), dateTimeFormatter)
-                .withSecond(0)
-                .withNano(0)
-                .atZone(zoneId)
-                .toInstant()
-                .toEpochMilli()
-        } catch (_: DateTimeParseException) {
-            null
-        }
+    private fun normalizeOccurredAt(epochMillis: Long): Long {
+        return Instant.ofEpochMilli(epochMillis)
+            .atZone(zoneId)
+            .withSecond(0)
+            .withNano(0)
+            .toInstant()
+            .toEpochMilli()
     }
 
     private fun canSave(outbreakDescriptor: String, bodyLocation: String, intensityLevel: Int): Boolean {
@@ -371,4 +338,26 @@ class CreateOutbreakViewModel(
             showCreateBodyLocationOption = bodyLocation.trim().isNotBlank() && !availableBodyLocations.hasExactName(bodyLocation)
         )
     }
+
+    private fun CreateOutbreakUiState.withOccurredAt(
+        epochMillis: Long,
+        selectedPreset: OutbreakTimePreset? = null
+    ): CreateOutbreakUiState {
+        val normalizedEpochMs = normalizeOccurredAt(epochMillis)
+        val occurredAt = Instant.ofEpochMilli(normalizedEpochMs).atZone(zoneId)
+        return copy(
+            occurredAtEpochMs = normalizedEpochMs,
+            occurredAtInput = dateTimeFormatter.format(occurredAt.toLocalDateTime()),
+            occurredAtLabel = timeFormatter.format(occurredAt),
+            selectedOccurredOn = occurredAt.toLocalDate(),
+            selectedOccurredTime = occurredAt.toLocalTime().withSecond(0).withNano(0),
+            selectedTimePreset = selectedPreset,
+            occurredAtError = null,
+            formMessage = ""
+        )
+    }
+
+    fun formatOccurredOnLabel(value: LocalDate): String = dateFormatter.format(value)
+
+    fun formatOccurredTimeLabel(value: LocalTime): String = value.withSecond(0).withNano(0).format(timeFormatter)
 }

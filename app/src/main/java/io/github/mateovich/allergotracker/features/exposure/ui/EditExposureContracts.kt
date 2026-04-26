@@ -1,6 +1,8 @@
 package io.github.mateovich.allergotracker.features.exposure.ui
 
 import io.github.mateovich.allergotracker.features.eventcatalog.ui.ReusableEventCatalogOptionUiModel
+import java.time.LocalDate
+import java.time.LocalTime
 
 data class EditExposureUiState(
     val title: String = "Edit Exposure",
@@ -11,7 +13,9 @@ data class EditExposureUiState(
     val occurredAtEpochMs: Long = 0L,
     val occurredAtInput: String = "",
     val occurredAtLabel: String = "",
-    val selectedTimePreset: ExposureTimePreset = ExposureTimePreset.NOW,
+    val selectedOccurredOn: LocalDate = LocalDate.now(),
+    val selectedOccurredTime: LocalTime = LocalTime.MIDNIGHT,
+    val selectedTimePreset: ExposureTimePreset? = null,
     val timeOptions: List<ExposureTimeOptionUiModel> = emptyList(),
     val intensityOptions: List<ExposureIntensityOptionUiModel> = emptyList(),
     val selectedExposureTypeCatalogId: Long? = null,
@@ -41,7 +45,8 @@ sealed interface EditExposureUiIntent {
     data object EditSelectedExposureCatalog : EditExposureUiIntent
     data class UpdateNotes(val value: String) : EditExposureUiIntent
     data class SelectIntensityLevel(val level: Int) : EditExposureUiIntent
-    data class UpdateOccurredAtInput(val value: String) : EditExposureUiIntent
+    data class SelectOccurredOn(val value: LocalDate) : EditExposureUiIntent
+    data class SelectOccurredTime(val value: LocalTime) : EditExposureUiIntent
     data class SelectTimePreset(val preset: ExposureTimePreset) : EditExposureUiIntent
     data object ShowDeleteConfirmation : EditExposureUiIntent
     data object DismissDeleteConfirmation : EditExposureUiIntent

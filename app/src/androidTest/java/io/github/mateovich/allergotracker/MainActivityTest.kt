@@ -1,5 +1,10 @@
 package io.github.mateovich.allergotracker
 
+import android.view.inputmethod.InputMethodManager
+import android.view.View
+import android.widget.DatePicker
+import android.widget.TimePicker
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertHeightIsAtLeast
@@ -17,10 +22,18 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.unit.dp
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.UiController
+import androidx.test.espresso.ViewAction
+import androidx.test.espresso.action.ViewActions.click
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import android.view.inputmethod.InputMethodManager
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import org.hamcrest.Matcher
 import org.junit.Ignore
 import org.junit.Before
 import org.junit.Rule
@@ -461,15 +474,22 @@ class MainActivityTest {
     }
 
     @Test
-    fun exposure_flow_allows_manual_datetime_correction_with_inline_feedback() {
+    fun exposure_flow_uses_picker_based_datetime_selection() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Exposure").performClick()
 
         composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
-        composeRule.onNodeWithTag("exposure-occurred-at-input").performTextReplacement("invalid")
+        composeRule.onNodeWithTag("exposure-occurred-at-date-picker").performClick()
+        setDatePicker(2023, 11, 13)
+        composeRule.onNodeWithTag("exposure-occurred-at-time-picker").performClick()
+        confirmDialog()
+        composeRule.onNodeWithText("2023-11-13").assertIsDisplayed()
         composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
 
-        waitForText("Enter date and time as yyyy-MM-dd HH:mm.")
+        waitForTag("records-list")
+        composeRule.onNodeWithText("Pollen").assertIsDisplayed()
+        composeRule.onNodeWithText("Pollen").performClick()
+        composeRule.onNodeWithTag("record-detail-occurred-at").assertIsDisplayed()
     }
 
     @Test
@@ -483,8 +503,8 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("outbreak-save").performScrollTo().performClick()
 
-        composeRule.onNodeWithText("Enter what happened.").assertIsDisplayed()
-        composeRule.onNodeWithText("Enter where on the body it happened.").assertIsDisplayed()
+        waitForText("Enter what happened.")
+        waitForText("Enter where on the body it happened.")
 
         composeRule.onNodeWithTag("outbreak-descriptor").performTextInput("Skin flare")
         composeRule.onNodeWithTag("outbreak-body-location").performTextInput("Left arm")
@@ -497,16 +517,23 @@ class MainActivityTest {
     }
 
     @Test
-    fun outbreak_flow_allows_manual_datetime_correction_with_inline_feedback() {
+    fun outbreak_flow_uses_picker_based_datetime_selection() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Outbreak").performClick()
 
         composeRule.onNodeWithTag("outbreak-descriptor").performTextInput("Skin flare")
         composeRule.onNodeWithTag("outbreak-body-location").performTextInput("Left arm")
-        composeRule.onNodeWithTag("outbreak-occurred-at-input").performTextReplacement("invalid")
+        composeRule.onNodeWithTag("outbreak-occurred-at-date-picker").performClick()
+        setDatePicker(2023, 11, 13)
+        composeRule.onNodeWithTag("outbreak-occurred-at-time-picker").performClick()
+        confirmDialog()
+        composeRule.onNodeWithText("2023-11-13").assertIsDisplayed()
         composeRule.onNodeWithTag("outbreak-save").performScrollTo().performClick()
 
-        waitForText("Enter date and time as yyyy-MM-dd HH:mm.")
+        waitForTag("records-list")
+        composeRule.onNodeWithText("Skin flare").assertIsDisplayed()
+        composeRule.onNodeWithText("Skin flare").performClick()
+        composeRule.onNodeWithTag("record-detail-occurred-at").assertIsDisplayed()
     }
 
     @Test
@@ -575,13 +602,22 @@ class MainActivityTest {
         assertOfflineFormHasNoDependencyWarnings("edit-exposure-form-screen")
 
         composeRule.onNodeWithTag("edit-exposure-type").performTextReplacement("Dust")
-        composeRule.onNodeWithTag("edit-exposure-save").performClick()
+        composeRule.onNodeWithTag("edit-exposure-occurred-at-date-picker").performClick()
+        setDatePicker(2023, 11, 13)
+        composeRule.onNodeWithTag("edit-exposure-occurred-at-time-picker").performClick()
+        confirmDialog()
+        composeRule.onNodeWithTag("edit-exposure-save").performScrollTo().performClick()
 
         waitForTag("records-list")
         composeRule.onNodeWithText("Dust").assertIsDisplayed()
         composeRule.onAllNodesWithText("Pollen").assertCountEquals(0)
 
         composeRule.onNodeWithText("Dust").performClick()
+        composeRule.onNodeWithTag("record-detail-occurred-at").assertIsDisplayed()
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        composeRule.onNodeWithTag("edit-exposure-occurred-at-date-picker").performScrollTo()
+        composeRule.onNodeWithText("2023-11-13").assertIsDisplayed()
+        navigateBack()
         composeRule.onNodeWithTag("record-detail-delete").performClick()
         composeRule.onNodeWithTag("edit-exposure-delete").performClick()
         composeRule.onNodeWithTag("edit-exposure-delete-confirm").performClick()
@@ -615,7 +651,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("edit-exposure-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("edit-exposure-type").assertTextContains("Dust")
         composeRule.onNodeWithText("Saved exposure type selected: Dust").assertIsDisplayed()
-        composeRule.onNodeWithTag("edit-exposure-save").performClick()
+        composeRule.onNodeWithTag("edit-exposure-save").performScrollTo().performClick()
 
         waitForTag("records-list")
         composeRule.onNodeWithText("Dust").assertIsDisplayed()
@@ -1017,13 +1053,22 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("edit-outbreak-descriptor").performTextReplacement("Skin rash")
         composeRule.onNodeWithTag("edit-outbreak-body-location").performTextReplacement("Left arm")
-        composeRule.onNodeWithTag("edit-outbreak-save").performClick()
+        composeRule.onNodeWithTag("edit-outbreak-occurred-at-date-picker").performClick()
+        setDatePicker(2023, 11, 13)
+        composeRule.onNodeWithTag("edit-outbreak-occurred-at-time-picker").performClick()
+        confirmDialog()
+        composeRule.onNodeWithTag("edit-outbreak-save").performScrollTo().performClick()
 
         waitForTag("records-list")
         composeRule.onNodeWithText("Skin rash").assertIsDisplayed()
         composeRule.onAllNodesWithText("Skin flare").assertCountEquals(0)
 
         composeRule.onNodeWithText("Skin rash").performClick()
+        composeRule.onNodeWithTag("record-detail-occurred-at").assertIsDisplayed()
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        composeRule.onNodeWithTag("edit-outbreak-occurred-at-date-picker").performScrollTo()
+        composeRule.onNodeWithText("2023-11-13").assertIsDisplayed()
+        navigateBack()
         composeRule.onNodeWithTag("record-detail-delete").performClick()
         composeRule.onNodeWithTag("edit-outbreak-delete").performClick()
         composeRule.onNodeWithTag("edit-outbreak-delete-confirm").performClick()
@@ -1254,6 +1299,54 @@ class MainActivityTest {
         composeRule.waitUntil(timeoutMillis = 15_000) {
             composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
         }
+    }
+
+    private fun setDatePicker(year: Int, month: Int, day: Int) {
+        onView(androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom(DatePicker::class.java))
+            .perform(setDatePickerValue(year, month, day))
+        onView(withTextFromAndroid(android.R.string.ok)).perform(click())
+        composeRule.waitForIdle()
+    }
+
+    private fun confirmDialog() {
+        onView(withTextFromAndroid(android.R.string.ok)).perform(click())
+        composeRule.waitForIdle()
+    }
+
+    private fun setDatePickerValue(year: Int, month: Int, day: Int): ViewAction {
+        return object : ViewAction {
+            override fun getConstraints(): Matcher<View> {
+                return androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom(DatePicker::class.java)
+            }
+
+            override fun getDescription(): String = "set date picker value"
+
+            override fun perform(uiController: UiController, view: View) {
+                (view as DatePicker).updateDate(year, month - 1, day)
+                uiController.loopMainThreadUntilIdle()
+            }
+        }
+    }
+
+    private fun withTextFromAndroid(resId: Int) = androidx.test.espresso.matcher.ViewMatchers.withText(resId)
+
+    private fun expectedDetailTimestampLabel(epochMillis: Long): String {
+        return DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
+            .withZone(ZoneId.systemDefault())
+            .format(Instant.ofEpochMilli(epochMillis))
+    }
+
+    private fun expectedDetailDateLabel(year: Int, month: Int, day: Int): String {
+        return DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+            .withZone(ZoneId.systemDefault())
+            .format(Instant.ofEpochMilli(expectedEpochMillis(year, month, day, 0, 0)))
+    }
+
+    private fun expectedEpochMillis(year: Int, month: Int, day: Int, hour: Int, minute: Int): Long {
+        return LocalDateTime.of(year, month, day, hour, minute)
+            .atZone(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
     }
 
     private fun validImportJson(): String {

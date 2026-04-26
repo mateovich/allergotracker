@@ -13,6 +13,7 @@ import io.github.mateovich.allergotracker.features.exposure.domain.ExposureEvent
 import io.github.mateovich.allergotracker.features.exposure.domain.ExposureRepository
 import io.github.mateovich.allergotracker.features.ingestion.domain.CurrentTimeProvider
 import java.time.Instant
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.async
@@ -86,19 +87,7 @@ class CreateExposureViewModelTest {
     }
 
     @Test
-    fun invalid_datetime_input_shows_actionable_inline_error() {
-        val viewModel = buildViewModel()
-
-        viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType("Pollen"))
-        viewModel.onIntent(CreateExposureUiIntent.UpdateOccurredAtInput("bad-input"))
-        viewModel.onIntent(CreateExposureUiIntent.Save)
-
-        assertEquals("Enter date and time as yyyy-MM-dd HH:mm.", viewModel.state.value.occurredAtError)
-        assertEquals("Please fix the highlighted fields.", viewModel.state.value.formMessage)
-    }
-
-    @Test
-    fun valid_manual_datetime_input_normalizes_hidden_subminute_precision() {
+    fun selecting_date_and_time_updates_state_and_save_command() = runBlocking {
         val viewModel = buildViewModel()
         val zoneId = ZoneId.systemDefault()
         val updatedEpochMs = Instant.ofEpochMilli(fixedNow)
@@ -109,17 +98,44 @@ class CreateExposureViewModelTest {
             .withNano(0)
             .toInstant()
             .toEpochMilli()
-        val updatedInput = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-            .withZone(zoneId)
-            .format(Instant.ofEpochMilli(updatedEpochMs))
+        var savedCommand: CreateExposureEventCommand? = null
         val expectedTimeLabel = DateTimeFormatter.ofPattern("HH:mm")
             .withZone(zoneId)
             .format(Instant.ofEpochMilli(updatedEpochMs))
+        val updatedLocalDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(updatedEpochMs), zoneId)
 
-        viewModel.onIntent(CreateExposureUiIntent.UpdateOccurredAtInput(updatedInput))
+        viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType("Pollen"))
+        viewModel.onIntent(CreateExposureUiIntent.SelectOccurredOn(updatedLocalDateTime.toLocalDate()))
+        viewModel.onIntent(CreateExposureUiIntent.SelectOccurredTime(updatedLocalDateTime.toLocalTime()))
+        viewModel.onIntent(CreateExposureUiIntent.Save)
 
         assertEquals(updatedEpochMs, viewModel.state.value.occurredAtEpochMs)
         assertEquals(expectedTimeLabel, viewModel.state.value.occurredAtLabel)
+        assertEquals(updatedLocalDateTime.toLocalDate(), viewModel.state.value.selectedOccurredOn)
+        assertEquals(updatedLocalDateTime.toLocalTime().withSecond(0).withNano(0), viewModel.state.value.selectedOccurredTime)
+    }
+
+    @Test
+    fun save_uses_picker_selected_timestamp() = runBlocking {
+        var savedCommand: CreateExposureEventCommand? = null
+        val viewModel = buildViewModel(onCreateExposure = { savedCommand = it })
+        val zoneId = ZoneId.systemDefault()
+        val updatedLocalDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(fixedNow), zoneId)
+            .minusDays(1)
+            .withHour(8)
+            .withMinute(45)
+            .withSecond(0)
+            .withNano(0)
+
+        viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType("Pollen"))
+        viewModel.onIntent(CreateExposureUiIntent.SelectOccurredOn(updatedLocalDateTime.toLocalDate()))
+        viewModel.onIntent(CreateExposureUiIntent.SelectOccurredTime(updatedLocalDateTime.toLocalTime()))
+        viewModel.onIntent(CreateExposureUiIntent.Save)
+
+        assertEquals(
+            updatedLocalDateTime.atZone(zoneId).toInstant().toEpochMilli(),
+            savedCommand?.occurredAtEpochMs
+        )
     }
 
     @Test
