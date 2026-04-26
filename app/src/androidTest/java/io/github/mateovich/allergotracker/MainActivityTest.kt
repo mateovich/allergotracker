@@ -1089,18 +1089,18 @@ class MainActivityTest {
 
     @Test
     fun ingestion_record_detail_shows_manual_entry_when_no_reusable_link() {
-        composeRule.onNodeWithContentDescription("Add record").performClick()
-        composeRule.onNodeWithText("Ingestion").performClick()
-
-        composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Random snack")
-        composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
-        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
+        composeRule.activity.insertManualIngestionForTesting(
+            itemName = "Random snack",
+            quantityLevel = 2,
+            occurredAtEpochMs = System.currentTimeMillis()
+        )
+        composeRule.waitForIdle()
 
         waitForText("Random snack")
         composeRule.onNodeWithText("Random snack").performClick()
 
         composeRule.onNodeWithTag("record-detail-screen").assertIsDisplayed()
-        composeRule.onNodeWithText("Reusable ingredient").assertIsDisplayed()
+        composeRule.onNodeWithText("Manual entry").assertIsDisplayed()
     }
 
     private fun assertNavigatesToForm(optionLabel: String, destinationTitle: String) {

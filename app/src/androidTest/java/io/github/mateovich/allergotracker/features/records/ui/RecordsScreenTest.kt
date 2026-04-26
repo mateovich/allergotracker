@@ -62,6 +62,7 @@ import io.github.mateovich.allergotracker.features.outbreak.ui.EditOutbreakScree
 import io.github.mateovich.allergotracker.features.outbreak.ui.EditOutbreakViewModel
 import io.github.mateovich.allergotracker.features.records.domain.ObserveRecordDetailUseCase
 import io.github.mateovich.allergotracker.features.records.domain.RecordDetail
+import io.github.mateovich.allergotracker.features.records.domain.RecordDetailSnapshot
 import io.github.mateovich.allergotracker.features.records.domain.ObserveRecordCountUseCase
 import io.github.mateovich.allergotracker.features.records.domain.ObserveRecordsUseCase
 import io.github.mateovich.allergotracker.features.records.domain.RecordEventType
@@ -69,6 +70,7 @@ import io.github.mateovich.allergotracker.features.records.domain.RecordSummary
 import io.github.mateovich.allergotracker.features.records.domain.RecordSummaryComparator
 import io.github.mateovich.allergotracker.features.records.domain.RecordsFilter
 import io.github.mateovich.allergotracker.features.records.domain.RecordsRepository
+import io.github.mateovich.allergotracker.features.records.domain.recordIntensityLabel
 import io.github.mateovich.allergotracker.features.records.ui.RecordDetailScreen
 import io.github.mateovich.allergotracker.features.records.ui.RecordDetailViewModel
 import io.github.mateovich.allergotracker.features.records.ui.RecordDetailViewModelFactory
@@ -1102,7 +1104,7 @@ private class ReactiveRecordStore(
                                 recordId = it.id,
                                 occurredAtEpochMs = it.occurredAtEpochMs,
                                 exposureType = it.exposureType,
-                                intensityLabel = "${it.intensityLevel} ${io.github.mateovich.allergotracker.features.ingestion.domain.IngestionQuantityOption.fromLevel(it.intensityLevel)?.label?.substringAfter(' ') ?: ""}".trim(),
+                                intensityLabel = recordIntensityLabel(it.intensityLevel),
                                 notes = it.notes
                             )
                         )
@@ -1115,7 +1117,7 @@ private class ReactiveRecordStore(
                                 occurredAtEpochMs = it.occurredAtEpochMs,
                                 outbreakDescriptor = it.outbreakDescriptor,
                                 bodyLocation = it.bodyLocation,
-                                intensityLabel = "${it.intensityLevel} ${io.github.mateovich.allergotracker.features.ingestion.domain.IngestionQuantityOption.fromLevel(it.intensityLevel)?.label?.substringAfter(' ') ?: ""}".trim(),
+                                intensityLabel = recordIntensityLabel(it.intensityLevel),
                                 notes = it.notes
                             )
                         )
@@ -1220,17 +1222,24 @@ private class ReactiveRecordStore(
 }
 
 private fun IngestionEvent.toRecordSummary(): RecordSummary {
+    val quantityLabel = IngestionQuantityOption.fromLevel(quantityLevel)?.label.orEmpty()
     return RecordSummary(
         id = "ingestion-$id",
         sortKey = id,
         typeLabel = "Ingestion",
         title = itemName,
-        detailLabel = "$quantityLevel Light snack",
+        detailLabel = quantityLabel,
         occurredAtEpochMs = occurredAtEpochMs,
         createdAtEpochMs = occurredAtEpochMs,
         sourceId = id,
         eventType = RecordEventType.INGESTION,
-        intensityLevel = quantityLevel
+        intensityLevel = quantityLevel,
+        detailSnapshot = RecordDetailSnapshot.Ingestion(
+            quantityLabel = quantityLabel,
+            reusableEntityKind = reusableEntityKind,
+            reusableEntityId = reusableEntityId,
+            notes = notes
+        )
     )
 }
 
@@ -1240,12 +1249,19 @@ private fun ExposureEvent.toRecordSummary(): RecordSummary {
         sortKey = id,
         typeLabel = "Exposure",
         title = exposureType,
-        detailLabel = "Exposure recorded",
+        detailLabel = listOfNotNull(
+            recordIntensityLabel(intensityLevel),
+            notes?.takeIf { it.isNotBlank() }
+        ).joinToString(" - ").ifBlank { "Exposure recorded" },
         occurredAtEpochMs = occurredAtEpochMs,
         createdAtEpochMs = occurredAtEpochMs,
         sourceId = id,
         eventType = RecordEventType.EXPOSURE,
-        intensityLevel = intensityLevel
+        intensityLevel = intensityLevel,
+        detailSnapshot = RecordDetailSnapshot.Exposure(
+            intensityLabel = recordIntensityLabel(intensityLevel),
+            notes = notes
+        )
     )
 }
 
@@ -1255,11 +1271,20 @@ private fun OutbreakEvent.toRecordSummary(): RecordSummary {
         sortKey = id,
         typeLabel = "Outbreak",
         title = outbreakDescriptor,
-        detailLabel = "$bodyLocation - ${notes ?: ""}".trimEnd(' ', '-'),
+        detailLabel = listOfNotNull(
+            recordIntensityLabel(intensityLevel),
+            bodyLocation.takeIf { it.isNotBlank() },
+            notes?.takeIf { it.isNotBlank() }
+        ).joinToString(" - "),
         occurredAtEpochMs = occurredAtEpochMs,
         createdAtEpochMs = occurredAtEpochMs,
         sourceId = id,
         eventType = RecordEventType.OUTBREAK,
-        intensityLevel = intensityLevel
+        intensityLevel = intensityLevel,
+        detailSnapshot = RecordDetailSnapshot.Outbreak(
+            bodyLocation = bodyLocation,
+            intensityLabel = recordIntensityLabel(intensityLevel),
+            notes = notes
+        )
     )
 }

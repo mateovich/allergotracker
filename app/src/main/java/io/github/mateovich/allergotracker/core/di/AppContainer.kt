@@ -73,6 +73,7 @@ import io.github.mateovich.allergotracker.features.ingredients.domain.UpdateReus
 import io.github.mateovich.allergotracker.features.ingredients.ui.CreateIngredientViewModelFactory
 import io.github.mateovich.allergotracker.features.ingredients.ui.EditIngredientViewModelFactory
 import io.github.mateovich.allergotracker.features.ingestion.data.RoomIngestionRepository
+import io.github.mateovich.allergotracker.features.ingestion.data.IngestionEventEntity
 import io.github.mateovich.allergotracker.features.ingestion.domain.CreateIngestionDefaultsUseCase
 import io.github.mateovich.allergotracker.features.ingestion.domain.CreateIngestionEventUseCase
 import io.github.mateovich.allergotracker.features.ingestion.domain.CurrentTimeProvider
@@ -612,6 +613,27 @@ class AppContainer(appContext: Context) {
     fun clearAllDataForTesting() {
         runBlocking {
             appDatabase.clearAllTables()
+        }
+    }
+
+    fun insertManualIngestionForTesting(
+        itemName: String,
+        quantityLevel: Int,
+        occurredAtEpochMs: Long,
+        notes: String? = null
+    ): Long {
+        return runBlocking {
+            ingestionEventDao.insert(
+                IngestionEventEntity(
+                    itemName = itemName,
+                    quantityLevel = quantityLevel,
+                    occurredAtEpochMs = occurredAtEpochMs,
+                    notes = notes,
+                    reusableEntityKind = null,
+                    reusableEntityId = null,
+                    createdAtEpochMs = occurredAtEpochMs
+                )
+            )
         }
     }
 }

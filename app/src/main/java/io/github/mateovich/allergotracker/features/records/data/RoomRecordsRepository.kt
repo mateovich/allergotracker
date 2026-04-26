@@ -8,11 +8,13 @@ import io.github.mateovich.allergotracker.features.ingestion.domain.IngestionQua
 import io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEntityKind
 import io.github.mateovich.allergotracker.features.outbreak.data.OutbreakEventDao
 import io.github.mateovich.allergotracker.features.records.domain.RecordDetail
+import io.github.mateovich.allergotracker.features.records.domain.RecordDetailSnapshot
 import io.github.mateovich.allergotracker.features.records.domain.RecordEventType
 import io.github.mateovich.allergotracker.features.records.domain.RecordsFilter
 import io.github.mateovich.allergotracker.features.records.domain.RecordSummary
 import io.github.mateovich.allergotracker.features.records.domain.RecordSummaryComparator
 import io.github.mateovich.allergotracker.features.records.domain.RecordsRepository
+import io.github.mateovich.allergotracker.features.records.domain.recordIntensityLabel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -99,7 +101,13 @@ private fun io.github.mateovich.allergotracker.features.ingestion.data.Ingestion
         createdAtEpochMs = createdAtEpochMs,
         sourceId = id,
         eventType = RecordEventType.INGESTION,
-        intensityLevel = quantityLevel
+        intensityLevel = quantityLevel,
+        detailSnapshot = RecordDetailSnapshot.Ingestion(
+            quantityLabel = IngestionQuantityOption.fromLevel(quantityLevel)?.label.orEmpty(),
+            reusableEntityKind = ReusableEntityKind.fromStorageValue(reusableEntityKind),
+            reusableEntityId = reusableEntityId,
+            notes = notes
+        )
     )
 }
 
@@ -110,14 +118,18 @@ private fun io.github.mateovich.allergotracker.features.exposure.data.ExposureEv
         typeLabel = "Exposure",
         title = exposureType,
         detailLabel = listOfNotNull(
-            intensitySummaryLabel(intensityLevel),
+            recordIntensityLabel(intensityLevel),
             notes?.takeIf { it.isNotBlank() }
         ).joinToString(" - ").ifBlank { "Exposure recorded" },
         occurredAtEpochMs = occurredAtEpochMs,
         createdAtEpochMs = createdAtEpochMs,
         sourceId = id,
         eventType = RecordEventType.EXPOSURE,
-        intensityLevel = intensityLevel
+        intensityLevel = intensityLevel,
+        detailSnapshot = RecordDetailSnapshot.Exposure(
+            intensityLabel = recordIntensityLabel(intensityLevel),
+            notes = notes
+        )
     )
 }
 
@@ -128,7 +140,7 @@ private fun io.github.mateovich.allergotracker.features.outbreak.data.OutbreakEv
         typeLabel = "Outbreak",
         title = outbreakDescriptor,
         detailLabel = listOfNotNull(
-            intensitySummaryLabel(intensityLevel),
+            recordIntensityLabel(intensityLevel),
             bodyLocation.takeIf { it.isNotBlank() },
             notes?.takeIf { it.isNotBlank() }
         ).joinToString(" - "),
@@ -136,7 +148,12 @@ private fun io.github.mateovich.allergotracker.features.outbreak.data.OutbreakEv
         createdAtEpochMs = createdAtEpochMs,
         sourceId = id,
         eventType = RecordEventType.OUTBREAK,
-        intensityLevel = intensityLevel
+        intensityLevel = intensityLevel,
+        detailSnapshot = RecordDetailSnapshot.Outbreak(
+            bodyLocation = bodyLocation,
+            intensityLabel = recordIntensityLabel(intensityLevel),
+            notes = notes
+        )
     )
 }
 
@@ -157,7 +174,7 @@ private fun io.github.mateovich.allergotracker.features.exposure.data.ExposureEv
         recordId = id,
         occurredAtEpochMs = occurredAtEpochMs,
         exposureType = exposureType,
-        intensityLabel = intensitySummaryLabel(intensityLevel),
+        intensityLabel = recordIntensityLabel(intensityLevel),
         notes = notes
     )
 }
@@ -168,12 +185,10 @@ private fun io.github.mateovich.allergotracker.features.outbreak.data.OutbreakEv
         occurredAtEpochMs = occurredAtEpochMs,
         outbreakDescriptor = outbreakDescriptor,
         bodyLocation = bodyLocation,
-        intensityLabel = intensitySummaryLabel(intensityLevel),
+        intensityLabel = recordIntensityLabel(intensityLevel),
         notes = notes
     )
 }
-
-private fun intensitySummaryLabel(level: Int): String = "Intensity $level"
 
 private fun RecordSummary.matches(filters: RecordsFilter, zoneId: ZoneId): Boolean {
     if (filters.eventTypes.isNotEmpty() && eventType !in filters.eventTypes) {

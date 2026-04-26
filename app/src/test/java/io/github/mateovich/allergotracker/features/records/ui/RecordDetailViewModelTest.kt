@@ -35,7 +35,7 @@ class RecordDetailViewModelTest {
                             recordId = 5L,
                             occurredAtEpochMs = 1_700_000_000_000L,
                             exposureType = "Pollen",
-                            intensityLabel = "2 Light snack",
+                            intensityLabel = "Intensity 2",
                             notes = "outside"
                         )
                     )
@@ -49,7 +49,7 @@ class RecordDetailViewModelTest {
             listOf("Exposure", "Intensity", "Notes"),
             viewModel.state.value.fields.map { it.label }
         )
-        assertEquals("2 Light snack", viewModel.state.value.fields[1].value)
+        assertEquals("Intensity 2", viewModel.state.value.fields[1].value)
     }
 
     @Test
@@ -65,7 +65,7 @@ class RecordDetailViewModelTest {
                             occurredAtEpochMs = 1_700_000_000_000L,
                             outbreakDescriptor = "Skin flare",
                             bodyLocation = "Left arm",
-                            intensityLabel = "4 Large",
+                            intensityLabel = "Intensity 4",
                             notes = "after workout"
                         )
                     )
@@ -79,7 +79,7 @@ class RecordDetailViewModelTest {
             listOf("Descriptor", "Body location", "Intensity", "Notes"),
             viewModel.state.value.fields.map { it.label }
         )
-        assertEquals("4 Large", viewModel.state.value.fields[2].value)
+        assertEquals("Intensity 4", viewModel.state.value.fields[2].value)
     }
 
     @Test
@@ -245,7 +245,7 @@ class RecordDetailViewModelTest {
                             recordId = 5L,
                             occurredAtEpochMs = 1_700_000_000_000L,
                             exposureType = "Pollen",
-                            intensityLabel = "2 Light snack",
+                            intensityLabel = "Intensity 2",
                             notes = "outside"
                         )
                     )
@@ -277,7 +277,7 @@ class RecordDetailViewModelTest {
                             occurredAtEpochMs = 1_700_000_000_000L,
                             outbreakDescriptor = "Skin flare",
                             bodyLocation = "Left arm",
-                            intensityLabel = "4 Large",
+                            intensityLabel = "Intensity 4",
                             notes = "after workout"
                         )
                     )

@@ -41,6 +41,20 @@ class MainActivity : ComponentActivity() {
         appContainer.clearAllDataForTesting()
     }
 
+    fun insertManualIngestionForTesting(
+        itemName: String,
+        quantityLevel: Int,
+        occurredAtEpochMs: Long,
+        notes: String? = null
+    ): Long {
+        return appContainer.insertManualIngestionForTesting(
+            itemName = itemName,
+            quantityLevel = quantityLevel,
+            occurredAtEpochMs = occurredAtEpochMs,
+            notes = notes
+        )
+    }
+
     fun enqueueImportDocumentForTesting(fileName: String, contents: String) {
         val file = cacheDir.resolve(fileName)
         file.writeText(contents)

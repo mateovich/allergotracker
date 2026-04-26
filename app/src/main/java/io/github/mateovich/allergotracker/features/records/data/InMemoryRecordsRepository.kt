@@ -4,10 +4,12 @@ import io.github.mateovich.allergotracker.core.common.error.DomainError
 import io.github.mateovich.allergotracker.core.common.result.AppResult
 import io.github.mateovich.allergotracker.features.ingestion.domain.IngestionQuantityOption
 import io.github.mateovich.allergotracker.features.records.domain.RecordDetail
+import io.github.mateovich.allergotracker.features.records.domain.RecordDetailSnapshot
 import io.github.mateovich.allergotracker.features.records.domain.RecordsFilter
 import io.github.mateovich.allergotracker.features.records.domain.RecordsRepository
 import io.github.mateovich.allergotracker.features.records.domain.RecordSummary
 import io.github.mateovich.allergotracker.features.records.domain.RecordEventType
+import io.github.mateovich.allergotracker.features.records.domain.recordIntensityLabel
 import java.time.Instant
 import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
@@ -44,29 +46,36 @@ class InMemoryRecordsRepository(
                             recordId = record.sourceId,
                             occurredAtEpochMs = record.occurredAtEpochMs,
                             itemName = record.title,
-                            quantityLabel = record.detailLabel.ifBlank {
-                                IngestionQuantityOption.fromLevel(record.intensityLevel ?: 0)?.label.orEmpty()
-                            },
-                            reusableEntityKind = null,
-                            reusableEntityId = null,
-                            notes = null
+                            quantityLabel = (record.detailSnapshot as? RecordDetailSnapshot.Ingestion)?.quantityLabel
+                                ?: record.detailLabel.ifBlank {
+                                    IngestionQuantityOption.fromLevel(record.intensityLevel ?: 0)?.label.orEmpty()
+                                },
+                            reusableEntityKind = (record.detailSnapshot as? RecordDetailSnapshot.Ingestion)?.reusableEntityKind,
+                            reusableEntityId = (record.detailSnapshot as? RecordDetailSnapshot.Ingestion)?.reusableEntityId,
+                            notes = (record.detailSnapshot as? RecordDetailSnapshot.Ingestion)?.notes
                         )
 
                         RecordEventType.EXPOSURE -> RecordDetail.Exposure(
                             recordId = record.sourceId,
                             occurredAtEpochMs = record.occurredAtEpochMs,
                             exposureType = record.title,
-                            intensityLabel = IngestionQuantityOption.fromLevel(record.intensityLevel ?: 0)?.label.orEmpty(),
-                            notes = record.detailLabel.takeIf { it.isNotBlank() && it != "Exposure recorded" }
+                            intensityLabel = (record.detailSnapshot as? RecordDetailSnapshot.Exposure)?.intensityLabel
+                                ?: recordIntensityLabel(record.intensityLevel),
+                            notes = (record.detailSnapshot as? RecordDetailSnapshot.Exposure)?.notes
+                                ?: record.detailLabel.takeIf { it.isNotBlank() && it != "Exposure recorded" }
                         )
 
                         RecordEventType.OUTBREAK -> RecordDetail.Outbreak(
                             recordId = record.sourceId,
                             occurredAtEpochMs = record.occurredAtEpochMs,
                             outbreakDescriptor = record.title,
-                            bodyLocation = record.detailLabel.substringBefore(" - ").ifBlank { "Unknown" },
-                            intensityLabel = IngestionQuantityOption.fromLevel(record.intensityLevel ?: 0)?.label.orEmpty(),
-                            notes = record.detailLabel.substringAfter(" - ", "").ifBlank { null }
+                            bodyLocation = (record.detailSnapshot as? RecordDetailSnapshot.Outbreak)?.bodyLocation
+                                ?.takeIf { it.isNotBlank() }
+                                ?: record.detailLabel.substringBefore(" - ").ifBlank { "Unknown" },
+                            intensityLabel = (record.detailSnapshot as? RecordDetailSnapshot.Outbreak)?.intensityLabel
+                                ?: recordIntensityLabel(record.intensityLevel),
+                            notes = (record.detailSnapshot as? RecordDetailSnapshot.Outbreak)?.notes
+                                ?: record.detailLabel.substringAfter(" - ", "").ifBlank { null }
                         )
                     }
                 )

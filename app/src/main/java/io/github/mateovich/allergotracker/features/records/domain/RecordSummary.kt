@@ -1,5 +1,7 @@
 package io.github.mateovich.allergotracker.features.records.domain
 
+import io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEntityKind
+
 enum class RecordEventType {
     INGESTION,
     EXPOSURE,
@@ -16,5 +18,30 @@ data class RecordSummary(
     val createdAtEpochMs: Long,
     val sourceId: Long,
     val eventType: RecordEventType,
-    val intensityLevel: Int? = null
+    val intensityLevel: Int? = null,
+    val detailSnapshot: RecordDetailSnapshot? = null
 )
+
+sealed interface RecordDetailSnapshot {
+    data class Ingestion(
+        val quantityLabel: String,
+        val reusableEntityKind: ReusableEntityKind?,
+        val reusableEntityId: Long?,
+        val notes: String?
+    ) : RecordDetailSnapshot
+
+    data class Exposure(
+        val intensityLabel: String,
+        val notes: String?
+    ) : RecordDetailSnapshot
+
+    data class Outbreak(
+        val bodyLocation: String,
+        val intensityLabel: String,
+        val notes: String?
+    ) : RecordDetailSnapshot
+}
+
+fun recordIntensityLabel(level: Int?): String {
+    return level?.let { "Intensity $it" }.orEmpty()
+}
