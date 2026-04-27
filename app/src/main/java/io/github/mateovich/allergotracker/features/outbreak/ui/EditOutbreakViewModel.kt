@@ -43,7 +43,7 @@ class EditOutbreakViewModel(
     private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
     private val mutableState = MutableStateFlow(
         EditOutbreakUiState(
-            intensityOptions = IngestionQuantityOption.entries.map { OutbreakIntensityOptionUiModel(it.level, it.label) },
+            intensityOptions = outbreakIntensityOptions(),
             timeOptions = OutbreakTimePreset.entries.map { OutbreakTimeOptionUiModel(it.name, it.label, it.offsetMillis) }
         )
     )

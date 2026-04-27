@@ -54,6 +54,10 @@ class EditOutbreakViewModelTest {
         assertEquals("Left arm", viewModel.state.value.bodyLocation)
         assertEquals("Skin flare at Left arm", viewModel.state.value.deleteRecordLabel)
         assertEquals("after workout", viewModel.state.value.notes)
+        assertEquals(
+            listOf("Intensity 1", "Intensity 2", "Intensity 3", "Intensity 4", "Intensity 5"),
+            viewModel.state.value.intensityOptions.map { it.label }
+        )
         assertEquals(3, viewModel.state.value.selectedIntensityLevel)
         assertEquals(expectedOccurredAt, viewModel.state.value.occurredAtEpochMs)
         assertEquals("${expectedLocalDateTime.toLocalDate()} ${expectedLocalDateTime.toLocalTime()}", viewModel.state.value.occurredAtInput)

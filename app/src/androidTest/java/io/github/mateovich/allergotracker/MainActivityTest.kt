@@ -400,6 +400,7 @@ class MainActivityTest {
         composeRule.onNodeWithText("Ingestion").performClick()
         composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Oat")
         composeRule.onNodeWithText("Oat milk - Ingredient").performClick()
+        waitForTag("ingestion-reusable-summary")
 
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk")
         composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable ingredient selected: Oat milk")
@@ -457,7 +458,9 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("create-exposure-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("exposure-occurred-at-label").assertIsDisplayed()
-        composeRule.onNodeWithTag("exposure-occurred-at-input").assertIsDisplayed()
+        composeRule.onNodeWithTag("exposure-occurred-at-date-picker").assertIsDisplayed()
+        composeRule.onNodeWithTag("exposure-occurred-at-time-picker").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("exposure-occurred-at-input").assertCountEquals(0)
 
         composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
 
@@ -499,7 +502,9 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("create-outbreak-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("outbreak-occurred-at-label").assertIsDisplayed()
-        composeRule.onNodeWithTag("outbreak-occurred-at-input").assertIsDisplayed()
+        composeRule.onNodeWithTag("outbreak-occurred-at-date-picker").assertIsDisplayed()
+        composeRule.onNodeWithTag("outbreak-occurred-at-time-picker").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("outbreak-occurred-at-input").assertCountEquals(0)
 
         composeRule.onNodeWithTag("outbreak-save").performScrollTo().performClick()
 
@@ -523,6 +528,8 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("outbreak-descriptor").performTextInput("Skin flare")
         composeRule.onNodeWithTag("outbreak-body-location").performTextInput("Left arm")
+        composeRule.runOnUiThread { composeRule.activity.currentFocus?.clearFocus() }
+        composeRule.waitForIdle()
         composeRule.onNodeWithTag("outbreak-occurred-at-date-picker").performClick()
         setDatePicker(2023, 11, 13)
         composeRule.onNodeWithTag("outbreak-occurred-at-time-picker").performClick()
@@ -579,7 +586,7 @@ class MainActivityTest {
         composeRule.onAllNodesWithText("Tea").assertCountEquals(0)
 
         composeRule.onNodeWithText("Green tea").performClick()
-        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        openDeleteFromDetail("edit-ingestion-form-screen", "edit-ingestion-delete", "edit-ingestion-delete-confirm")
         composeRule.onNodeWithTag("edit-ingestion-delete-confirm").performClick()
 
         composeRule.onNodeWithTag("records-empty-state").assertIsDisplayed()
@@ -599,6 +606,10 @@ class MainActivityTest {
         waitForTag("record-detail-edit")
         composeRule.onNodeWithTag("record-detail-edit").performClick()
         assertOfflineFormHasNoDependencyWarnings("edit-exposure-form-screen")
+        composeRule.onNodeWithTag("edit-exposure-occurred-at-date-picker").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-exposure-occurred-at-label").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-exposure-occurred-at-time-picker").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("edit-exposure-occurred-at-input").assertCountEquals(0)
 
         composeRule.onNodeWithTag("edit-exposure-type").performTextReplacement("Dust")
         composeRule.onNodeWithTag("edit-exposure-occurred-at-date-picker").performClick()
@@ -617,7 +628,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("edit-exposure-occurred-at-date-picker").performScrollTo()
         composeRule.onNodeWithText("2023-11-13").assertIsDisplayed()
         navigateBack()
-        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        openDeleteFromDetail("edit-exposure-form-screen", "edit-exposure-delete", "edit-exposure-delete-confirm")
         composeRule.onNodeWithTag("edit-exposure-delete-confirm").performClick()
 
         composeRule.onNodeWithTag("records-empty-state").assertIsDisplayed()
@@ -919,6 +930,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("ingestion-reusable-edit").performClick()
 
         composeRule.onNodeWithTag("edit-compound-retire").performClick()
+        waitForTag("edit-compound-retire-message")
         composeRule.onNodeWithTag("edit-compound-retire-message").assertIsDisplayed()
         composeRule.onNodeWithTag("edit-compound-retire-confirm").assertIsDisplayed()
         composeRule.onNodeWithTag("edit-compound-retire-confirm").performClick()
@@ -940,8 +952,9 @@ class MainActivityTest {
 
         waitForTag("records-list")
         composeRule.onNodeWithText("Pollen").performClick()
-        waitForTag("record-detail-delete")
-        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        waitForTag("record-detail-edit")
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        ensureDeleteDialogVisible("edit-exposure-form-screen", "edit-exposure-delete", "edit-exposure-delete-confirm")
         composeRule.onNodeWithTag("edit-exposure-delete-confirm").performClick()
 
         composeRule.onNodeWithContentDescription("Add record").performClick()
@@ -983,8 +996,9 @@ class MainActivityTest {
 
         waitForText("Skin flare")
         composeRule.onNodeWithText("Skin flare").performClick()
-        waitForTag("record-detail-delete")
-        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        waitForTag("record-detail-edit")
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        ensureDeleteDialogVisible("edit-outbreak-form-screen", "edit-outbreak-delete", "edit-outbreak-delete-confirm")
         composeRule.onNodeWithTag("edit-outbreak-delete-confirm").performClick()
 
         composeRule.onNodeWithContentDescription("Add record").performClick()
@@ -1046,6 +1060,10 @@ class MainActivityTest {
         waitForTag("record-detail-edit")
         composeRule.onNodeWithTag("record-detail-edit").performClick()
         assertOfflineFormHasNoDependencyWarnings("edit-outbreak-form-screen")
+        composeRule.onNodeWithTag("edit-outbreak-occurred-at-date-picker").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-outbreak-occurred-at-label").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-outbreak-occurred-at-time-picker").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("edit-outbreak-occurred-at-input").assertCountEquals(0)
 
         composeRule.onNodeWithTag("edit-outbreak-descriptor").performTextReplacement("Skin rash")
         composeRule.onNodeWithTag("edit-outbreak-body-location").performTextReplacement("Left arm")
@@ -1065,7 +1083,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("edit-outbreak-occurred-at-date-picker").performScrollTo()
         composeRule.onNodeWithText("2023-11-13").assertIsDisplayed()
         navigateBack()
-        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        openDeleteFromDetail("edit-outbreak-form-screen", "edit-outbreak-delete", "edit-outbreak-delete-confirm")
         composeRule.onNodeWithTag("edit-outbreak-delete-confirm").performClick()
 
         composeRule.onNodeWithTag("records-empty-state").assertIsDisplayed()
@@ -1076,14 +1094,17 @@ class MainActivityTest {
     fun ingestion_delete_cancel_from_detail_does_not_reopen_until_delete_is_tapped_again() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()
+        waitForTag("create-ingestion-form-screen")
 
-        composeRule.onNodeWithTag("ingestion-item-name").performTextInput("Green tea")
+        composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Green tea")
         composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
         composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
 
         waitForTag("records-list")
         composeRule.onNodeWithText("Green tea").performClick()
-        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        waitForTag("record-detail-edit")
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        ensureDeleteDialogVisible("edit-ingestion-form-screen", "edit-ingestion-delete", "edit-ingestion-delete-cancel")
         composeRule.onNodeWithTag("edit-ingestion-delete-cancel").performClick()
 
         composeRule.onNodeWithTag("edit-ingestion-form-screen").assertIsDisplayed()
@@ -1103,7 +1124,9 @@ class MainActivityTest {
 
         waitForTag("records-list")
         composeRule.onNodeWithText("Pollen").performClick()
-        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        waitForTag("record-detail-edit")
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        ensureDeleteDialogVisible("edit-exposure-form-screen", "edit-exposure-delete", "edit-exposure-delete-cancel")
         composeRule.onNodeWithTag("edit-exposure-delete-cancel").performClick()
 
         composeRule.onNodeWithTag("edit-exposure-form-screen").assertIsDisplayed()
@@ -1123,8 +1146,10 @@ class MainActivityTest {
 
         waitForTag("records-list")
         composeRule.onNodeWithText("Dust").performClick()
-        composeRule.onNodeWithTag("record-detail-delete").performClick()
-        navigateBack()
+        waitForTag("record-detail-edit")
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        ensureDeleteDialogVisible("edit-exposure-form-screen", "edit-exposure-delete", "edit-exposure-delete-cancel")
+        composeRule.onNodeWithTag("edit-exposure-delete-cancel").performClick()
 
         composeRule.onNodeWithTag("edit-exposure-form-screen").assertIsDisplayed()
         composeRule.onAllNodesWithTag("edit-exposure-delete-confirm").assertCountEquals(0)
@@ -1144,7 +1169,9 @@ class MainActivityTest {
 
         waitForText("Skin flare")
         composeRule.onNodeWithText("Skin flare").performClick()
-        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        waitForTag("record-detail-edit")
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        ensureDeleteDialogVisible("edit-outbreak-form-screen", "edit-outbreak-delete", "edit-outbreak-delete-cancel")
         composeRule.onNodeWithTag("edit-outbreak-delete-cancel").performClick()
 
         composeRule.onNodeWithTag("edit-outbreak-form-screen").assertIsDisplayed()
@@ -1376,6 +1403,29 @@ class MainActivityTest {
         composeRule.waitUntil(timeoutMillis = 15_000) {
             composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
         }
+    }
+
+    private fun ensureDeleteDialogVisible(
+        formTag: String,
+        deleteButtonTag: String,
+        dialogActionTag: String
+    ) {
+        waitForTag(formTag)
+        if (composeRule.onAllNodesWithTag(dialogActionTag).fetchSemanticsNodes().isEmpty()) {
+            composeRule.onNodeWithTag(deleteButtonTag).performScrollTo().performClick()
+            composeRule.waitForIdle()
+            waitForTag(dialogActionTag)
+        }
+    }
+
+    private fun openDeleteFromDetail(
+        formTag: String,
+        deleteButtonTag: String,
+        dialogActionTag: String
+    ) {
+        waitForTag("record-detail-delete")
+        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        ensureDeleteDialogVisible(formTag, deleteButtonTag, dialogActionTag)
     }
 
     private fun setDatePicker(year: Int, month: Int, day: Int) {

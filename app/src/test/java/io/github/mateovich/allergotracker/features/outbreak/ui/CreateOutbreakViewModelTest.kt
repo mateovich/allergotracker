@@ -45,6 +45,10 @@ class CreateOutbreakViewModelTest {
         assertEquals(expectedTimeLabel, viewModel.state.value.occurredAtLabel)
         assertEquals(OutbreakTimePreset.NOW, viewModel.state.value.selectedTimePreset)
         assertEquals(3, viewModel.state.value.selectedIntensityLevel)
+        assertEquals(
+            listOf("Intensity 1", "Intensity 2", "Intensity 3", "Intensity 4", "Intensity 5"),
+            viewModel.state.value.intensityOptions.map { it.label }
+        )
         assertTrue(viewModel.state.value.occurredAtInput.isNotBlank())
         assertFalse(viewModel.state.value.canSave)
     }

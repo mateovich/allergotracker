@@ -236,16 +236,16 @@ fun EditExposureScreen(
 
             DateTimePickerSection(
                 title = "When did it happen?",
-                value = state.occurredAtInput,
                 timeLabel = state.occurredAtLabel,
                 dateButtonLabel = viewModel.formatOccurredOnLabel(state.selectedOccurredOn),
                 timeButtonLabel = viewModel.formatOccurredTimeLabel(state.selectedOccurredTime),
                 selectedDate = state.selectedOccurredOn,
                 selectedTime = state.selectedOccurredTime,
-                inputTag = "edit-exposure-occurred-at-input",
+                sectionTag = "edit-exposure-occurred-at-section",
                 labelTag = "edit-exposure-occurred-at-label",
                 dateButtonTag = "edit-exposure-occurred-at-date-picker",
                 timeButtonTag = "edit-exposure-occurred-at-time-picker",
+                errorTag = "edit-exposure-occurred-at-error",
                 error = state.occurredAtError,
                 onDateSelected = { viewModel.onIntent(EditExposureUiIntent.SelectOccurredOn(it)) },
                 onTimeSelected = { viewModel.onIntent(EditExposureUiIntent.SelectOccurredTime(it)) },

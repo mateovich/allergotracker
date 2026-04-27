@@ -147,16 +147,16 @@ fun CreateOutbreakScreen(
 
             DateTimePickerSection(
                 title = "When did it happen?",
-                value = state.occurredAtInput,
                 timeLabel = state.occurredAtLabel,
                 dateButtonLabel = viewModel.formatOccurredOnLabel(state.selectedOccurredOn),
                 timeButtonLabel = viewModel.formatOccurredTimeLabel(state.selectedOccurredTime),
                 selectedDate = state.selectedOccurredOn,
                 selectedTime = state.selectedOccurredTime,
-                inputTag = "outbreak-occurred-at-input",
+                sectionTag = "outbreak-occurred-at-section",
                 labelTag = "outbreak-occurred-at-label",
                 dateButtonTag = "outbreak-occurred-at-date-picker",
                 timeButtonTag = "outbreak-occurred-at-time-picker",
+                errorTag = "outbreak-occurred-at-error",
                 error = state.occurredAtError,
                 onDateSelected = { viewModel.onIntent(CreateOutbreakUiIntent.SelectOccurredOn(it)) },
                 onTimeSelected = { viewModel.onIntent(CreateOutbreakUiIntent.SelectOccurredTime(it)) },

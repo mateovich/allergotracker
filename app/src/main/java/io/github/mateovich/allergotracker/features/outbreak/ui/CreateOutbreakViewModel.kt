@@ -282,9 +282,7 @@ class CreateOutbreakViewModel(
     private fun buildInitialState(): CreateOutbreakUiState {
         val defaults = createOutbreakDefaultsUseCase()
         return CreateOutbreakUiState(
-            intensityOptions = IngestionQuantityOption.entries.map { option ->
-                OutbreakIntensityOptionUiModel(level = option.level, label = option.label)
-            },
+            intensityOptions = outbreakIntensityOptions(),
             selectedIntensityLevel = defaults.intensityLevel,
             timeOptions = OutbreakTimePreset.entries.map { preset ->
                 OutbreakTimeOptionUiModel(

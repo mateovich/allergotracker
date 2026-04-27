@@ -17,6 +17,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.lifecycle.ViewModel
@@ -529,6 +530,40 @@ class RecordsScreenTest {
     }
 
     @Test
+    fun exposure_edit_form_keeps_picker_controls_without_redundant_datetime_input() {
+        val fixedNow = 1_700_000_000_000L
+        val store = ReactiveRecordStore(
+            exposure = ExposureEvent(5L, "Pollen", fixedNow - 120_000L, "outside")
+        )
+
+        composeRule.setContent {
+            ExposureEditJourneyHost(
+                recordsFactory = recordsFactoryFor(store.recordsRepository(), fixedNow),
+                detailFactoryProvider = detailFactoryProviderFor(store.detailRepository(), fixedNow),
+                editFactory = object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return EditExposureViewModel(
+                            recordId = 5L,
+                            getExposureEventUseCase = GetExposureEventUseCase(store.exposureRepository()),
+                            deleteExposureEventUseCase = DeleteExposureEventUseCase(store.exposureRepository()),
+                            updateExposureEventUseCase = UpdateExposureEventUseCase(store.exposureRepository(), CurrentTimeProvider { fixedNow }),
+                            currentTimeProvider = CurrentTimeProvider { fixedNow }
+                        ) as T
+                    }
+                }
+            )
+        }
+
+        composeRule.onNodeWithTag("record-item-exposure-5").performClick()
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        composeRule.onNodeWithTag("edit-exposure-occurred-at-date-picker").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-exposure-occurred-at-label").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-exposure-occurred-at-time-picker").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("edit-exposure-occurred-at-input").assertCountEquals(0)
+    }
+
+    @Test
     fun exposure_delete_cancel_from_detail_stays_closed_until_explicit_retry() {
         val fixedNow = 1_700_000_000_000L
         val store = ReactiveRecordStore(
@@ -629,13 +664,21 @@ class RecordsScreenTest {
         }
 
         composeRule.onNodeWithTag("record-item-outbreak-9").performClick()
-        composeRule.onNodeWithTag("record-detail-delete").performClick()
+        waitForTag(composeRule, "record-detail-edit")
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        ensureDeleteDialogVisible(
+            composeRule = composeRule,
+            formTag = "edit-outbreak-form-screen",
+            deleteButtonTag = "edit-outbreak-delete",
+            dialogActionTag = "edit-outbreak-delete-cancel"
+        )
         composeRule.onNodeWithTag("edit-outbreak-delete-cancel").performClick()
 
         composeRule.onNodeWithTag("edit-outbreak-form-screen").assertIsDisplayed()
         composeRule.onAllNodesWithTag("edit-outbreak-delete-confirm").assertCountEquals(0)
 
         composeRule.onNodeWithTag("edit-outbreak-delete").performClick()
+        waitForTag(composeRule, "edit-outbreak-delete-confirm")
         composeRule.onNodeWithTag("edit-outbreak-delete-confirm").assertIsDisplayed()
     }
 
@@ -669,6 +712,40 @@ class RecordsScreenTest {
             recordTag = "record-item-outbreak-9",
             formTag = "edit-outbreak-form-screen"
         )
+    }
+
+    @Test
+    fun outbreak_edit_form_keeps_picker_controls_without_redundant_datetime_input() {
+        val fixedNow = 1_700_000_000_000L
+        val store = ReactiveRecordStore(
+            outbreak = OutbreakEvent(9L, "Skin flare", "Arm", fixedNow - 180_000L, "after workout")
+        )
+
+        composeRule.setContent {
+            OutbreakEditJourneyHost(
+                recordsFactory = recordsFactoryFor(store.recordsRepository(), fixedNow),
+                detailFactoryProvider = detailFactoryProviderFor(store.detailRepository(), fixedNow),
+                editFactory = object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return EditOutbreakViewModel(
+                            recordId = 9L,
+                            getOutbreakEventUseCase = GetOutbreakEventUseCase(store.outbreakRepository()),
+                            deleteOutbreakEventUseCase = DeleteOutbreakEventUseCase(store.outbreakRepository()),
+                            updateOutbreakEventUseCase = UpdateOutbreakEventUseCase(store.outbreakRepository(), CurrentTimeProvider { fixedNow }),
+                            currentTimeProvider = CurrentTimeProvider { fixedNow }
+                        ) as T
+                    }
+                }
+            )
+        }
+
+        composeRule.onNodeWithTag("record-item-outbreak-9").performClick()
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        composeRule.onNodeWithTag("edit-outbreak-occurred-at-date-picker").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-outbreak-occurred-at-label").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-outbreak-occurred-at-time-picker").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("edit-outbreak-occurred-at-input").assertCountEquals(0)
     }
 
     @Test
@@ -1087,6 +1164,29 @@ private fun OutbreakEditJourneyHost(
             onNavigateToRoute = { currentRoute = it },
             viewModelFactory = recordsFactory
         )
+    }
+}
+
+private fun waitForTag(
+    composeRule: AndroidComposeTestRule<*, *>,
+    tag: String
+) {
+    composeRule.waitUntil(timeoutMillis = 15_000) {
+        composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+    }
+}
+
+private fun ensureDeleteDialogVisible(
+    composeRule: AndroidComposeTestRule<*, *>,
+    formTag: String,
+    deleteButtonTag: String,
+    dialogActionTag: String
+) {
+    waitForTag(composeRule, formTag)
+    if (composeRule.onAllNodesWithTag(dialogActionTag).fetchSemanticsNodes().isEmpty()) {
+        composeRule.onNodeWithTag(deleteButtonTag).performScrollTo().performClick()
+        composeRule.waitForIdle()
+        waitForTag(composeRule, dialogActionTag)
     }
 }
 
