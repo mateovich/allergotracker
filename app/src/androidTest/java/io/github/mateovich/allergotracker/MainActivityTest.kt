@@ -295,6 +295,43 @@ class MainActivityTest {
     }
 
     @Test
+    fun ingestion_text_prefills_compound_name_when_opening_new_compound() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        composeRule.onNodeWithTag("ingestion-reusable-search").performTextReplacement("Banana shake")
+        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
+
+        composeRule.onNodeWithTag("create-compound-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("compound-name").assertTextContains("Banana shake")
+    }
+
+    @Test
+    fun create_compound_flow_can_create_ingredient_inline_and_use_it_immediately() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        composeRule.onNodeWithTag("ingestion-create-compound").performClick()
+        composeRule.onNodeWithTag("create-compound-form-screen").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("compound-name").performTextReplacement("Chocolate mix")
+        composeRule.onNodeWithTag("compound-component-search").performTextReplacement("Cocoa")
+        composeRule.onNodeWithTag("compound-create-inline-ingredient").performClick()
+        waitForTag("compound-inline-ingredient-name")
+        composeRule.onNodeWithTag("compound-inline-ingredient-name").performTextReplacement("Cocoa")
+        composeRule.onNodeWithTag("compound-inline-ingredient-save").performClick()
+
+        composeRule.onNodeWithTag("compound-component-row-0").assertIsDisplayed()
+        composeRule.onNodeWithText("Cocoa (ingredient)").assertIsDisplayed()
+        composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
+        composeRule.onNodeWithTag("compound-save").performClick()
+
+        waitForTag("create-ingestion-form-screen")
+        composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Chocolate mix")
+        composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable compound selected: Chocolate mix")
+    }
+
+    @Test
     fun create_compound_flow_shows_inline_validation_and_accessible_total_feedback() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()
@@ -692,6 +729,34 @@ class MainActivityTest {
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk plus")
         composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable ingredient selected: Oat milk plus")
+    }
+
+    @Test
+    fun ingredient_edit_flow_can_seed_new_compound_and_return_selected_compound() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        composeRule.onNodeWithTag("ingestion-reusable-search").performTextReplacement("Oat milk")
+        waitForTag("ingestion-create-inline-ingredient")
+        composeRule.onNodeWithTag("ingestion-create-inline-ingredient").performClick()
+        waitForTag("ingestion-inline-ingredient-name")
+        composeRule.onNodeWithTag("ingestion-inline-ingredient-name").performTextReplacement("Oat milk")
+        composeRule.onNodeWithTag("ingestion-inline-ingredient-save").performClick()
+
+        waitForTag("ingestion-reusable-edit")
+        composeRule.onNodeWithTag("ingestion-reusable-edit").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("edit-ingredient-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-ingredient-make-compound").performClick()
+
+        composeRule.onNodeWithTag("create-compound-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithText("Oat milk (ingredient)").assertIsDisplayed()
+        composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
+        composeRule.onNodeWithTag("compound-name").performTextReplacement("Oat milk blend")
+        composeRule.onNodeWithTag("compound-save").performClick()
+
+        waitForTag("create-ingestion-form-screen")
+        composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk blend")
+        composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable compound selected: Oat milk blend")
     }
 
     @Test

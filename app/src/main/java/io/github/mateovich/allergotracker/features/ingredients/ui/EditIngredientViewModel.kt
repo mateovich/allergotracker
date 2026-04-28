@@ -94,7 +94,20 @@ class EditIngredientViewModel(
                 it.copy(isRetirementDialogVisible = false, retirementImpact = null, isRetiring = false)
             }
             EditIngredientUiIntent.ConfirmRetirement -> retire()
+            EditIngredientUiIntent.MakeIntoCompound -> makeIntoCompound()
         }
+    }
+
+    private fun makeIntoCompound() {
+        val currentState = mutableState.value
+        if (currentState.isLoading || currentState.isSaving || currentState.isRetiring || currentState.isMerging) return
+        effectChannel.trySend(
+            EditIngredientUiEffect.NavigateToCreateCompound(
+                id = ingredientId,
+                name = currentState.name,
+                kind = ReusableEntityKind.INGREDIENT
+            )
+        )
     }
 
     private fun loadIfNeeded() {

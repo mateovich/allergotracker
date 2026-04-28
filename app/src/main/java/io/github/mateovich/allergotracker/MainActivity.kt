@@ -24,7 +24,7 @@ class MainActivity : ComponentActivity() {
                     createExposureViewModelFactory = appContainer.createExposureViewModelFactory,
                     createOutbreakViewModelFactory = appContainer.createOutbreakViewModelFactory,
                     createIngredientViewModelFactory = appContainer.createIngredientViewModelFactory,
-                    createCompoundViewModelFactory = appContainer.createCompoundViewModelFactory,
+                    createCompoundViewModelFactoryProvider = appContainer::createCreateCompoundViewModelFactory,
                     editIngredientViewModelFactoryProvider = appContainer::createEditIngredientViewModelFactory,
                     editCompoundViewModelFactoryProvider = appContainer::createEditCompoundViewModelFactory,
                     editReusableEventCatalogViewModelFactoryProvider = appContainer::createEditReusableEventCatalogViewModelFactory,

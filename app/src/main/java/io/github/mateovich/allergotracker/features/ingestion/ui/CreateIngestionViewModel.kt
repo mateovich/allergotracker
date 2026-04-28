@@ -178,7 +178,11 @@ class CreateIngestionViewModel(
             }
 
             CreateIngestionUiIntent.CreateNewCompound -> {
-                effectChannel.trySend(CreateIngestionUiEffect.NavigateToCreateCompound)
+                effectChannel.trySend(
+                    CreateIngestionUiEffect.NavigateToCreateCompound(
+                        prefillName = mutableState.value.reusableSearchQuery.trim()
+                    )
+                )
             }
 
             CreateIngestionUiIntent.EditSelectedReusableEntity -> {

@@ -33,11 +33,17 @@ fun CompoundComposer(
     onSearchQueryChange: (String) -> Unit,
     onAddIngredient: (Long) -> Unit,
     onAddCompound: (Long) -> Unit,
+    onCreateIngredient: ((String) -> Unit)?,
     onApplyPreset: (CompoundCompositionPreset) -> Unit,
     onProportionTextChange: (Int, String) -> Unit,
     onProportionSliderChange: (Int, Int) -> Unit,
     onRemoveComponent: (Int) -> Unit
 ) {
+    val normalizedQuery = componentSearchQuery.trim().replace(Regex("\\s+"), " ").lowercase()
+    val hasExactIngredientMatch = filteredComponents.any { option ->
+        option.kind == "ingredient" && option.name.trim().replace(Regex("\\s+"), " ").lowercase() == normalizedQuery
+    }
+
     OutlinedTextField(
         value = componentSearchQuery,
         onValueChange = onSearchQueryChange,
@@ -48,11 +54,27 @@ fun CompoundComposer(
         singleLine = true
     )
 
-    if (filteredComponents.isNotEmpty()) {
+    if (componentSearchQuery.isNotBlank() || filteredComponents.isNotEmpty()) {
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            if (onCreateIngredient != null && componentSearchQuery.isNotBlank()) {
+                AssistChip(
+                    onClick = { if (!hasExactIngredientMatch) onCreateIngredient(componentSearchQuery) },
+                    enabled = !hasExactIngredientMatch,
+                    label = {
+                        Text(
+                            if (hasExactIngredientMatch) {
+                                "'${componentSearchQuery}' already saved as ingredient"
+                            } else {
+                                "New ingredient: '${componentSearchQuery}'"
+                            }
+                        )
+                    },
+                    modifier = Modifier.testTag("$prefix-create-inline-ingredient")
+                )
+            }
             filteredComponents.forEach { option ->
                 AssistChip(
                     onClick = {
@@ -68,7 +90,7 @@ fun CompoundComposer(
         }
     } else {
         Text(
-            text = "No saved ingredients or compounds match. Create reusable items first if needed.",
+            text = "No saved ingredients or compounds match yet.",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.testTag("$prefix-component-empty")
         )

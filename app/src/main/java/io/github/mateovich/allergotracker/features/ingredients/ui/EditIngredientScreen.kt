@@ -37,16 +37,32 @@ import kotlinx.coroutines.flow.collectLatest
 fun EditIngredientScreen(
     viewModelFactory: ViewModelProvider.Factory,
     onNavigateBackWithSelection: (IngestionReusableSelectionResult) -> Unit,
+    onNavigateToCreateCompound: (String) -> Unit,
     onNavigateBack: () -> Unit,
+    selectedReusableEntity: IngestionReusableSelectionResult? = null,
+    onReusableEntityConsumed: () -> Unit = {},
     viewModel: EditIngredientViewModel = viewModel(factory = viewModelFactory)
 ) {
     val state by viewModel.state.collectAsState()
+
+    LaunchedEffect(selectedReusableEntity) {
+        selectedReusableEntity?.let {
+            onNavigateBackWithSelection(it)
+            onReusableEntityConsumed()
+        }
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.onIntent(EditIngredientUiIntent.Load)
         viewModel.effects.collectLatest { effect ->
             when (effect) {
                 is EditIngredientUiEffect.NavigateBackWithSelection -> onNavigateBackWithSelection(effect.result)
+                is EditIngredientUiEffect.NavigateToCreateCompound -> onNavigateToCreateCompound(
+                    io.github.mateovich.allergotracker.navigation.AppRoutes.createCompound(
+                        seedIngredientId = effect.id,
+                        seedIngredientName = effect.name
+                    )
+                )
                 EditIngredientUiEffect.NavigateBackAfterRetirement -> onNavigateBack()
             }
         }
@@ -118,6 +134,13 @@ fun EditIngredientScreen(
                 modifier = Modifier.fillMaxWidth().testTag("edit-ingredient-save")
             ) {
                 Text(if (state.isSaving) "Saving..." else "Save changes")
+            }
+            Button(
+                onClick = { viewModel.onIntent(EditIngredientUiIntent.MakeIntoCompound) },
+                enabled = !state.isSaving && !state.isRetiring && !state.isMerging,
+                modifier = Modifier.fillMaxWidth().testTag("edit-ingredient-make-compound")
+            ) {
+                Text("Make into compound")
             }
             Button(
                 onClick = { viewModel.onIntent(EditIngredientUiIntent.RequestMergeFlow) },

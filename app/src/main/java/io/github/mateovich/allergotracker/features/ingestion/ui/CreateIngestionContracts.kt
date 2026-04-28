@@ -84,6 +84,6 @@ sealed interface CreateIngestionUiIntent {
 
 sealed interface CreateIngestionUiEffect {
     data object NavigateToRecords : CreateIngestionUiEffect
-    data object NavigateToCreateCompound : CreateIngestionUiEffect
+    data class NavigateToCreateCompound(val prefillName: String) : CreateIngestionUiEffect
     data class NavigateToEditReusableEntity(val kind: ReusableEntityKind, val id: Long) : CreateIngestionUiEffect
 }

@@ -520,11 +520,17 @@ class AppContainer(appContext: Context) {
         )
     val createIngredientViewModelFactory: CreateIngredientViewModelFactory =
         CreateIngredientViewModelFactory(createReusableIngredientUseCase)
-    val createCompoundViewModelFactory: CreateCompoundViewModelFactory =
+    fun createCreateCompoundViewModelFactory(
+        initialName: String = "",
+        initialSeedIngredient: io.github.mateovich.allergotracker.features.ingestion.ui.IngestionReusableSelectionResult? = null
+    ): CreateCompoundViewModelFactory =
         CreateCompoundViewModelFactory(
             createReusableCompoundUseCase,
+            createReusableIngredientUseCase,
             observeReusableIngredientsUseCase,
-            observeReusableCompoundsUseCase
+            observeReusableCompoundsUseCase,
+            initialName,
+            initialSeedIngredient
         )
 
     fun createEditIngredientViewModelFactory(reusableId: Long): EditIngredientViewModelFactory {

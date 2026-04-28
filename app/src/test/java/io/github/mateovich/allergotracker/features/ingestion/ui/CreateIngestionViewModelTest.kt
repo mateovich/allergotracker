@@ -225,6 +225,20 @@ class CreateIngestionViewModelTest {
     }
 
     @Test
+    fun create_new_compound_carries_current_typed_prefill() = runBlocking {
+        val viewModel = buildViewModel()
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery("Banana shake"))
+        viewModel.onIntent(CreateIngestionUiIntent.CreateNewCompound)
+
+        assertEquals(
+            CreateIngestionUiEffect.NavigateToCreateCompound(prefillName = "Banana shake"),
+            effect.await()
+        )
+    }
+
+    @Test
     fun integrity_error_from_save_is_mapped_back_into_form_message() = runBlocking {
         val viewModel = buildViewModel(
             saveResult = AppResult.Error(io.github.mateovich.allergotracker.core.common.error.DomainError.IntegrityError("Selected reusable item is no longer available."))

@@ -4,6 +4,7 @@ import io.github.mateovich.allergotracker.features.ingestion.ui.IngestionReusabl
 import io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredient
 import io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredientMergePreview
 import io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredientRetirementImpact
+import io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEntityKind
 
 data class EditIngredientUiState(
     val title: String = "Edit Ingredient",
@@ -41,9 +42,15 @@ sealed interface EditIngredientUiIntent {
     data object RequestRetirementPreview : EditIngredientUiIntent
     data object DismissRetirementDialog : EditIngredientUiIntent
     data object ConfirmRetirement : EditIngredientUiIntent
+    data object MakeIntoCompound : EditIngredientUiIntent
 }
 
 sealed interface EditIngredientUiEffect {
     data class NavigateBackWithSelection(val result: IngestionReusableSelectionResult) : EditIngredientUiEffect
     data object NavigateBackAfterRetirement : EditIngredientUiEffect
+    data class NavigateToCreateCompound(
+        val id: Long,
+        val name: String,
+        val kind: ReusableEntityKind
+    ) : EditIngredientUiEffect
 }

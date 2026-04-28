@@ -20,6 +20,10 @@ data class CreateCompoundUiState(
     val formMessage: String = "",
     val isFormMessageError: Boolean = false,
     val isFormMessageSticky: Boolean = false,
+    val isCreatingInlineIngredient: Boolean = false,
+    val inlineIngredientError: String? = null,
+    val showInlineIngredientDialog: Boolean = false,
+    val inlineIngredientName: String = "",
     val isSaving: Boolean = false,
     val canSave: Boolean = false
 )
@@ -34,6 +38,10 @@ sealed interface CreateCompoundUiIntent {
     data class UpdateComponentProportion(val index: Int, val value: String) : CreateCompoundUiIntent
     data class AdjustComponentProportion(val index: Int, val basisPoints: Int) : CreateCompoundUiIntent
     data class RemoveComponent(val index: Int) : CreateCompoundUiIntent
+    data class CreateInlineIngredient(val name: String) : CreateCompoundUiIntent
+    data class UpdateInlineIngredientName(val value: String) : CreateCompoundUiIntent
+    data class ShowInlineIngredientDialog(val prefillName: String) : CreateCompoundUiIntent
+    data object CancelInlineIngredientCreation : CreateCompoundUiIntent
     data object Save : CreateCompoundUiIntent
 }
 

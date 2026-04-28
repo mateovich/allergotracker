@@ -64,7 +64,9 @@ fun CreateIngestionScreen(
         viewModel.effects.collectLatest { effect ->
             when (effect) {
                 CreateIngestionUiEffect.NavigateToRecords -> onNavigateToRoute(AppRoutes.RECORDS)
-                CreateIngestionUiEffect.NavigateToCreateCompound -> onNavigateToRoute(AppRoutes.CREATE_COMPOUND)
+                is CreateIngestionUiEffect.NavigateToCreateCompound -> onNavigateToRoute(
+                    AppRoutes.createCompound(prefillName = effect.prefillName)
+                )
                 is CreateIngestionUiEffect.NavigateToEditReusableEntity -> onNavigateToRoute(
                     when (effect.kind) {
                         io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEntityKind.INGREDIENT -> AppRoutes.editIngredient(effect.id)

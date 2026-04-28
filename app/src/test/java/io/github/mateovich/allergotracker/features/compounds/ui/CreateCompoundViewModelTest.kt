@@ -11,7 +11,10 @@ import io.github.mateovich.allergotracker.features.compounds.domain.CreateReusab
 import io.github.mateovich.allergotracker.features.compounds.domain.ReusableCompound
 import io.github.mateovich.allergotracker.features.compounds.domain.ReusableCompoundComponent
 import io.github.mateovich.allergotracker.features.compounds.domain.ReusableCompoundRepository
+import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReusableIngredientCommand
+import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReusableIngredientUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredient
+import io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredientRepository
 import io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEntityKind
 import io.github.mateovich.allergotracker.features.ingestion.ui.IngestionReusableSelectionResult
 import kotlinx.coroutines.async
@@ -41,6 +44,67 @@ class CreateCompoundViewModelTest {
         assertEquals("Enter a compound name.", viewModel.state.value.nameError)
         assertEquals("Add at least one component.", viewModel.state.value.componentsError)
         assertTrue(viewModel.state.value.formMessage.isNotBlank())
+    }
+
+    @Test
+    fun prefilled_name_initializes_only_once() {
+        val viewModel = buildViewModel(prefilledName = "Typed from ingestion")
+
+        assertEquals("Typed from ingestion", viewModel.state.value.name)
+
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateName("User override"))
+
+        assertEquals("User override", viewModel.state.value.name)
+    }
+
+    @Test
+    fun seeded_ingredient_starts_with_single_ready_component() {
+        val viewModel = buildViewModel(
+            seededIngredient = IngestionReusableSelectionResult(
+                id = 7L,
+                name = "Oat milk",
+                kind = ReusableEntityKind.INGREDIENT
+            )
+        )
+
+        assertEquals(listOf("Oat milk"), viewModel.state.value.components.map { it.name })
+        assertEquals(listOf("100"), viewModel.state.value.components.map { it.proportionPercent })
+        assertEquals("100% total", viewModel.state.value.totalPercentLabel)
+    }
+
+    @Test
+    fun inline_ingredient_creation_adds_new_component_immediately() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.ShowInlineIngredientDialog("Cocoa"))
+        viewModel.onIntent(CreateCompoundUiIntent.CreateInlineIngredient("Cocoa"))
+
+        assertFalse(viewModel.state.value.showInlineIngredientDialog)
+        assertEquals(listOf("Cocoa"), viewModel.state.value.components.map { it.name })
+        assertEquals(listOf("100"), viewModel.state.value.components.map { it.proportionPercent })
+        assertEquals("100% total", viewModel.state.value.totalPercentLabel)
+    }
+
+    @Test
+    fun inline_ingredient_validation_error_clears_when_name_changes() {
+        val viewModel = buildViewModel(
+            createIngredientResult = AppResult.Error(
+                DomainError.ValidationError(
+                    message = "Please fix the highlighted fields.",
+                    fieldErrors = mapOf("name" to "An ingredient with this name already exists.")
+                )
+            )
+        )
+
+        viewModel.onIntent(CreateCompoundUiIntent.ShowInlineIngredientDialog("Cocoa"))
+        viewModel.onIntent(CreateCompoundUiIntent.CreateInlineIngredient("Cocoa"))
+
+        assertEquals("An ingredient with this name already exists.", viewModel.state.value.inlineIngredientError)
+
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateInlineIngredientName("Cocoa powder"))
+
+        assertEquals("Cocoa powder", viewModel.state.value.inlineIngredientName)
+        assertNull(viewModel.state.value.inlineIngredientError)
     }
 
     @Test
@@ -277,7 +341,10 @@ class CreateCompoundViewModelTest {
     }
 
     private fun buildViewModel(
-        createResult: AppResult<ReusableCompound>? = null
+        createResult: AppResult<ReusableCompound>? = null,
+        createIngredientResult: AppResult<ReusableIngredient>? = null,
+        prefilledName: String = "",
+        seededIngredient: IngestionReusableSelectionResult? = null
     ): CreateCompoundViewModel {
         val ingredients = MutableStateFlow(
             listOf(
@@ -330,6 +397,23 @@ class CreateCompoundViewModelTest {
                     override fun observeCompounds(): Flow<List<ReusableCompound>> = emptyFlow()
                 }
             ),
+            createReusableIngredientUseCase = CreateReusableIngredientUseCase(
+                repository = object : ReusableIngredientRepository {
+                    override suspend fun createIngredient(command: CreateReusableIngredientCommand): AppResult<ReusableIngredient> {
+                        return createIngredientResult ?: AppResult.Success(
+                            ReusableIngredient(
+                                id = 70L,
+                                name = command.name,
+                                notes = command.notes,
+                                createdAtEpochMs = 5L,
+                                updatedAtEpochMs = 6L
+                            )
+                        )
+                    }
+
+                    override fun observeIngredients(): Flow<List<ReusableIngredient>> = ingredients
+                }
+            ),
             observeReusableIngredients = { ingredients },
             observeReusableCompounds = {
                 MutableStateFlow(
@@ -345,7 +429,9 @@ class CreateCompoundViewModelTest {
                         )
                     )
                 )
-            }
+            },
+            initialName = prefilledName,
+            initialSeedIngredient = seededIngredient
         )
     }
 
@@ -428,6 +514,23 @@ class CreateCompoundViewModelTest {
                         )
 
                     override fun observeCompounds(): Flow<List<ReusableCompound>> = emptyFlow()
+                }
+            ),
+            createReusableIngredientUseCase = CreateReusableIngredientUseCase(
+                repository = object : ReusableIngredientRepository {
+                    override suspend fun createIngredient(command: CreateReusableIngredientCommand): AppResult<ReusableIngredient> {
+                        return AppResult.Success(
+                            ReusableIngredient(
+                                id = 71L,
+                                name = command.name,
+                                notes = command.notes,
+                                createdAtEpochMs = 5L,
+                                updatedAtEpochMs = 6L
+                            )
+                        )
+                    }
+
+                    override fun observeIngredients(): Flow<List<ReusableIngredient>> = ingredients
                 }
             ),
             observeReusableIngredients = { ingredients },

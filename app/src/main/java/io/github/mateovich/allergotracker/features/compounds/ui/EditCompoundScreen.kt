@@ -132,6 +132,7 @@ fun EditCompoundScreen(
                 onSearchQueryChange = { viewModel.onIntent(EditCompoundUiIntent.UpdateComponentSearchQuery(it)) },
                 onAddIngredient = { viewModel.onIntent(EditCompoundUiIntent.AddIngredientComponent(it)) },
                 onAddCompound = { viewModel.onIntent(EditCompoundUiIntent.AddCompoundComponent(it)) },
+                onCreateIngredient = null,
                 onApplyPreset = { viewModel.onIntent(EditCompoundUiIntent.ApplyPreset(it)) },
                 onProportionTextChange = { index, value ->
                     viewModel.onIntent(EditCompoundUiIntent.UpdateComponentProportion(index, value))

@@ -8,15 +8,21 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
@@ -88,6 +94,7 @@ fun CreateCompoundScreen(
                 onSearchQueryChange = { viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentSearchQuery(it)) },
                 onAddIngredient = { viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(it)) },
                 onAddCompound = { viewModel.onIntent(CreateCompoundUiIntent.AddCompoundComponent(it)) },
+                onCreateIngredient = { viewModel.onIntent(CreateCompoundUiIntent.ShowInlineIngredientDialog(it)) },
                 onApplyPreset = { viewModel.onIntent(CreateCompoundUiIntent.ApplyPreset(it)) },
                 onProportionTextChange = { index, value ->
                     viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentProportion(index, value))
@@ -120,5 +127,80 @@ fun CreateCompoundScreen(
                 )
             }
         }
+
+        if (state.showInlineIngredientDialog) {
+            CreateCompoundInlineIngredientDialog(
+                name = state.inlineIngredientName,
+                isSaving = state.isCreatingInlineIngredient,
+                errorMessage = state.inlineIngredientError,
+                onNameChange = { viewModel.onIntent(CreateCompoundUiIntent.UpdateInlineIngredientName(it)) },
+                onSave = { name -> viewModel.onIntent(CreateCompoundUiIntent.CreateInlineIngredient(name)) },
+                onCancel = { viewModel.onIntent(CreateCompoundUiIntent.CancelInlineIngredientCreation) }
+            )
+        }
     }
+}
+
+@Composable
+private fun CreateCompoundInlineIngredientDialog(
+    name: String,
+    isSaving: Boolean,
+    errorMessage: String?,
+    onNameChange: (String) -> Unit,
+    onSave: (String) -> Unit,
+    onCancel: () -> Unit
+) {
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Create new ingredient") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = onNameChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .testTag("compound-inline-ingredient-name"),
+                    label = { Text("Ingredient name") },
+                    supportingText = {
+                        errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    },
+                    isError = errorMessage != null,
+                    singleLine = true,
+                    enabled = !isSaving
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSave(name) },
+                enabled = !isSaving && name.isNotBlank(),
+                modifier = Modifier.testTag("compound-inline-ingredient-save")
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.padding(end = 8.dp),
+                        strokeWidth = 2.dp
+                    )
+                }
+                Text(if (isSaving) "Saving..." else "Save")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onCancel,
+                enabled = !isSaving,
+                modifier = Modifier.testTag("compound-inline-ingredient-cancel")
+            ) {
+                Text("Cancel")
+            }
+        }
+    )
 }

@@ -13,6 +13,7 @@ import io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIn
 import io.github.mateovich.allergotracker.features.ingredients.domain.RetireReusableIngredientUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.UpdateReusableIngredientCommand
 import io.github.mateovich.allergotracker.features.ingredients.domain.UpdateReusableIngredientUseCase
+import io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEntityKind
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.Flow
@@ -77,6 +78,39 @@ class EditIngredientViewModelTest {
 
         assertEquals("Enter an ingredient name.", viewModel.state.value.nameError)
         assertFalse(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun make_into_compound_emits_seeded_navigation_context() = runBlocking {
+        val repository = FakeEditIngredientRepository()
+        val viewModel = buildViewModel(repository)
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.onIntent(EditIngredientUiIntent.Load)
+        viewModel.onIntent(EditIngredientUiIntent.MakeIntoCompound)
+
+        assertEquals(
+            EditIngredientUiEffect.NavigateToCreateCompound(
+                id = 7L,
+                name = "Oat milk",
+                kind = ReusableEntityKind.INGREDIENT
+            ),
+            effect.await()
+        )
+    }
+
+    @Test
+    fun make_into_compound_is_non_destructive_until_new_compound_is_saved() = runBlocking {
+        val repository = FakeEditIngredientRepository()
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onIntent(EditIngredientUiIntent.Load)
+        viewModel.onIntent(EditIngredientUiIntent.UpdateName("Oat milk draft"))
+        viewModel.onIntent(EditIngredientUiIntent.MakeIntoCompound)
+
+        assertEquals(0, repository.updateCalls)
+        assertEquals(0, repository.deleteCalls)
+        assertEquals("Oat milk", (repository.getIngredient(7L) as AppResult.Success).value.name)
     }
 
     @Test
@@ -299,6 +333,8 @@ private class FakeEditIngredientRepository(
     private val deleteResult: AppResult<Unit> = AppResult.Success(Unit)
 ) : ReusableIngredientRepository {
     var updatedCommand: UpdateReusableIngredientCommand? = null
+    var updateCalls: Int = 0
+    var deleteCalls: Int = 0
     private val observedIngredients = MutableStateFlow(
         listOf(
             ReusableIngredient(7L, "Oat milk", "Staple", 1L, 1L),
@@ -324,6 +360,7 @@ private class FakeEditIngredientRepository(
     }
 
     override suspend fun updateIngredient(command: UpdateReusableIngredientCommand): AppResult<ReusableIngredient> {
+        updateCalls += 1
         updatedCommand = command
         return updateResult ?: AppResult.Success(
             ReusableIngredient(
@@ -336,7 +373,10 @@ private class FakeEditIngredientRepository(
         )
     }
 
-    override suspend fun deleteIngredient(id: Long): AppResult<Unit> = deleteResult
+    override suspend fun deleteIngredient(id: Long): AppResult<Unit> {
+        deleteCalls += 1
+        return deleteResult
+    }
 
     override fun observeIngredients(): Flow<List<ReusableIngredient>> {
         return observedIngredients

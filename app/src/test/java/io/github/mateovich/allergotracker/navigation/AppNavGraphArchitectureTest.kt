@@ -26,7 +26,11 @@ class AppNavGraphArchitectureTest {
         assertTrue(source.contains("createExposureViewModelFactory: CreateExposureViewModelFactory"))
         assertTrue(source.contains("createOutbreakViewModelFactory: CreateOutbreakViewModelFactory"))
         assertTrue(source.contains("createIngredientViewModelFactory: CreateIngredientViewModelFactory"))
-        assertTrue(source.contains("createCompoundViewModelFactory: CreateCompoundViewModelFactory"))
+        assertTrue(
+            source.contains(
+                "createCompoundViewModelFactoryProvider: (String, IngestionReusableSelectionResult?) -> CreateCompoundViewModelFactory"
+            )
+        )
         assertTrue(source.contains("recordDetailViewModelFactoryProvider: (Long, RecordEventType) -> RecordDetailViewModelFactory"))
         assertTrue(source.contains("editIngestionViewModelFactoryProvider: (Long) -> EditIngestionViewModelFactory"))
         assertTrue(source.contains("editExposureViewModelFactoryProvider: (Long) -> EditExposureViewModelFactory"))
@@ -49,6 +53,9 @@ class AppNavGraphArchitectureTest {
 
         assertTrue(source.contains("selectedReusableEntity = savedStateHandle.toIngestionReusableSelectionResult()"))
         assertTrue(source.contains("editedCatalogSelection = savedStateHandle.toEditedEventCatalogSelectionResult()"))
+        assertTrue(source.contains("backStackEntry.savedStateHandle.remove<Long>(AppRoutes.REUSABLE_ENTITY_ID_RESULT)"))
+        assertTrue(source.contains("backStackEntry.savedStateHandle.remove<String>(AppRoutes.REUSABLE_ENTITY_NAME_RESULT)"))
+        assertTrue(source.contains("backStackEntry.savedStateHandle.remove<String>(AppRoutes.REUSABLE_ENTITY_KIND_RESULT)"))
         assertTrue(source.contains("navigateToRouteOrReturnToRecords(navController, route)"))
         assertTrue(source.contains("navController.navigate(route)"))
     }

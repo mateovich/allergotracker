@@ -21,7 +21,18 @@ class AppRoutesTest {
     @Test
     fun create_routes_cover_reusable_catalog_flows() {
         assertEquals("create/ingredient", AppRoutes.CREATE_INGREDIENT)
-        assertEquals("create/compound", AppRoutes.CREATE_COMPOUND)
+        assertEquals(
+            "create/compound?prefillName={prefillName}&seedIngredientId={seedIngredientId}&seedIngredientName={seedIngredientName}",
+            AppRoutes.CREATE_COMPOUND
+        )
+        assertEquals(
+            "create/compound?prefillName=Banana%20shake&seedIngredientId=7&seedIngredientName=Oat%20milk",
+            AppRoutes.createCompound(
+                prefillName = "Banana shake",
+                seedIngredientId = 7L,
+                seedIngredientName = "Oat milk"
+            )
+        )
     }
 
     @Test

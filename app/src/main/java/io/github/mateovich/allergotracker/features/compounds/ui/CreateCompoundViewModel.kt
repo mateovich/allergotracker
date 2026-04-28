@@ -6,12 +6,15 @@ import io.github.mateovich.allergotracker.core.common.error.DomainError
 import io.github.mateovich.allergotracker.core.common.result.AppResult
 import io.github.mateovich.allergotracker.features.compounds.domain.CompoundComponentKind
 import io.github.mateovich.allergotracker.features.compounds.domain.CompoundCompositionIntegrity
-import io.github.mateovich.allergotracker.features.compounds.domain.ReusableCompound
 import io.github.mateovich.allergotracker.features.compounds.domain.CreateReusableCompoundCommand
 import io.github.mateovich.allergotracker.features.compounds.domain.CreateReusableCompoundComponentCommand
 import io.github.mateovich.allergotracker.features.compounds.domain.CreateReusableCompoundUseCase
+import io.github.mateovich.allergotracker.features.compounds.domain.ReusableCompound
 import io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEntityKind
 import io.github.mateovich.allergotracker.features.ingestion.ui.IngestionReusableSelectionResult
+import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReusableIngredientCommand
+import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReusableIngredientUseCase
+import io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredient
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,14 +26,17 @@ import kotlinx.coroutines.launch
 
 class CreateCompoundViewModel(
     private val createReusableCompoundUseCase: CreateReusableCompoundUseCase,
+    private val createReusableIngredientUseCase: CreateReusableIngredientUseCase,
     private val observeReusableIngredients: () -> Flow<List<io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredient>> = { emptyFlow() },
-    private val observeReusableCompounds: () -> Flow<List<io.github.mateovich.allergotracker.features.compounds.domain.ReusableCompound>> = { emptyFlow() }
+    private val observeReusableCompounds: () -> Flow<List<io.github.mateovich.allergotracker.features.compounds.domain.ReusableCompound>> = { emptyFlow() },
+    initialName: String = "",
+    initialSeedIngredient: IngestionReusableSelectionResult? = null
 ) : ViewModel() {
     private var ingredientCatalogOptions: List<CompoundComponentCatalogOptionUiModel> = emptyList()
     private var compoundCatalogOptions: List<CompoundComponentCatalogOptionUiModel> = emptyList()
     private var observedCompounds: List<ReusableCompound> = emptyList()
 
-    private val mutableState = MutableStateFlow(CreateCompoundUiState())
+    private val mutableState = MutableStateFlow(buildInitialState(initialName, initialSeedIngredient))
     val state: StateFlow<CreateCompoundUiState> = mutableState.asStateFlow()
 
     private val effectChannel = Channel<CreateCompoundUiEffect>(capacity = Channel.BUFFERED)
@@ -112,7 +118,51 @@ class CreateCompoundViewModel(
             is CreateCompoundUiIntent.UpdateComponentProportion -> updateComponentProportion(intent.index, intent.value)
             is CreateCompoundUiIntent.AdjustComponentProportion -> applyAdjustedProportion(intent.index, intent.basisPoints)
             is CreateCompoundUiIntent.RemoveComponent -> removeComponent(intent.index)
+            is CreateCompoundUiIntent.CreateInlineIngredient -> createInlineIngredient(intent.name)
+            is CreateCompoundUiIntent.UpdateInlineIngredientName -> updateState {
+                it.copy(inlineIngredientName = intent.value, inlineIngredientError = null)
+            }
+            is CreateCompoundUiIntent.ShowInlineIngredientDialog -> updateState {
+                it.copy(
+                    showInlineIngredientDialog = true,
+                    inlineIngredientName = intent.prefillName,
+                    inlineIngredientError = null
+                )
+            }
+            CreateCompoundUiIntent.CancelInlineIngredientCreation -> updateState {
+                it.copy(
+                    showInlineIngredientDialog = false,
+                    inlineIngredientName = "",
+                    inlineIngredientError = null,
+                    isCreatingInlineIngredient = false
+                )
+            }
             CreateCompoundUiIntent.Save -> save()
+        }
+    }
+
+    private fun createInlineIngredient(name: String) {
+        val currentState = mutableState.value
+        if (currentState.isCreatingInlineIngredient) return
+
+        updateState { it.copy(isCreatingInlineIngredient = true, inlineIngredientError = null) }
+        viewModelScope.launch {
+            when (
+                val result = createReusableIngredientUseCase(
+                    CreateReusableIngredientCommand(name = name, notes = null)
+                )
+            ) {
+                is AppResult.Success -> updateState { state ->
+                    state.addCreatedIngredientComponent(result.value)
+                }
+
+                is AppResult.Error -> updateState {
+                    it.copy(
+                        isCreatingInlineIngredient = false,
+                        inlineIngredientError = result.error.fieldError("name") ?: result.error.message
+                    )
+                }
+            }
         }
     }
 
@@ -299,6 +349,27 @@ class CreateCompoundViewModel(
         mutableState.value = transform(mutableState.value)
     }
 
+    private fun buildInitialState(
+        initialName: String,
+        initialSeedIngredient: IngestionReusableSelectionResult?
+    ): CreateCompoundUiState {
+        val seededComponent = initialSeedIngredient
+            ?.takeIf { it.kind == ReusableEntityKind.INGREDIENT }
+            ?.let { ingredient ->
+                CompoundComponentRowUiModel(
+                    kind = CompoundComponentKind.INGREDIENT.storageValue,
+                    reusableEntityId = ingredient.id,
+                    name = ingredient.name,
+                    proportionBasisPoints = COMPOUND_TOTAL_BASIS_POINTS,
+                    proportionPercent = COMPOUND_TOTAL_BASIS_POINTS.toPercentInput()
+                )
+            }
+        return CreateCompoundUiState(
+            name = initialName,
+            components = seededComponent?.let(::listOf).orEmpty()
+        ).withDerivedFields()
+    }
+
     private fun CreateCompoundUiState.applyAdjustedProportion(index: Int, requestedBasisPoints: Int): CreateCompoundUiState {
         val adjustment = CompoundProportionAdjustmentEngine.adjust(
             values = components.normalizedValuesForAdjustment(),
@@ -387,6 +458,47 @@ class CreateCompoundViewModel(
                     .thenBy { it.id }
             )
         return copy(availableComponents = availableComponents).withDerivedFields()
+    }
+
+    private fun CreateCompoundUiState.addCreatedIngredientComponent(
+        ingredient: ReusableIngredient
+    ): CreateCompoundUiState {
+        val clearedState = copy(
+            isCreatingInlineIngredient = false,
+            showInlineIngredientDialog = false,
+            inlineIngredientName = "",
+            inlineIngredientError = null,
+            componentSearchQuery = "",
+            selectedPreset = null,
+            componentsError = null,
+            formMessage = "",
+            isFormMessageError = false,
+            isFormMessageSticky = false
+        )
+        val existingIndex = clearedState.components.indexOfFirst {
+            it.kind == CompoundComponentKind.INGREDIENT.storageValue && it.reusableEntityId == ingredient.id
+        }
+        if (existingIndex >= 0) {
+            return clearedState.withDerivedFields().refreshAvailableComponents()
+        }
+        val nextComponents = if (clearedState.components.isEmpty()) {
+            listOf(
+                CompoundComponentRowUiModel(
+                    kind = CompoundComponentKind.INGREDIENT.storageValue,
+                    reusableEntityId = ingredient.id,
+                    name = ingredient.name,
+                    proportionBasisPoints = COMPOUND_TOTAL_BASIS_POINTS,
+                    proportionPercent = COMPOUND_TOTAL_BASIS_POINTS.toPercentInput()
+                )
+            )
+        } else {
+            clearedState.components + CompoundComponentRowUiModel(
+                kind = CompoundComponentKind.INGREDIENT.storageValue,
+                reusableEntityId = ingredient.id,
+                name = ingredient.name
+            )
+        }
+        return clearedState.copy(components = nextComponents).withDerivedFields().refreshAvailableComponents()
     }
 
     private fun blockedAddMessage(

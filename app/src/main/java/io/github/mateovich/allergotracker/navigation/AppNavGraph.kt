@@ -59,7 +59,7 @@ fun AppNavGraph(
     createExposureViewModelFactory: CreateExposureViewModelFactory,
     createOutbreakViewModelFactory: CreateOutbreakViewModelFactory,
     createIngredientViewModelFactory: CreateIngredientViewModelFactory,
-    createCompoundViewModelFactory: CreateCompoundViewModelFactory,
+    createCompoundViewModelFactoryProvider: (String, IngestionReusableSelectionResult?) -> CreateCompoundViewModelFactory,
     editIngredientViewModelFactoryProvider: (Long) -> EditIngredientViewModelFactory,
     editCompoundViewModelFactoryProvider: (Long) -> EditCompoundViewModelFactory,
     editReusableEventCatalogViewModelFactoryProvider: (ReusableEventCatalogKind, Long) -> EditReusableEventCatalogViewModelFactory,
@@ -188,9 +188,35 @@ fun AppNavGraph(
                 }
             )
         }
-        composable(route = AppRoutes.CREATE_COMPOUND) {
+        composable(
+            route = AppRoutes.CREATE_COMPOUND,
+            arguments = listOf(
+                navArgument(AppRoutes.PREFILL_NAME_ARG) {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument(AppRoutes.SEED_INGREDIENT_ID_ARG) {
+                    type = NavType.LongType
+                    defaultValue = -1L
+                },
+                navArgument(AppRoutes.SEED_INGREDIENT_NAME_ARG) {
+                    type = NavType.StringType
+                    defaultValue = ""
+                }
+            )
+        ) { backStackEntry ->
+            val prefillName = backStackEntry.arguments?.getString(AppRoutes.PREFILL_NAME_ARG).orEmpty()
+            val seedIngredientId = backStackEntry.arguments?.getLong(AppRoutes.SEED_INGREDIENT_ID_ARG)?.takeIf { it > 0L }
+            val seedIngredientName = backStackEntry.arguments?.getString(AppRoutes.SEED_INGREDIENT_NAME_ARG).orEmpty()
+            val seedIngredient = seedIngredientId?.let { id ->
+                IngestionReusableSelectionResult(
+                    id = id,
+                    name = seedIngredientName,
+                    kind = ReusableEntityKind.INGREDIENT
+                )
+            }
             CreateCompoundScreen(
-                viewModelFactory = createCompoundViewModelFactory,
+                viewModelFactory = createCompoundViewModelFactoryProvider(prefillName, seedIngredient),
                 onNavigateBackWithSelection = { result ->
                     navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_ID_RESULT, result.id)
                     navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_NAME_RESULT, result.name)
@@ -205,6 +231,12 @@ fun AppNavGraph(
         ) { backStackEntry ->
             val reusableId = backStackEntry.arguments?.getLong(AppRoutes.REUSABLE_ID_ARG) ?: return@composable
             EditIngredientScreen(
+                selectedReusableEntity = backStackEntry.savedStateHandle.toIngestionReusableSelectionResult(),
+                onReusableEntityConsumed = {
+                    backStackEntry.savedStateHandle.remove<Long>(AppRoutes.REUSABLE_ENTITY_ID_RESULT)
+                    backStackEntry.savedStateHandle.remove<String>(AppRoutes.REUSABLE_ENTITY_NAME_RESULT)
+                    backStackEntry.savedStateHandle.remove<String>(AppRoutes.REUSABLE_ENTITY_KIND_RESULT)
+                },
                 viewModelFactory = editIngredientViewModelFactoryProvider(reusableId),
                 onNavigateBackWithSelection = { result ->
                     navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_ID_RESULT, result.id)
@@ -212,6 +244,7 @@ fun AppNavGraph(
                     navController.previousBackStackEntry?.savedStateHandle?.set(AppRoutes.REUSABLE_ENTITY_KIND_RESULT, result.kind.storageValue)
                     navController.popBackStack()
                 },
+                onNavigateToCreateCompound = navController::navigate,
                 onNavigateBack = {
                     navController.previousBackStackEntry?.savedStateHandle?.remove<Long>(AppRoutes.REUSABLE_ENTITY_ID_RESULT)
                     navController.previousBackStackEntry?.savedStateHandle?.remove<String>(AppRoutes.REUSABLE_ENTITY_NAME_RESULT)
