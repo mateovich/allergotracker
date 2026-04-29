@@ -28,7 +28,8 @@ class ReleaseBrandingGuardrailTest {
 
     @Test
     fun launcher_icon_resources_are_present_for_android_launcher_surfaces() {
-        val expectedIconSizes = mapOf(
+        val expectedLauncherIconSizes = mapOf(
+            "mipmap-ldpi" to 36,
             "mipmap-mdpi" to 48,
             "mipmap-hdpi" to 72,
             "mipmap-xhdpi" to 96,
@@ -36,7 +37,7 @@ class ReleaseBrandingGuardrailTest {
             "mipmap-xxxhdpi" to 192
         )
 
-        expectedIconSizes.forEach { (densityDirectory, expectedSize) ->
+        expectedLauncherIconSizes.forEach { (densityDirectory, expectedSize) ->
             listOf("ic_launcher.png", "ic_launcher_round.png").forEach { iconName ->
                 val relativePath = "app/src/main/res/$densityDirectory/$iconName"
                 val file = File(repoRoot, relativePath)
@@ -47,6 +48,34 @@ class ReleaseBrandingGuardrailTest {
                 assertEquals("Expected launcher icon height for $relativePath", expectedSize, height)
             }
         }
+
+        val expectedForegroundIconSizes = mapOf(
+            "mipmap-mdpi" to 108,
+            "mipmap-hdpi" to 162,
+            "mipmap-xhdpi" to 216,
+            "mipmap-xxhdpi" to 324,
+            "mipmap-xxxhdpi" to 432
+        )
+
+        expectedForegroundIconSizes.forEach { (densityDirectory, expectedSize) ->
+            val relativePath = "app/src/main/res/$densityDirectory/ic_launcher_foreground.png"
+            val file = File(repoRoot, relativePath)
+            assertTrue("Expected adaptive foreground resource $relativePath", file.exists() && file.length() > 0L)
+
+            val (width, height) = readPngDimensions(file)
+            assertEquals("Expected foreground icon width for $relativePath", expectedSize, width)
+            assertEquals("Expected foreground icon height for $relativePath", expectedSize, height)
+        }
+
+        val adaptiveIcon = File(repoRoot, "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml").readText()
+        val adaptiveRoundIcon = File(repoRoot, "app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml").readText()
+        val adaptiveBackground = File(repoRoot, "app/src/main/res/values/ic_launcher_background.xml").readText()
+
+        listOf(adaptiveIcon, adaptiveRoundIcon).forEach { iconXml ->
+            assertTrue(iconXml.contains("@color/ic_launcher_background"))
+            assertTrue(iconXml.contains("@mipmap/ic_launcher_foreground"))
+        }
+        assertTrue(adaptiveBackground.contains("<color name=\"ic_launcher_background\">"))
     }
 
     private fun readPngDimensions(file: File): Pair<Int, Int> {
