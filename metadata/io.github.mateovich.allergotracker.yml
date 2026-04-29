@@ -5,7 +5,7 @@ IssueTracker: https://github.com/mateovich/allergotracker/issues
 License: MIT
 Summary: Offline delayed-allergy tracking with structured export and import.
 Description: |-
-  Allergotracker is an Android-native, offline-first app for logging ingestion,
+  Allergo Tracker is an Android-native, offline-first app for logging ingestion,
   exposure, and outbreak events without mandatory dependence on store services.
 
   The app keeps capture, review, structured export, and structured import

@@ -1,4 +1,4 @@
-Allergotracker helps capture ingestion, exposure, and outbreak events on-device
+Allergo Tracker helps capture ingestion, exposure, and outbreak events on-device
 without mandatory Play, Firebase, billing, or other proprietary mobile-service
 dependencies.
 
