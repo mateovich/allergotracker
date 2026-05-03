@@ -372,10 +372,12 @@ class ExportViewModelTest {
 
     @Test
     fun blocking_preflight_failure_surfaces_actionable_error_without_generation() {
+        val blockingMessage = "Export blocked: ingestion record 12 references missing reusable ingredient 44 in reusable_entity_id. " +
+            "Edit that ingestion or restore the reusable ingredient before exporting."
         nextReviewResult = ExportPreflightReview(
             result = ExportPreflightResult(
                 issues = listOf(
-                    ExportPreflightIssue.Blocking(DomainError.IntegrityError("Export blocked: fix missing references before retrying."))
+                    ExportPreflightIssue.Blocking(DomainError.ExportError(blockingMessage))
                 )
             ),
             preparedExport = null
@@ -387,9 +389,11 @@ class ExportViewModelTest {
         viewModel.onIntent(ExportUiIntent.ConfirmExportStart)
 
         assertEquals(0, generateInvocationCount)
-        assertEquals("Export blocked: fix missing references before retrying.", viewModel.state.value.generalValidationMessage)
+        assertEquals(blockingMessage, viewModel.state.value.generalValidationMessage)
         assertNull(viewModel.state.value.statusMessage)
         assertNull(viewModel.state.value.stagedExport)
+        assertNull(viewModel.state.value.selectedDestination)
+        assertNull(viewModel.state.value.deliveryResult)
         assertTrue(!viewModel.state.value.isReviewingWarnings)
     }
 

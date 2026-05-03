@@ -145,43 +145,79 @@ class GenerateVersionedJsonExportUseCaseTest {
 
     @Test
     fun malformed_normalized_compound_data_returns_actionable_export_error() = runBlocking {
-        val useCase = GenerateVersionedJsonExportUseCase(
-            snapshotRepository = FakeExportSnapshotRepository(
-                sampleSnapshot().copy(
-                    reusableCompounds = listOf(
-                        ExportReusableCompoundRecord(
-                            id = 60L,
-                            name = "Broken blend",
-                            notes = null,
-                            compositionStatus = "complete",
-                            components = listOf(
-                                ExportReusableCompoundComponentRecord(
-                                    id = 61L,
-                                    position = 1,
-                                    componentRef = ExportReusableEntityReference(kind = "ingredient", id = 50L),
-                                    proportionBasisPoints = null
-                                )
-                            ),
-                            createdAtEpochMs = 1_699_998_600_000L,
-                            updatedAtEpochMs = 1_699_998_700_000L
-                        )
+        val result = runExport(
+            sampleSnapshot().copy(
+                reusableCompounds = listOf(
+                    ExportReusableCompoundRecord(
+                        id = 60L,
+                        name = "Broken blend",
+                        notes = null,
+                        compositionStatus = "complete",
+                        components = listOf(
+                            ExportReusableCompoundComponentRecord(
+                                id = 61L,
+                                position = 1,
+                                componentRef = ExportReusableEntityReference(kind = "ingredient", id = 50L),
+                                proportionBasisPoints = null
+                            )
+                        ),
+                        createdAtEpochMs = 1_699_998_600_000L,
+                        updatedAtEpochMs = 1_699_998_700_000L
                     )
                 )
-            ),
-            writer = object : ExportArtifactWriter {
-                override suspend fun writeJson(fileName: String, content: String): AppResult<ExportArtifact> = error("should not be called")
-            },
-            serializer = object : VersionedJsonExportSerializer {
-                override fun serialize(envelope: VersionedExportEnvelopeDto): AppResult<String> = error("should not be called")
-            },
-            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L }
+            )
         )
-
-        val result = useCase(ExportConfiguration(ExportFormat.JSON, ExportScope.AllRecords))
 
         require(result is AppResult.Error)
         assertTrue(result.error.message.contains("Export blocked"))
+        assertTrue(result.error.message.contains("compound 60"))
+        assertTrue(result.error.message.contains("component 61"))
         assertTrue(result.error.message.contains("missing proportion_basis_points"))
+        assertTrue(result.error.message.contains("Edit that compound component before exporting."))
+    }
+
+    @Test
+    fun missing_normalized_reusable_reference_returns_actionable_export_error() = runBlocking {
+        val result = runExport(
+            sampleSnapshot().copy(
+                ingestions = listOf(sampleSnapshot().ingestions.first().copy(reusableEntityRef = null))
+            )
+        )
+
+        require(result is AppResult.Error)
+        assertTrue(result.error.message.contains("Export blocked"))
+        assertTrue(result.error.message.contains("ingestion record 10"))
+        assertTrue(result.error.message.contains("reusable_entity_ref"))
+        assertTrue(result.error.message.contains("Edit that ingestion and set a reusable reference before exporting."))
+    }
+
+    @Test
+    fun missing_normalized_compound_component_references_return_actionable_export_errors() = runBlocking {
+        val cases = listOf(
+            sampleSnapshot().copy(reusableCompounds = sampleSnapshot().reusableCompounds.filterNot { it.id == 62L }) to listOf(
+                "compound 60",
+                "component 61",
+                "child_compound_id",
+                "missing child compound 62",
+                "Edit that compound component or restore the child compound before exporting."
+            ),
+            sampleSnapshot().copy(reusableIngredients = sampleSnapshot().reusableIngredients.filterNot { it.id == 51L }) to listOf(
+                "compound 62",
+                "component 65",
+                "missing reusable ingredient 51",
+                "ingredient_id",
+                "Edit that compound component or restore the reusable ingredient before exporting."
+            )
+        )
+
+        cases.forEach { (snapshot, expectedTokens) ->
+            val result = runExport(snapshot)
+
+            require(result is AppResult.Error)
+            expectedTokens.forEach { token ->
+                assertTrue("Expected message to contain '$token' but was: ${result.error.message}", result.error.message.contains(token))
+            }
+        }
     }
 
     @Test
@@ -476,6 +512,20 @@ class GenerateVersionedJsonExportUseCaseTest {
         require(result is AppResult.Error)
         assertTrue(result.error is DomainError.ValidationError)
         assertEquals("Export data changed. Review warnings before continuing.", result.error.message)
+    }
+
+    private suspend fun runExport(snapshot: ExportSnapshot): AppResult<GeneratedJsonExport> {
+        val useCase = GenerateVersionedJsonExportUseCase(
+            snapshotRepository = FakeExportSnapshotRepository(snapshot),
+            writer = object : ExportArtifactWriter {
+                override suspend fun writeJson(fileName: String, content: String): AppResult<ExportArtifact> = error("should not be called")
+            },
+            serializer = object : VersionedJsonExportSerializer {
+                override fun serialize(envelope: VersionedExportEnvelopeDto): AppResult<String> = error("should not be called")
+            },
+            currentTimeProvider = CurrentTimeProvider { 1_700_000_000_000L }
+        )
+        return useCase(ExportConfiguration(ExportFormat.JSON, ExportScope.AllRecords))
     }
 
     private fun sampleSnapshot() = ExportSnapshot(

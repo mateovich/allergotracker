@@ -1,10 +1,11 @@
 package io.github.mateovich.allergotracker.features.export.data
 
 import io.github.mateovich.allergotracker.core.common.result.AppResult
-import io.github.mateovich.allergotracker.features.eventcatalog.data.ReusableEventCatalogEntity
 import io.github.mateovich.allergotracker.features.compounds.data.ReusableCompoundComponentEntity
 import io.github.mateovich.allergotracker.features.compounds.data.ReusableCompoundEntity
 import io.github.mateovich.allergotracker.features.compounds.data.ReusableCompoundWithComponents
+import io.github.mateovich.allergotracker.features.eventcatalog.data.ReusableEventCatalogEntity
+import io.github.mateovich.allergotracker.features.exposure.data.ExposureEventEntity
 import io.github.mateovich.allergotracker.features.export.domain.ExportScope
 import io.github.mateovich.allergotracker.features.ingredients.data.ReusableIngredientEntity
 import io.github.mateovich.allergotracker.features.ingestion.data.IngestionEventEntity
@@ -154,9 +155,202 @@ class RoomExportSnapshotRepositoryTest {
         val result = repository.getSnapshot(ExportScope.EventTypeRecords(RecordEventType.OUTBREAK))
 
         require(result is AppResult.Error)
-        assertTrue(result.error.message.contains("Export blocked"))
-        assertTrue(result.error.message.contains("outbreak record 7"))
-        assertTrue(result.error.message.contains("99"))
+        assertMessageContainsAll(
+            result.error.message,
+            "Export blocked",
+            "outbreak record 7",
+            "outbreak_descriptor_catalog_id",
+            "99",
+            "expected 'outbreak_descriptor'",
+            "Edit the outbreak saved value before exporting."
+        )
+    }
+
+    @Test
+    fun missing_reusable_ingredient_in_ingestion_names_record_field_kind_id_and_correction() = runBlocking {
+        val repository = RoomExportSnapshotRepository(
+            FakeExportSnapshotDataAccess(
+                ingestions = listOf(
+                    IngestionEventEntity(12L, "Tea", 2, 200L, null, "ingredient", 44L, 201L)
+                ),
+                reusableIngredients = emptyList()
+            )
+        )
+
+        val result = repository.getSnapshot(ExportScope.AllRecords)
+
+        require(result is AppResult.Error)
+        assertMessageContainsAll(
+            result.error.message,
+            "Export blocked",
+            "ingestion record 12",
+            "missing reusable ingredient 44",
+            "reusable_entity_id",
+            "Edit that ingestion or restore the reusable ingredient before exporting."
+        )
+    }
+
+    @Test
+    fun missing_reusable_compound_in_ingestion_names_record_field_kind_id_and_correction() = runBlocking {
+        val repository = RoomExportSnapshotRepository(
+            FakeExportSnapshotDataAccess(
+                ingestions = listOf(
+                    IngestionEventEntity(13L, "Blend", 2, 200L, null, "compound", 45L, 201L)
+                ),
+                reusableCompounds = emptyList()
+            )
+        )
+
+        val result = repository.getSnapshot(ExportScope.AllRecords)
+
+        require(result is AppResult.Error)
+        assertMessageContainsAll(
+            result.error.message,
+            "Export blocked",
+            "ingestion record 13",
+            "missing reusable compound 45",
+            "reusable_entity_id",
+            "Edit that ingestion or restore the reusable compound before exporting."
+        )
+    }
+
+    @Test
+    fun incomplete_ingestion_reusable_reference_names_both_fields_and_correction() = runBlocking {
+        val repository = RoomExportSnapshotRepository(
+            FakeExportSnapshotDataAccess(
+                ingestions = listOf(
+                    IngestionEventEntity(14L, "Tea", 2, 200L, null, "ingredient", null, 201L)
+                )
+            )
+        )
+
+        val result = repository.getSnapshot(ExportScope.AllRecords)
+
+        require(result is AppResult.Error)
+        assertMessageContainsAll(
+            result.error.message,
+            "Export blocked",
+            "ingestion record 14",
+            "reusable_entity_kind",
+            "reusable_entity_id",
+            "Edit that ingestion and set both reusable reference fields before exporting."
+        )
+    }
+
+    @Test
+    fun exposure_catalog_wrong_kind_names_expected_actual_field_and_correction_in_all_and_partial_scopes() = runBlocking {
+        val repository = RoomExportSnapshotRepository(
+            FakeExportSnapshotDataAccess(
+                exposures = listOf(
+                    ExposureEventEntity(15L, "Pollen", 200L, null, 201L, exposureTypeCatalogId = 99L)
+                ),
+                reusableEventCatalogEntries = listOf(
+                    ReusableEventCatalogEntity(99L, "body_location", "Arm", "arm", 1, 100L, 101L, 102L)
+                )
+            )
+        )
+
+        listOf(ExportScope.AllRecords, ExportScope.EventTypeRecords(RecordEventType.EXPOSURE)).forEach { scope ->
+            val result = repository.getSnapshot(scope)
+
+            require(result is AppResult.Error)
+            assertMessageContainsAll(
+                result.error.message,
+                "Export blocked",
+                "exposure record 15",
+                "exposure_type_catalog_id",
+                "99",
+                "expected 'exposure_type'",
+                "actual 'body_location'",
+                "Edit the exposure saved value before exporting."
+            )
+        }
+    }
+
+    @Test
+    fun compound_component_missing_ids_and_unsupported_kind_name_field_and_correction() = runBlocking {
+        val cases = listOf(
+            ReusableCompoundComponentEntity(61L, 60L, 1, "ingredient", null, null, 10_000) to listOf(
+                "compound 60",
+                "component 61",
+                "ingredient_id",
+                "Edit that compound component before exporting."
+            ),
+            ReusableCompoundComponentEntity(62L, 60L, 1, "compound", null, null, 10_000) to listOf(
+                "compound 60",
+                "component 62",
+                "child_compound_id",
+                "Edit that compound component before exporting."
+            ),
+            ReusableCompoundComponentEntity(63L, 60L, 1, "unknown", null, null, 10_000) to listOf(
+                "compound 60",
+                "component 63",
+                "componentKind 'unknown'",
+                "Edit that compound component before exporting."
+            )
+        )
+
+        cases.forEach { (component, expectedTokens) ->
+            val repository = RoomExportSnapshotRepository(
+                FakeExportSnapshotDataAccess(
+                    reusableCompounds = listOf(
+                        ReusableCompoundWithComponents(
+                            compound = ReusableCompoundEntity(60L, "Broken", "broken", null, "complete", 100L, 101L),
+                            components = listOf(component)
+                        )
+                    )
+                )
+            )
+
+            val result = repository.getSnapshot(ExportScope.AllRecords)
+
+            require(result is AppResult.Error)
+            assertMessageContainsAll(result.error.message, "Export blocked", *expectedTokens.toTypedArray())
+        }
+    }
+
+    @Test
+    fun compound_component_missing_referenced_entities_name_field_id_and_correction() = runBlocking {
+        val cases = listOf(
+            ReusableCompoundComponentEntity(64L, 60L, 1, "ingredient", 404L, null, 10_000) to listOf(
+                "compound 60",
+                "component 64",
+                "missing reusable ingredient 404",
+                "ingredient_id",
+                "Edit that compound component or restore the reusable ingredient before exporting."
+            ),
+            ReusableCompoundComponentEntity(65L, 60L, 1, "compound", null, 405L, 10_000) to listOf(
+                "compound 60",
+                "component 65",
+                "missing child compound 405",
+                "child_compound_id",
+                "Edit that compound component or restore the child compound before exporting."
+            )
+        )
+
+        cases.forEach { (component, expectedTokens) ->
+            val repository = RoomExportSnapshotRepository(
+                FakeExportSnapshotDataAccess(
+                    reusableCompounds = listOf(
+                        ReusableCompoundWithComponents(
+                            compound = ReusableCompoundEntity(60L, "Broken", "broken", null, "complete", 100L, 101L),
+                            components = listOf(component)
+                        )
+                    )
+                )
+            )
+
+            val result = repository.getSnapshot(ExportScope.AllRecords)
+
+            require(result is AppResult.Error)
+            assertMessageContainsAll(result.error.message, "Export blocked", *expectedTokens.toTypedArray())
+        }
+    }
+}
+
+private fun assertMessageContainsAll(message: String, vararg expectedTokens: String) {
+    expectedTokens.forEach { token ->
+        assertTrue("Expected message to contain '$token' but was: $message", message.contains(token))
     }
 }
 

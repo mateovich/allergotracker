@@ -213,9 +213,7 @@ private fun ExportScope.toScopedReusableData(
                 ScopedReusableData(
                     reusableIngredients = emptyList(),
                     reusableCompounds = emptyList(),
-                    reusableEventCatalogEntries = reusableEventCatalogEntries.filter {
-                        it.kind == ReusableEventCatalogKind.EXPOSURE_TYPE.storageValue && it.id in selectedCatalogIds
-                    }
+                    reusableEventCatalogEntries = reusableEventCatalogEntries.filter { it.id in selectedCatalogIds }
                 )
             }
 
@@ -242,14 +240,17 @@ private fun io.github.mateovich.allergotracker.features.ingestion.data.Ingestion
     if (kind == null && id == null) return null
     if (kind == null || id == null) {
         throw MissingExportReferenceException(
-            "Export blocked: ingestion record ${this.id} has an incomplete reusable entity reference."
+            "Export blocked: ingestion record ${this.id} has an incomplete reusable entity reference; " +
+                "both reusable_entity_kind and reusable_entity_id are required. " +
+                "Edit that ingestion and set both reusable reference fields before exporting."
         )
     }
     return when (kind) {
         ReusableEntityKind.INGREDIENT.storageValue -> {
             if (id !in reusableIngredientIds) {
                 throw MissingExportReferenceException(
-                    "Export blocked: ingestion record ${this.id} references missing reusable ingredient $id. Resolve the inconsistency before exporting."
+                    "Export blocked: ingestion record ${this.id} references missing reusable ingredient $id in reusable_entity_id. " +
+                        "Edit that ingestion or restore the reusable ingredient before exporting."
                 )
             }
             ExportReusableEntityReference(kind = kind, id = id)
@@ -258,7 +259,8 @@ private fun io.github.mateovich.allergotracker.features.ingestion.data.Ingestion
         ReusableEntityKind.COMPOUND.storageValue -> {
             if (id !in reusableCompoundIds) {
                 throw MissingExportReferenceException(
-                    "Export blocked: ingestion record ${this.id} references missing reusable compound $id. Resolve the inconsistency before exporting."
+                    "Export blocked: ingestion record ${this.id} references missing reusable compound $id in reusable_entity_id. " +
+                        "Edit that ingestion or restore the reusable compound before exporting."
                 )
             }
             ExportReusableEntityReference(kind = kind, id = id)
@@ -266,7 +268,8 @@ private fun io.github.mateovich.allergotracker.features.ingestion.data.Ingestion
 
         else -> {
             throw MissingExportReferenceException(
-                "Export blocked: ingestion record ${this.id} references unsupported reusable entity kind '$kind'."
+                "Export blocked: ingestion record ${this.id} references unsupported reusable_entity_kind '$kind'. " +
+                    "Edit that ingestion and choose a supported reusable reference before exporting."
             )
         }
     }
@@ -290,11 +293,14 @@ private fun Long?.toCatalogReferenceOrNull(
     val id = this ?: return null
     val entry = catalogEntriesById[id]
         ?: throw MissingExportReferenceException(
-            "Export blocked: $ownerDescription references missing catalog entry $id in $fieldLabel. Resolve the inconsistency before exporting."
+            "Export blocked: $ownerDescription references missing catalog entry $id in $fieldLabel; expected '$expectedKind'. " +
+                "Edit the ${ownerDescription.substringBefore(" record")} saved value before exporting."
         )
     if (entry.kind != expectedKind) {
         throw MissingExportReferenceException(
-            "Export blocked: $ownerDescription references catalog entry $id with unexpected kind '${entry.kind}' in $fieldLabel."
+            "Export blocked: $ownerDescription references catalog entry $id in $fieldLabel; " +
+                "expected '$expectedKind', actual '${entry.kind}'. " +
+                "Edit the ${ownerDescription.substringBefore(" record")} saved value before exporting."
         )
     }
     return ExportEventCatalogReference(kind = entry.kind, id = entry.id)
@@ -309,11 +315,13 @@ private fun io.github.mateovich.allergotracker.features.compounds.data.ReusableC
         ReusableEntityKind.INGREDIENT.storageValue -> {
             val ingredientId = ingredientId
                 ?: throw MissingExportReferenceException(
-                    "Export blocked: compound $compoundId component $id is missing ingredient_id."
+                    "Export blocked: compound $compoundId component $id is missing ingredient_id. " +
+                        "Edit that compound component before exporting."
                 )
             if (ingredientId !in reusableIngredientIds) {
                 throw MissingExportReferenceException(
-                    "Export blocked: compound $compoundId component $id references missing reusable ingredient $ingredientId. Resolve the inconsistency before exporting."
+                    "Export blocked: compound $compoundId component $id references missing reusable ingredient $ingredientId in ingredient_id. " +
+                        "Edit that compound component or restore the reusable ingredient before exporting."
                 )
             }
             ExportReusableEntityReference(kind = componentKind, id = ingredientId)
@@ -322,11 +330,13 @@ private fun io.github.mateovich.allergotracker.features.compounds.data.ReusableC
         ReusableEntityKind.COMPOUND.storageValue -> {
             val childCompoundId = childCompoundId
                 ?: throw MissingExportReferenceException(
-                    "Export blocked: compound $compoundId component $id is missing child_compound_id."
+                    "Export blocked: compound $compoundId component $id is missing child_compound_id. " +
+                        "Edit that compound component before exporting."
                 )
             if (childCompoundId !in reusableCompoundIds) {
                 throw MissingExportReferenceException(
-                    "Export blocked: compound $compoundId component $id references missing child compound $childCompoundId. Resolve the inconsistency before exporting."
+                    "Export blocked: compound $compoundId component $id references missing child compound $childCompoundId in child_compound_id. " +
+                        "Edit that compound component or restore the child compound before exporting."
                 )
             }
             ExportReusableEntityReference(kind = componentKind, id = childCompoundId)
@@ -334,7 +344,8 @@ private fun io.github.mateovich.allergotracker.features.compounds.data.ReusableC
 
         else -> {
             throw MissingExportReferenceException(
-                "Export blocked: compound $compoundId component $id uses unsupported component kind '$componentKind'."
+                "Export blocked: compound $compoundId component $id uses unsupported componentKind '$componentKind'. " +
+                    "Edit that compound component before exporting."
             )
         }
     }

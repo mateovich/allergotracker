@@ -40,14 +40,16 @@ internal class NormalizedIngredientBaseExportBuilder {
             val reusableEntityRef = ingestion.reusableEntityRef
                 ?: return AppResult.Error(
                     DomainError.ExportError(
-                        "Export blocked: ingestion record ${ingestion.id} is missing reusable_entity_ref required for normalized export. Resolve the inconsistency before exporting."
+                        "Export blocked: ingestion record ${ingestion.id} is missing reusable_entity_ref required for normalized export. " +
+                            "Edit that ingestion and set a reusable reference before exporting."
                     )
                 )
             val quantityLevel = ingestion.quantityLevel
                 .takeIf { IngestionQuantityOption.fromLevel(it) != null }
                 ?: return AppResult.Error(
                     DomainError.ExportError(
-                        "Export blocked: ingestion record ${ingestion.id} has invalid quantity_level ${ingestion.quantityLevel}. Expected a value between 1 and 5."
+                        "Export blocked: ingestion record ${ingestion.id} has invalid quantity_level ${ingestion.quantityLevel}. " +
+                            "Expected a value between 1 and 5. Edit that ingestion before exporting."
                     )
                 )
             val baseIngredientBasisPoints = linkedMapOf<Long, Int>()
@@ -67,7 +69,8 @@ internal class NormalizedIngredientBaseExportBuilder {
                             ingredientsById = ingredientsById,
                             compoundsById = compoundsById,
                             aggregateBasisPoints = baseIngredientBasisPoints,
-                            traversalPath = linkedSetOf(reusableEntityRef.id)
+                            traversalPath = linkedSetOf(reusableEntityRef.id),
+                            referencedByComponent = null
                         )
                     ) {
                         is AppResult.Success -> Unit
@@ -78,7 +81,8 @@ internal class NormalizedIngredientBaseExportBuilder {
                 else -> {
                     return AppResult.Error(
                         DomainError.ExportError(
-                            "Export blocked: ingestion record ${ingestion.id} references unsupported reusable entity kind '${reusableEntityRef.kind}'."
+                            "Export blocked: ingestion record ${ingestion.id} references unsupported reusable entity kind '${reusableEntityRef.kind}'. " +
+                                "Edit that ingestion and choose a supported reusable reference before exporting."
                         )
                     )
                 }
@@ -121,25 +125,34 @@ internal class NormalizedIngredientBaseExportBuilder {
         ingredientsById: Map<Long, ExportReusableIngredientRecord>,
         compoundsById: Map<Long, ExportReusableCompoundRecord>,
         aggregateBasisPoints: MutableMap<Long, Int>,
-        traversalPath: LinkedHashSet<Long>
+        traversalPath: LinkedHashSet<Long>,
+        referencedByComponent: String?
     ): AppResult<Unit> {
         val compound = compoundsById[compoundId]
             ?: return AppResult.Error(
                 DomainError.ExportError(
-                    "Export blocked: ingestion record $rootIngestionId references missing reusable compound $compoundId. Resolve the inconsistency before exporting."
+                    if (referencedByComponent == null) {
+                        "Export blocked: ingestion record $rootIngestionId references missing reusable compound $compoundId in reusable_entity_ref. " +
+                            "Edit that ingestion or restore the reusable compound before exporting."
+                    } else {
+                        "Export blocked: $referencedByComponent references missing child compound $compoundId. " +
+                            "Edit that compound component or restore the child compound before exporting."
+                    }
                 )
             )
         if (compound.compositionStatus != "complete") {
             return AppResult.Error(
                 DomainError.ExportError(
-                    "Export blocked: compound $compoundId is not complete and cannot be normalized."
+                    "Export blocked: compound $compoundId is not complete and cannot be normalized. " +
+                        "Complete that compound composition before exporting."
                 )
             )
         }
         if (compound.components.isEmpty()) {
             return AppResult.Error(
                 DomainError.ExportError(
-                    "Export blocked: compound $compoundId has no components to normalize."
+                    "Export blocked: compound $compoundId has no components to normalize. " +
+                        "Add compound components before exporting."
                 )
             )
         }
@@ -156,7 +169,7 @@ internal class NormalizedIngredientBaseExportBuilder {
                         ReusableEntityKind.INGREDIENT.storageValue -> {
                             val ingredientId = component.componentRef.id
                             if (ingredientId !in ingredientsById) {
-                                return missingIngredientResult(rootIngestionId, ingredientId)
+                                return missingIngredientResult(rootIngestionId, ingredientId, compoundId, component.id)
                             }
                             aggregateBasisPoints[ingredientId] =
                                 aggregateBasisPoints.getOrDefault(ingredientId, 0) + componentShareBasisPoints
@@ -167,7 +180,8 @@ internal class NormalizedIngredientBaseExportBuilder {
                             if (!traversalPath.add(childCompoundId)) {
                                 return AppResult.Error(
                                     DomainError.ExportError(
-                                        "Export blocked: recursive compound loop detected while normalizing ingestion record $rootIngestionId at compound $childCompoundId."
+                                        "Export blocked: recursive compound loop detected while normalizing ingestion record $rootIngestionId at compound $childCompoundId. " +
+                                            "Edit the compound components to remove the cycle before exporting."
                                     )
                                 )
                             }
@@ -179,7 +193,8 @@ internal class NormalizedIngredientBaseExportBuilder {
                                     ingredientsById = ingredientsById,
                                     compoundsById = compoundsById,
                                     aggregateBasisPoints = aggregateBasisPoints,
-                                    traversalPath = traversalPath
+                                    traversalPath = traversalPath,
+                                    referencedByComponent = "compound $compoundId component ${component.id} child_compound_id"
                                 )
                             ) {
                                 is AppResult.Success -> Unit
@@ -191,7 +206,8 @@ internal class NormalizedIngredientBaseExportBuilder {
                         else -> {
                             return AppResult.Error(
                                 DomainError.ExportError(
-                                    "Export blocked: compound $compoundId component ${component.id} uses unsupported component kind '${component.componentRef.kind}'."
+                                    "Export blocked: compound $compoundId component ${component.id} uses unsupported component kind '${component.componentRef.kind}'. " +
+                                        "Edit that compound component before exporting."
                                 )
                             )
                         }
@@ -217,7 +233,8 @@ internal class NormalizedIngredientBaseExportBuilder {
             val proportion = component.proportionBasisPoints
                 ?: return AppResult.Error(
                     DomainError.ExportError(
-                        "Export blocked: compound $ownerCompoundId component ${component.id} is missing proportion_basis_points."
+                        "Export blocked: compound $ownerCompoundId component ${component.id} is missing proportion_basis_points. " +
+                            "Edit that compound component before exporting."
                     )
                 )
             val exactShare = parentShareBasisPoints.toLong() * proportion.toLong()
@@ -231,7 +248,8 @@ internal class NormalizedIngredientBaseExportBuilder {
         if (totalProportionBasisPoints != BASIS_POINTS_SCALE) {
             return AppResult.Error(
                 DomainError.ExportError(
-                    "Export blocked: compound $ownerCompoundId has invalid total proportion_basis_points $totalProportionBasisPoints. Expected $BASIS_POINTS_SCALE."
+                    "Export blocked: compound $ownerCompoundId has invalid total proportion_basis_points $totalProportionBasisPoints. " +
+                        "Expected $BASIS_POINTS_SCALE. Edit that compound composition before exporting."
                 )
             )
         }
@@ -240,7 +258,8 @@ internal class NormalizedIngredientBaseExportBuilder {
         if (remainderUnits < 0 || remainderUnits > candidates.size) {
             return AppResult.Error(
                 DomainError.ExportError(
-                    "Export blocked: compound $ownerCompoundId produced an invalid normalization remainder."
+                    "Export blocked: compound $ownerCompoundId produced an invalid normalization remainder. " +
+                        "Edit that compound composition before exporting."
                 )
             )
         }
@@ -257,10 +276,21 @@ internal class NormalizedIngredientBaseExportBuilder {
         )
     }
 
-    private fun missingIngredientResult(rootIngestionId: Long, ingredientId: Long): AppResult.Error {
+    private fun missingIngredientResult(
+        rootIngestionId: Long,
+        ingredientId: Long,
+        compoundId: Long? = null,
+        componentId: Long? = null
+    ): AppResult.Error {
         return AppResult.Error(
             DomainError.ExportError(
-                "Export blocked: ingestion record $rootIngestionId references missing reusable ingredient $ingredientId. Resolve the inconsistency before exporting."
+                if (compoundId == null || componentId == null) {
+                    "Export blocked: ingestion record $rootIngestionId references missing reusable ingredient $ingredientId in reusable_entity_ref. " +
+                        "Edit that ingestion or restore the reusable ingredient before exporting."
+                } else {
+                    "Export blocked: compound $compoundId component $componentId references missing reusable ingredient $ingredientId in ingredient_id. " +
+                        "Edit that compound component or restore the reusable ingredient before exporting."
+                }
             )
         )
     }
