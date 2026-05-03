@@ -29,5 +29,16 @@ java_pid*.hprof
 # BMAD / OpenCode process artifacts
 _bmad/
 _bmad-output/
+bmad_output/
+.agents/
 .opencode/
 AGENTS.md
+
+# Local planning notes
+docs/
+
+# Security
+keystore.properties
+*.jks
+*.keystore
+secrets/
