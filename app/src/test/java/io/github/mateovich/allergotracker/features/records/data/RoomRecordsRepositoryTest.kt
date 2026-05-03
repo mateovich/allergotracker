@@ -20,12 +20,19 @@ import io.github.mateovich.allergotracker.features.outbreak.domain.UpdateOutbrea
 import io.github.mateovich.allergotracker.features.records.domain.RecordEventType
 import io.github.mateovich.allergotracker.features.records.domain.RecordsFilter
 import io.github.mateovich.allergotracker.core.common.result.AppResult
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import java.time.LocalDate
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
@@ -572,6 +579,290 @@ class RoomRecordsRepositoryTest {
         assertEquals(listOf("exposure-1", "ingestion-1"), records.map { it.id })
         assertEquals("Dust", records.first().title)
         assertEquals("Green tea", records.last().title)
+    }
+
+    @Test
+    fun active_records_and_count_collectors_track_create_edit_delete_sequence() = runBlocking {
+        val now = 1_700_000_500_000L
+        val ingestionEventDao = FakeIngestionEventDao()
+        val exposureEventDao = FakeExposureEventDao()
+        val outbreakEventDao = FakeOutbreakEventDao()
+        val recordsRepository = RoomRecordsRepository(ingestionEventDao, exposureEventDao, outbreakEventDao)
+        val ingestionRepository = RoomIngestionRepository(ingestionEventDao, CurrentTimeProvider { now })
+        val exposureRepository = RoomExposureRepository(exposureEventDao, CurrentTimeProvider { now })
+        val outbreakRepository = RoomOutbreakRepository(outbreakEventDao, CurrentTimeProvider { now })
+
+        val recordEmissions = mutableListOf<List<String>>()
+        val countEmissions = mutableListOf<Int>()
+        val initialRecordsReceived = CompletableDeferred<Unit>()
+        val initialCountReceived = CompletableDeferred<Unit>()
+        val finalRecordsReceived = CompletableDeferred<Unit>()
+        val finalCountReceived = CompletableDeferred<Unit>()
+        var sawThreeRecords = false
+        var sawThreeCount = false
+        val recordsCollector = launch {
+            recordsRepository.observeRecords()
+                .onEach { records ->
+                    val ids = records.map { it.id }
+                    recordEmissions += ids
+                    if (recordEmissions.size == 1) initialRecordsReceived.complete(Unit)
+                    if (ids.size == 3) sawThreeRecords = true
+                    if (sawThreeRecords && ids == listOf("exposure-1", "ingestion-1")) {
+                        finalRecordsReceived.complete(Unit)
+                    }
+                }
+                .collect {}
+        }
+        val countCollector = launch {
+            recordsRepository.observeRecordCount()
+                .onEach { count ->
+                    countEmissions += count
+                    if (countEmissions.size == 1) initialCountReceived.complete(Unit)
+                    if (count == 3) sawThreeCount = true
+                    if (sawThreeCount && count == 2) finalCountReceived.complete(Unit)
+                }
+                .collect {}
+        }
+
+        withTimeout(5_000L) {
+            initialRecordsReceived.await()
+            initialCountReceived.await()
+            ingestionRepository.createIngestion(
+                CreateIngestionEventCommand(
+                    itemName = "Tea",
+                    quantityLevel = 2,
+                    occurredAtEpochMs = now - 300_000L,
+                    notes = null
+                )
+            )
+            yield()
+            exposureRepository.createExposure(
+                CreateExposureEventCommand(
+                    exposureType = "Pollen",
+                    occurredAtEpochMs = now - 200_000L,
+                    notes = "outside"
+                )
+            )
+            yield()
+            outbreakRepository.createOutbreak(
+                CreateOutbreakEventCommand(
+                    outbreakDescriptor = "Skin flare",
+                    bodyLocation = "Arm",
+                    occurredAtEpochMs = now - 100_000L,
+                    notes = "after workout"
+                )
+            )
+            yield()
+            ingestionRepository.updateIngestion(
+                UpdateIngestionEventCommand(
+                    id = 1L,
+                    itemName = "Green tea",
+                    quantityLevel = 3,
+                    occurredAtEpochMs = now - 50_000L,
+                    notes = "after lunch"
+                )
+            )
+            yield()
+            exposureRepository.updateExposure(
+                UpdateExposureEventCommand(
+                    id = 1L,
+                    exposureType = "Dust",
+                    occurredAtEpochMs = now - 25_000L,
+                    notes = "inside"
+                )
+            )
+            yield()
+            outbreakRepository.deleteOutbreak(1L)
+            yield()
+            finalRecordsReceived.await()
+            finalCountReceived.await()
+            recordsCollector.cancel()
+            countCollector.cancel()
+        }
+
+        assertEquals(listOf("exposure-1", "ingestion-1"), recordEmissions.last())
+        assertEquals(2, countEmissions.last())
+        assertEquals(recordEmissions.last().distinct(), recordEmissions.last())
+    }
+
+    @Test
+    fun active_records_collector_receives_ingestion_created_after_collection_started() = runBlocking {
+        val now = 1_700_000_500_000L
+        val ingestionEventDao = FakeIngestionEventDao(
+            events = listOf(
+                IngestionEventEntity(
+                    id = 4L,
+                    itemName = "Coffee",
+                    quantityLevel = 3,
+                    occurredAtEpochMs = now - 1_000L,
+                    notes = null,
+                    reusableEntityKind = null,
+                    reusableEntityId = null,
+                    createdAtEpochMs = now - 1_000L
+                )
+            )
+        )
+        val recordsRepository = RoomRecordsRepository(
+            ingestionEventDao = ingestionEventDao,
+            exposureEventDao = FakeExposureEventDao(
+                events = listOf(
+                    ExposureEventEntity(
+                        id = 1L,
+                        exposureType = "Pollen",
+                        occurredAtEpochMs = now + 1_000L,
+                        notes = null,
+                        createdAtEpochMs = now + 1_000L
+                    )
+                )
+            ),
+            outbreakEventDao = FakeOutbreakEventDao()
+        )
+        val ingestionRepository = RoomIngestionRepository(ingestionEventDao, CurrentTimeProvider { now })
+
+        val emissions = mutableListOf<List<String>>()
+        val initialEmissionReceived = CompletableDeferred<Unit>()
+        val collector = launch {
+            recordsRepository.observeRecords()
+                .onEach { records ->
+                    emissions += records.map { it.id }
+                    if (emissions.size == 1) initialEmissionReceived.complete(Unit)
+                }
+                .take(2)
+                .collect {}
+        }
+        withTimeout(5_000L) {
+            initialEmissionReceived.await()
+            ingestionRepository.createIngestion(
+                CreateIngestionEventCommand(
+                    itemName = "Tea",
+                    quantityLevel = 2,
+                    occurredAtEpochMs = now,
+                    notes = null
+                )
+            )
+            collector.join()
+        }
+
+        assertEquals(listOf("exposure-1", "ingestion-5", "ingestion-4"), emissions.last())
+    }
+
+    @Test
+    fun active_records_collector_receives_exposure_created_after_collection_started() = runBlocking {
+        val now = 1_700_000_500_000L
+        val exposureEventDao = FakeExposureEventDao(
+            events = listOf(
+                ExposureEventEntity(
+                    id = 4L,
+                    exposureType = "Dust",
+                    occurredAtEpochMs = now - 1_000L,
+                    notes = null,
+                    createdAtEpochMs = now - 1_000L
+                )
+            )
+        )
+        val recordsRepository = RoomRecordsRepository(
+            ingestionEventDao = FakeIngestionEventDao(
+                events = listOf(
+                    IngestionEventEntity(
+                        id = 1L,
+                        itemName = "Tea",
+                        quantityLevel = 2,
+                        occurredAtEpochMs = now + 1_000L,
+                        notes = null,
+                        reusableEntityKind = null,
+                        reusableEntityId = null,
+                        createdAtEpochMs = now + 1_000L
+                    )
+                )
+            ),
+            exposureEventDao = exposureEventDao,
+            outbreakEventDao = FakeOutbreakEventDao()
+        )
+        val exposureRepository = RoomExposureRepository(exposureEventDao, CurrentTimeProvider { now })
+
+        val emissions = mutableListOf<List<String>>()
+        val initialEmissionReceived = CompletableDeferred<Unit>()
+        val collector = launch {
+            recordsRepository.observeRecords()
+                .onEach { records ->
+                    emissions += records.map { it.id }
+                    if (emissions.size == 1) initialEmissionReceived.complete(Unit)
+                }
+                .take(2)
+                .collect {}
+        }
+        withTimeout(5_000L) {
+            initialEmissionReceived.await()
+            exposureRepository.createExposure(
+                CreateExposureEventCommand(
+                    exposureType = "Pollen",
+                    occurredAtEpochMs = now,
+                    notes = "outside"
+                )
+            )
+            collector.join()
+        }
+
+        assertEquals(listOf("ingestion-1", "exposure-5", "exposure-4"), emissions.last())
+    }
+
+    @Test
+    fun active_records_collector_receives_outbreak_created_after_collection_started() = runBlocking {
+        val now = 1_700_000_500_000L
+        val outbreakEventDao = FakeOutbreakEventDao(
+            events = listOf(
+                OutbreakEventEntity(
+                    id = 4L,
+                    outbreakDescriptor = "Rash",
+                    bodyLocation = "Leg",
+                    occurredAtEpochMs = now - 1_000L,
+                    notes = null,
+                    createdAtEpochMs = now - 1_000L
+                )
+            )
+        )
+        val recordsRepository = RoomRecordsRepository(
+            ingestionEventDao = FakeIngestionEventDao(),
+            exposureEventDao = FakeExposureEventDao(
+                events = listOf(
+                    ExposureEventEntity(
+                        id = 1L,
+                        exposureType = "Pollen",
+                        occurredAtEpochMs = now + 1_000L,
+                        notes = null,
+                        createdAtEpochMs = now + 1_000L
+                    )
+                )
+            ),
+            outbreakEventDao = outbreakEventDao
+        )
+        val outbreakRepository = RoomOutbreakRepository(outbreakEventDao, CurrentTimeProvider { now })
+
+        val emissions = mutableListOf<List<String>>()
+        val initialEmissionReceived = CompletableDeferred<Unit>()
+        val collector = launch {
+            recordsRepository.observeRecords()
+                .onEach { records ->
+                    emissions += records.map { it.id }
+                    if (emissions.size == 1) initialEmissionReceived.complete(Unit)
+                }
+                .take(2)
+                .collect {}
+        }
+        withTimeout(5_000L) {
+            initialEmissionReceived.await()
+            outbreakRepository.createOutbreak(
+                CreateOutbreakEventCommand(
+                    outbreakDescriptor = "Skin flare",
+                    bodyLocation = "Arm",
+                    occurredAtEpochMs = now,
+                    notes = null
+                )
+            )
+            collector.join()
+        }
+
+        assertEquals(listOf("exposure-1", "outbreak-5", "outbreak-4"), emissions.last())
     }
 
     @Test

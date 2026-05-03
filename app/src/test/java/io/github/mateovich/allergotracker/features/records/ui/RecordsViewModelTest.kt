@@ -271,6 +271,81 @@ class RecordsViewModelTest {
     }
 
     @Test
+    fun records_state_updates_when_repository_emits_after_view_model_initialization() {
+        val recordCountFlow = MutableStateFlow(0)
+        val recordsFlow = MutableStateFlow(emptyList<RecordSummary>())
+        val repository = object : RecordsRepository {
+            override fun observeRecordCount() = recordCountFlow
+
+            override fun observeRecords(filters: Flow<RecordsFilter>) = recordsFlow
+        }
+        val viewModel = RecordsViewModel(
+            currentTimeProvider(),
+            ObserveRecordCountUseCase(repository),
+            ObserveRecordsUseCase(repository)
+        )
+
+        recordCountFlow.value = 1
+        recordsFlow.value = listOf(
+            record(
+                id = "ingestion-7",
+                typeLabel = "Ingestion",
+                title = "Tea",
+                detailLabel = "2 Light snack",
+                sourceId = 7L,
+                eventType = RecordEventType.INGESTION,
+                intensityLevel = 2
+            )
+        )
+
+        assertTrue(viewModel.state.value.hasRecords)
+        assertEquals(listOf("ingestion-7"), viewModel.state.value.records.map { it.id })
+        assertEquals("Tea", viewModel.state.value.records.single().title)
+    }
+
+    @Test
+    fun filtered_empty_state_tracks_active_filters_when_repository_emits_after_initialization() {
+        val recordCountFlow = MutableStateFlow(0)
+        val recordsFlow = MutableStateFlow(emptyList<RecordSummary>())
+        val repository = object : RecordsRepository {
+            override fun observeRecordCount() = recordCountFlow
+
+            override fun observeRecords(filters: Flow<RecordsFilter>) = combine(recordsFlow, filters) { records, activeFilters ->
+                records.filter { record ->
+                    activeFilters.eventTypes.isEmpty() || record.eventType in activeFilters.eventTypes
+                }
+            }
+        }
+        val viewModel = RecordsViewModel(
+            currentTimeProvider(),
+            ObserveRecordCountUseCase(repository),
+            ObserveRecordsUseCase(repository)
+        )
+
+        viewModel.onIntent(RecordsUiIntent.OpenFilterDialog)
+        viewModel.onIntent(RecordsUiIntent.ToggleFilterEventType(RecordEventType.INGESTION))
+        viewModel.onIntent(RecordsUiIntent.ApplyFilters)
+        recordCountFlow.value = 1
+        recordsFlow.value = listOf(
+            record(
+                id = "exposure-7",
+                typeLabel = "Exposure",
+                title = "Pollen",
+                detailLabel = "Intensity 2 - outside",
+                sourceId = 7L,
+                eventType = RecordEventType.EXPOSURE,
+                intensityLevel = 2
+            )
+        )
+
+        assertTrue(viewModel.state.value.activeFilters.hasActiveFilters)
+        assertEquals(listOf("Types: Ingestion"), viewModel.state.value.activeFilters.summaryLabels)
+        assertEquals("No records match these filters", viewModel.state.value.emptyStateTitle)
+        assertEquals("Clear filters", viewModel.state.value.emptyStateActionLabel)
+        assertEquals(emptyList<RecordSummary>(), viewModel.state.value.records)
+    }
+
+    @Test
     fun applying_filters_updates_active_labels_and_filtered_empty_state() {
         val repository = repositoryWithRecords(
             records = listOf(
