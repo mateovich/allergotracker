@@ -28,6 +28,8 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.runBlocking
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import org.junit.Assert.assertEquals
@@ -185,6 +187,86 @@ class CreateIngestionViewModelTest {
     }
 
     @Test
+    fun custom_date_selection_preserves_current_time() {
+        val viewModel = buildViewModel()
+        val initialTime = Instant.ofEpochMilli(fixedNow).atZone(ZoneId.systemDefault()).toLocalTime()
+        val selectedDate = LocalDate.of(2023, 11, 10)
+
+        viewModel.onIntent(CreateIngestionUiIntent.SelectDate(selectedDate))
+
+        val selectedDateTime = Instant.ofEpochMilli(viewModel.state.value.occurredAtEpochMs)
+            .atZone(ZoneId.systemDefault())
+        assertEquals(selectedDate, viewModel.state.value.selectedDate)
+        assertEquals(initialTime.withSecond(0).withNano(0), selectedDateTime.toLocalTime().withSecond(0).withNano(0))
+        assertNull(viewModel.state.value.selectedTimePreset)
+    }
+
+    @Test
+    fun custom_time_selection_preserves_current_date() {
+        val viewModel = buildViewModel()
+        val initialDate = Instant.ofEpochMilli(fixedNow).atZone(ZoneId.systemDefault()).toLocalDate()
+        val selectedTime = LocalTime.of(8, 45)
+
+        viewModel.onIntent(CreateIngestionUiIntent.SelectTime(selectedTime))
+
+        val selectedDateTime = Instant.ofEpochMilli(viewModel.state.value.occurredAtEpochMs)
+            .atZone(ZoneId.systemDefault())
+        assertEquals(initialDate, selectedDateTime.toLocalDate())
+        assertEquals(selectedTime, viewModel.state.value.selectedTime)
+        assertNull(viewModel.state.value.selectedTimePreset)
+    }
+
+    @Test
+    fun save_uses_custom_selected_timestamp() = runBlocking {
+        val savedCommands = mutableListOf<CreateIngestionEventCommand>()
+        val viewModel = buildViewModel(savedCommands = savedCommands)
+
+        viewModel.onIntent(CreateIngestionUiIntent.UpdateItemName("Tea"))
+        viewModel.onIntent(CreateIngestionUiIntent.SelectQuantityLevel(2))
+        viewModel.onIntent(CreateIngestionUiIntent.SelectDate(LocalDate.of(2023, 11, 10)))
+        viewModel.onIntent(CreateIngestionUiIntent.SelectTime(LocalTime.of(8, 45)))
+        viewModel.onIntent(CreateIngestionUiIntent.Save)
+
+        val expectedEpoch = LocalDate.of(2023, 11, 10)
+            .atTime(LocalTime.of(8, 45))
+            .atZone(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+        assertEquals(expectedEpoch, savedCommands.single().occurredAtEpochMs)
+    }
+
+    @Test
+    fun future_custom_timestamp_is_rejected_and_form_remains_recoverable() = runBlocking {
+        val viewModel = buildViewModel()
+        val futureDate = Instant.ofEpochMilli(fixedNow).atZone(ZoneId.systemDefault()).toLocalDate().plusDays(1)
+
+        viewModel.onIntent(CreateIngestionUiIntent.UpdateItemName("Tea"))
+        viewModel.onIntent(CreateIngestionUiIntent.SelectQuantityLevel(2))
+        viewModel.onIntent(CreateIngestionUiIntent.SelectDate(futureDate))
+        viewModel.onIntent(CreateIngestionUiIntent.Save)
+
+        assertEquals("Time cannot be in the future.", viewModel.state.value.occurredAtError)
+        assertFalse(viewModel.state.value.isSaving)
+        assertTrue(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun preset_after_custom_reanchors_timestamp_and_selected_date_time() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateIngestionUiIntent.SelectDate(LocalDate.of(2023, 11, 10)))
+        viewModel.onIntent(CreateIngestionUiIntent.SelectTime(LocalTime.of(8, 45)))
+        viewModel.onIntent(CreateIngestionUiIntent.SelectTimePreset(IngestionTimePreset.THIRTY_MINUTES_AGO))
+
+        val expectedEpoch = fixedNow - (30L * 60L * 1000L)
+        val expectedDateTime = Instant.ofEpochMilli(expectedEpoch).atZone(ZoneId.systemDefault())
+        assertEquals(expectedEpoch, viewModel.state.value.occurredAtEpochMs)
+        assertEquals(expectedDateTime.toLocalDate(), viewModel.state.value.selectedDate)
+        assertEquals(expectedDateTime.toLocalTime().withSecond(0).withNano(0), viewModel.state.value.selectedTime)
+        assertEquals(IngestionTimePreset.THIRTY_MINUTES_AGO, viewModel.state.value.selectedTimePreset)
+    }
+
+    @Test
     fun clearing_retired_reusable_selection_keeps_text_but_drops_stale_identity() {
         val viewModel = buildViewModel()
 
@@ -328,7 +410,8 @@ class CreateIngestionViewModelTest {
         ingredients: List<ReusableIngredient> = emptyList(),
         compounds: List<ReusableCompound> = emptyList(),
         saveResult: AppResult<IngestionEvent>? = null,
-        createIngredientResult: AppResult<ReusableIngredient>? = null
+        createIngredientResult: AppResult<ReusableIngredient>? = null,
+        savedCommands: MutableList<CreateIngestionEventCommand> = mutableListOf()
     ): CreateIngestionViewModel {
         val timeProvider = object : CurrentTimeProvider {
             override fun nowEpochMillis(): Long = fixedNow
@@ -338,6 +421,7 @@ class CreateIngestionViewModelTest {
             createIngestionEventUseCase = CreateIngestionEventUseCase(
                 repository = object : IngestionRepository {
                     override suspend fun createIngestion(command: CreateIngestionEventCommand): AppResult<IngestionEvent> {
+                        savedCommands += command
                         return saveResult ?: AppResult.Success(
                             IngestionEvent(
                                 id = 7L,

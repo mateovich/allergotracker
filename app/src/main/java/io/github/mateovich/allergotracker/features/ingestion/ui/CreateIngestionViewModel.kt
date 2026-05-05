@@ -14,6 +14,9 @@ import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReus
 import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReusableIngredientUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.ObserveReusableIngredientsUseCase
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.channels.Channel
@@ -32,7 +35,10 @@ class CreateIngestionViewModel(
     private val observeReusableCompoundsUseCase: ObserveReusableCompoundsUseCase,
     private val createReusableIngredientUseCase: CreateReusableIngredientUseCase
 ) : ViewModel() {
-    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+    private val zoneId = ZoneId.systemDefault()
+    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(zoneId)
+    private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    private val localTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
     private val mutableState = MutableStateFlow(buildInitialState())
     val state: StateFlow<CreateIngestionUiState> = mutableState.asStateFlow()
 
@@ -131,16 +137,18 @@ class CreateIngestionViewModel(
                 )
             }
 
+            is CreateIngestionUiIntent.SelectDate -> updateState {
+                it.withOccurredAt(composeOccurredAt(intent.value, it.selectedTime))
+            }
+
+            is CreateIngestionUiIntent.SelectTime -> updateState {
+                it.withOccurredAt(composeOccurredAt(it.selectedDate, intent.value))
+            }
+
             is CreateIngestionUiIntent.SelectTimePreset -> {
                 val nextOccurredAt = createIngestionDefaultsUseCase().occurredAtEpochMs - intent.preset.offsetMillis
                 updateState {
-                    it.copy(
-                        selectedTimePreset = intent.preset,
-                        occurredAtEpochMs = nextOccurredAt,
-                        occurredAtLabel = formatTime(nextOccurredAt),
-                        occurredAtError = null,
-                        formMessage = ""
-                    )
+                    it.withOccurredAt(nextOccurredAt, intent.preset)
                 }
             }
 
@@ -347,16 +355,38 @@ class CreateIngestionViewModel(
     private fun buildInitialState(): CreateIngestionUiState {
         val defaults = createIngestionDefaultsUseCase()
         return CreateIngestionUiState(
-            occurredAtEpochMs = defaults.occurredAtEpochMs,
-            occurredAtLabel = formatTime(defaults.occurredAtEpochMs),
             quantityOptions = IngestionQuantityOption.entries.map { option ->
                 QuantityOptionUiModel(level = option.level, label = option.label)
             }
-        ).withFilteredReusableEntities()
+        ).withOccurredAt(defaults.occurredAtEpochMs, IngestionTimePreset.NOW)
+            .withFilteredReusableEntities()
     }
 
-    private fun formatTime(epochMillis: Long): String {
-        return timeFormatter.format(Instant.ofEpochMilli(epochMillis))
+    private fun composeOccurredAt(date: LocalDate, time: LocalTime): Long {
+        return LocalDateTime.of(date, time.withSecond(0).withNano(0))
+            .atZone(zoneId)
+            .toInstant()
+            .toEpochMilli()
+    }
+
+    fun formatSelectedDateLabel(value: LocalDate): String = dateFormatter.format(value)
+
+    fun formatSelectedTimeLabel(value: LocalTime): String = value.withSecond(0).withNano(0).format(localTimeFormatter)
+
+    private fun CreateIngestionUiState.withOccurredAt(
+        epochMillis: Long,
+        selectedPreset: IngestionTimePreset? = null
+    ): CreateIngestionUiState {
+        val occurredAt = Instant.ofEpochMilli(epochMillis).atZone(zoneId)
+        return copy(
+            occurredAtEpochMs = epochMillis,
+            occurredAtLabel = timeFormatter.format(occurredAt),
+            selectedDate = occurredAt.toLocalDate(),
+            selectedTime = occurredAt.toLocalTime().withSecond(0).withNano(0),
+            selectedTimePreset = selectedPreset,
+            occurredAtError = null,
+            formMessage = ""
+        )
     }
 
     private fun updateState(transform: (CreateIngestionUiState) -> CreateIngestionUiState) {

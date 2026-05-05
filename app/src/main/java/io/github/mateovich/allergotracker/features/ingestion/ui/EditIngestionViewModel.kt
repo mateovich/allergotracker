@@ -12,6 +12,9 @@ import io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEnti
 import io.github.mateovich.allergotracker.features.ingestion.domain.UpdateIngestionEventCommand
 import io.github.mateovich.allergotracker.features.ingestion.domain.UpdateIngestionEventUseCase
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.channels.Channel
@@ -29,7 +32,10 @@ class EditIngestionViewModel(
     private val currentTimeProvider: CurrentTimeProvider,
     private val reusableEntityExists: suspend (ReusableEntityKind, Long) -> Boolean = { _, _ -> true }
 ) : ViewModel() {
-    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+    private val zoneId = ZoneId.systemDefault()
+    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(zoneId)
+    private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    private val localTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
     private val mutableState = MutableStateFlow(
         EditIngestionUiState(
             quantityOptions = IngestionQuantityOption.entries.map { QuantityOptionUiModel(it.level, it.label) }
@@ -63,16 +69,16 @@ class EditIngestionViewModel(
                     canSave = canSave(it.itemName, intent.level)
                 )
             }
+            is EditIngestionUiIntent.SelectDate -> updateState {
+                it.withOccurredAt(composeOccurredAt(intent.value, it.selectedTime))
+            }
+            is EditIngestionUiIntent.SelectTime -> updateState {
+                it.withOccurredAt(composeOccurredAt(it.selectedDate, intent.value))
+            }
             is EditIngestionUiIntent.SelectTimePreset -> {
                 val nextOccurredAt = currentTimeProvider.nowEpochMillis() - intent.preset.offsetMillis
                 updateState {
-                    it.copy(
-                        selectedTimePreset = intent.preset,
-                        occurredAtEpochMs = nextOccurredAt,
-                        occurredAtLabel = formatTime(nextOccurredAt),
-                        occurredAtError = null,
-                        formMessage = ""
-                    )
+                    it.withOccurredAt(nextOccurredAt, intent.preset)
                 }
             }
             is EditIngestionUiIntent.ApplyReusableSelection -> updateState { it.withReusableSelection(intent.result) }
@@ -113,8 +119,6 @@ class EditIngestionViewModel(
                             itemName = event.itemName,
                             deleteRecordLabel = event.itemName,
                             notes = event.notes.orEmpty(),
-                            occurredAtEpochMs = event.occurredAtEpochMs,
-                            occurredAtLabel = formatTime(event.occurredAtEpochMs),
                             selectedQuantityLevel = event.quantityLevel,
                             selectedReusableEntityKind = if (hasRetiredReusableSelection) null else event.reusableEntityKind,
                             selectedReusableEntityId = if (hasRetiredReusableSelection) null else event.reusableEntityId,
@@ -131,7 +135,7 @@ class EditIngestionViewModel(
                             } else {
                                 it.formMessage
                             }
-                        )
+                        ).withOccurredAt(event.occurredAtEpochMs, selectedPreset = null, clearMessages = false)
                     }
                 }
                 is AppResult.Error -> {
@@ -225,7 +229,33 @@ class EditIngestionViewModel(
         updateState { it.copy(isDeleteConfirmationVisible = true, formMessage = "") }
     }
 
-    private fun formatTime(epochMillis: Long): String = timeFormatter.format(Instant.ofEpochMilli(epochMillis))
+    private fun composeOccurredAt(date: LocalDate, time: LocalTime): Long {
+        return LocalDateTime.of(date, time.withSecond(0).withNano(0))
+            .atZone(zoneId)
+            .toInstant()
+            .toEpochMilli()
+    }
+
+    fun formatSelectedDateLabel(value: LocalDate): String = dateFormatter.format(value)
+
+    fun formatSelectedTimeLabel(value: LocalTime): String = value.withSecond(0).withNano(0).format(localTimeFormatter)
+
+    private fun EditIngestionUiState.withOccurredAt(
+        epochMillis: Long,
+        selectedPreset: IngestionTimePreset? = null,
+        clearMessages: Boolean = true
+    ): EditIngestionUiState {
+        val occurredAt = Instant.ofEpochMilli(epochMillis).atZone(zoneId)
+        return copy(
+            occurredAtEpochMs = epochMillis,
+            occurredAtLabel = timeFormatter.format(occurredAt),
+            selectedDate = occurredAt.toLocalDate(),
+            selectedTime = occurredAt.toLocalTime().withSecond(0).withNano(0),
+            selectedTimePreset = selectedPreset,
+            occurredAtError = if (clearMessages) null else occurredAtError,
+            formMessage = if (clearMessages) "" else formMessage
+        )
+    }
 
     private fun updateState(transform: (EditIngestionUiState) -> EditIngestionUiState) {
         mutableState.value = transform(mutableState.value)

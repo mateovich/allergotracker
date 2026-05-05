@@ -1,6 +1,8 @@
 package io.github.mateovich.allergotracker.features.ingestion.ui
 
 import io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEntityKind
+import java.time.LocalDate
+import java.time.LocalTime
 
 data class IngestionReusableSelectionResult(
     val id: Long,
@@ -42,7 +44,9 @@ data class CreateIngestionUiState(
     val notes: String = "",
     val occurredAtEpochMs: Long = 0L,
     val occurredAtLabel: String = "",
-    val selectedTimePreset: IngestionTimePreset = IngestionTimePreset.NOW,
+    val selectedDate: LocalDate = LocalDate.now(),
+    val selectedTime: LocalTime = LocalTime.MIDNIGHT,
+    val selectedTimePreset: IngestionTimePreset? = IngestionTimePreset.NOW,
     val quantityOptions: List<QuantityOptionUiModel> = emptyList(),
     val selectedQuantityLevel: Int? = null,
     val selectedReusableEntitySummary: String? = null,
@@ -69,6 +73,8 @@ sealed interface CreateIngestionUiIntent {
     data class UpdateItemName(val value: String) : CreateIngestionUiIntent
     data class UpdateNotes(val value: String) : CreateIngestionUiIntent
     data class SelectQuantityLevel(val level: Int) : CreateIngestionUiIntent
+    data class SelectDate(val value: LocalDate) : CreateIngestionUiIntent
+    data class SelectTime(val value: LocalTime) : CreateIngestionUiIntent
     data class SelectTimePreset(val preset: IngestionTimePreset) : CreateIngestionUiIntent
     data class ApplyReusableSelection(val result: IngestionReusableSelectionResult) : CreateIngestionUiIntent
     data class SelectReusableEntity(val result: IngestionReusableSelectionResult) : CreateIngestionUiIntent

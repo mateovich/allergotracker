@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.mateovich.allergotracker.core.designsystem.AppScreenScaffold
+import io.github.mateovich.allergotracker.core.designsystem.DateTimePickerSection
 import io.github.mateovich.allergotracker.core.designsystem.LocalOnlyNotice
 import io.github.mateovich.allergotracker.navigation.AppRoutes
 import kotlinx.coroutines.flow.collectLatest
@@ -175,20 +176,33 @@ fun EditIngestionScreen(
                 isError = state.itemNameError != null,
                 singleLine = true
             )
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "When did it happen?", style = MaterialTheme.typography.titleSmall)
-                Text(text = state.occurredAtLabel, modifier = Modifier.testTag("edit-ingestion-occurred-at-label"))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IngestionTimePreset.entries.forEach { preset ->
-                        AssistChip(
-                            onClick = { viewModel.onIntent(EditIngestionUiIntent.SelectTimePreset(preset)) },
-                            label = { Text(preset.label) },
-                            modifier = Modifier.testTag("edit-ingestion-time-${preset.name.lowercase()}")
-                        )
+            DateTimePickerSection(
+                title = "When did it happen?",
+                timeLabel = state.occurredAtLabel,
+                dateButtonLabel = viewModel.formatSelectedDateLabel(state.selectedDate),
+                timeButtonLabel = viewModel.formatSelectedTimeLabel(state.selectedTime),
+                selectedDate = state.selectedDate,
+                selectedTime = state.selectedTime,
+                sectionTag = "edit-ingestion-occurred-at-section",
+                labelTag = "edit-ingestion-occurred-at-label",
+                dateButtonTag = "edit-ingestion-date-picker",
+                timeButtonTag = "edit-ingestion-time-picker",
+                errorTag = "edit-ingestion-occurred-at-error",
+                error = state.occurredAtError,
+                onDateSelected = { viewModel.onIntent(EditIngestionUiIntent.SelectDate(it)) },
+                onTimeSelected = { viewModel.onIntent(EditIngestionUiIntent.SelectTime(it)) },
+                presetContent = {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IngestionTimePreset.entries.forEach { preset ->
+                            AssistChip(
+                                onClick = { viewModel.onIntent(EditIngestionUiIntent.SelectTimePreset(preset)) },
+                                label = { Text(preset.label) },
+                                modifier = Modifier.testTag("edit-ingestion-time-${preset.name.lowercase()}")
+                            )
+                        }
                     }
                 }
-                state.occurredAtError?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
-            }
+            )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = "How much?", style = MaterialTheme.typography.titleSmall)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
