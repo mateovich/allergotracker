@@ -19,6 +19,7 @@ data class EditIngestionUiState(
     val selectedReusableEntityKind: ReusableEntityKind? = null,
     val selectedReusableEntityId: Long? = null,
     val selectedReusableEntitySummary: String? = null,
+    val isItemNameReadOnly: Boolean = false,
     val itemNameError: String? = null,
     val quantityError: String? = null,
     val occurredAtError: String? = null,

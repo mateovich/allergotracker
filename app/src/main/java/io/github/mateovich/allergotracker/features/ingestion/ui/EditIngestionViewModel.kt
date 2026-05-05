@@ -45,21 +45,14 @@ class EditIngestionViewModel(
 
     private val effectChannel = Channel<EditIngestionUiEffect>(capacity = Channel.BUFFERED)
     val effects = effectChannel.receiveAsFlow()
+    private var hasLoadedRecord = false
+    private var isLoadInFlight = false
+    private var pendingReusableSelection: IngestionReusableSelectionResult? = null
 
     fun onIntent(intent: EditIngestionUiIntent) {
         when (intent) {
             EditIngestionUiIntent.Load -> loadIfNeeded()
-            is EditIngestionUiIntent.UpdateItemName -> updateState {
-                it.copy(
-                    itemName = intent.value,
-                    selectedReusableEntityKind = null,
-                    selectedReusableEntityId = null,
-                    selectedReusableEntitySummary = null,
-                    itemNameError = null,
-                    formMessage = "",
-                    canSave = canSave(intent.value, it.selectedQuantityLevel)
-                )
-            }
+            is EditIngestionUiIntent.UpdateItemName -> updateState { it.withItemNameUpdate(intent.value) }
             is EditIngestionUiIntent.UpdateNotes -> updateState { it.copy(notes = intent.value) }
             is EditIngestionUiIntent.SelectQuantityLevel -> updateState {
                 it.copy(
@@ -81,7 +74,7 @@ class EditIngestionViewModel(
                     it.withOccurredAt(nextOccurredAt, intent.preset)
                 }
             }
-            is EditIngestionUiIntent.ApplyReusableSelection -> updateState { it.withReusableSelection(intent.result) }
+            is EditIngestionUiIntent.ApplyReusableSelection -> applyReusableSelection(intent.result)
             EditIngestionUiIntent.EditSelectedReusableEntity -> {
                 val selectedKind = mutableState.value.selectedReusableEntityKind ?: return
                 val selectedId = mutableState.value.selectedReusableEntityId ?: return
@@ -92,6 +85,7 @@ class EditIngestionViewModel(
                     selectedReusableEntityKind = null,
                     selectedReusableEntityId = null,
                     selectedReusableEntitySummary = null,
+                    isItemNameReadOnly = false,
                     formMessage = "Saved reusable item was retired. Review the text value before saving.",
                     canSave = canSave(it.itemName, it.selectedQuantityLevel)
                 )
@@ -104,39 +98,48 @@ class EditIngestionViewModel(
     }
 
     private fun loadIfNeeded() {
-        val currentState = mutableState.value
-        if (currentState.itemName.isNotBlank()) return
+        if (hasLoadedRecord || isLoadInFlight) return
+        isLoadInFlight = true
         updateState { it.copy(isLoading = true, formMessage = "") }
         viewModelScope.launch {
             when (val result = getIngestionEventUseCase(recordId)) {
                 is AppResult.Success -> {
                     val event = result.value
-                    val hasRetiredReusableSelection = event.reusableEntityKind != null &&
-                        event.reusableEntityId != null &&
+                    val hasCompleteReusableSelection = event.reusableEntityKind != null && event.reusableEntityId != null
+                    val hasPartialReusableSelection = (event.reusableEntityKind != null) != (event.reusableEntityId != null)
+                    val hasRetiredReusableSelection = hasCompleteReusableSelection &&
                         !reusableEntityExists(event.reusableEntityKind, event.reusableEntityId)
+                    val shouldClearReusableSelection = hasPartialReusableSelection || hasRetiredReusableSelection
                     updateState {
-                        it.copy(
+                        val loadedState = it.copy(
                             itemName = event.itemName,
                             deleteRecordLabel = event.itemName,
                             notes = event.notes.orEmpty(),
                             selectedQuantityLevel = event.quantityLevel,
-                            selectedReusableEntityKind = if (hasRetiredReusableSelection) null else event.reusableEntityKind,
-                            selectedReusableEntityId = if (hasRetiredReusableSelection) null else event.reusableEntityId,
-                            selectedReusableEntitySummary = if (hasRetiredReusableSelection) {
+                            selectedReusableEntityKind = if (shouldClearReusableSelection) null else event.reusableEntityKind,
+                            selectedReusableEntityId = if (shouldClearReusableSelection) null else event.reusableEntityId,
+                            selectedReusableEntitySummary = if (shouldClearReusableSelection) {
                                 null
                             } else {
                                 event.reusableEntityKind?.let { kind -> "${kind.label} selected: ${event.itemName}" }
                             },
+                            isItemNameReadOnly = hasCompleteReusableSelection && !hasRetiredReusableSelection,
                             isLoading = false,
                             canSave = canSave(event.itemName, event.quantityLevel),
                             canDelete = event.itemName.isNotBlank(),
-                            formMessage = if (hasRetiredReusableSelection) {
+                            formMessage = if (shouldClearReusableSelection) {
                                 "Saved reusable item was retired. Review the text value before saving."
                             } else {
                                 it.formMessage
                             }
                         ).withOccurredAt(event.occurredAtEpochMs, selectedPreset = null, clearMessages = false)
+                        pendingReusableSelection?.let { selection ->
+                            pendingReusableSelection = null
+                            loadedState.withReusableSelection(selection)
+                        } ?: loadedState
                     }
+                    hasLoadedRecord = true
+                    isLoadInFlight = false
                 }
                 is AppResult.Error -> {
                     updateState {
@@ -145,6 +148,7 @@ class EditIngestionViewModel(
                             formMessage = result.error.message
                         )
                     }
+                    isLoadInFlight = false
                 }
             }
         }
@@ -278,9 +282,38 @@ class EditIngestionViewModel(
             selectedReusableEntityKind = result.kind,
             selectedReusableEntityId = result.id,
             selectedReusableEntitySummary = "${result.kind.label} selected: ${result.name}",
+            isItemNameReadOnly = true,
             itemNameError = null,
             formMessage = "",
             canSave = canSave(result.name, selectedQuantityLevel)
+        )
+    }
+
+    private fun applyReusableSelection(result: IngestionReusableSelectionResult) {
+        if (!hasLoadedRecord) {
+            pendingReusableSelection = result
+            return
+        }
+        updateState { it.withReusableSelection(result) }
+    }
+
+    private fun EditIngestionUiState.withItemNameUpdate(value: String): EditIngestionUiState {
+        if (isItemNameReadOnly) {
+            return copy(
+                itemNameError = null,
+                formMessage = "",
+                canSave = canSave(itemName, selectedQuantityLevel)
+            )
+        }
+        return copy(
+            itemName = value,
+            selectedReusableEntityKind = null,
+            selectedReusableEntityId = null,
+            selectedReusableEntitySummary = null,
+            isItemNameReadOnly = false,
+            itemNameError = null,
+            formMessage = "",
+            canSave = canSave(value, selectedQuantityLevel)
         )
     }
 }

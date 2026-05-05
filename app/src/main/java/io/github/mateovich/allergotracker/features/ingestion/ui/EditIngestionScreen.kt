@@ -174,6 +174,7 @@ fun EditIngestionScreen(
                 label = { Text("What did you ingest?") },
                 supportingText = { state.itemNameError?.let { Text(it) } },
                 isError = state.itemNameError != null,
+                readOnly = state.isItemNameReadOnly,
                 singleLine = true
             )
             DateTimePickerSection(
