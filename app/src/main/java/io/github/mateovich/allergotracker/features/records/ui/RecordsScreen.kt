@@ -1,5 +1,7 @@
 package io.github.mateovich.allergotracker.features.records.ui
 
+import android.app.DatePickerDialog
+import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +29,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -39,6 +42,7 @@ import io.github.mateovich.allergotracker.core.designsystem.EmptyStateMessage
 import io.github.mateovich.allergotracker.core.designsystem.PrimaryAddFab
 import io.github.mateovich.allergotracker.features.ingestion.domain.IngestionQuantityOption
 import io.github.mateovich.allergotracker.features.records.domain.RecordEventType
+import java.time.LocalDate
 import kotlinx.coroutines.flow.collectLatest
 
 @Composable
@@ -247,6 +251,8 @@ private fun RecordsFilterDialog(
     onToggleEventType: (RecordEventType) -> Unit,
     onToggleIntensity: (IngestionQuantityOption) -> Unit
 ) {
+    val context = LocalContext.current
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(text = "Filter records") },
@@ -254,9 +260,26 @@ private fun RecordsFilterDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = state.filterDraft.startDateInput,
-                    onValueChange = onStartDateChanged,
+                    onValueChange = {},
                     label = { Text("From date") },
-                    supportingText = { Text("YYYY-MM-DD") },
+                    supportingText = { Text("Select with date picker") },
+                    trailingIcon = {
+                        TextButton(
+                            onClick = {
+                                showFilterDatePicker(
+                                    context = context,
+                                    draftValue = state.filterDraft.startDateInput,
+                                    onDateChanged = onStartDateChanged
+                                )
+                            },
+                            modifier = Modifier
+                                .testTag("records-filter-start-date-picker")
+                                .semantics { contentDescription = "Pick start date" }
+                        ) {
+                            Text(text = "Pick")
+                        }
+                    },
+                    readOnly = true,
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -264,9 +287,26 @@ private fun RecordsFilterDialog(
                 )
                 OutlinedTextField(
                     value = state.filterDraft.endDateInput,
-                    onValueChange = onEndDateChanged,
+                    onValueChange = {},
                     label = { Text("To date") },
-                    supportingText = { Text("YYYY-MM-DD") },
+                    supportingText = { Text("Select with date picker") },
+                    trailingIcon = {
+                        TextButton(
+                            onClick = {
+                                showFilterDatePicker(
+                                    context = context,
+                                    draftValue = state.filterDraft.endDateInput,
+                                    onDateChanged = onEndDateChanged
+                                )
+                            },
+                            modifier = Modifier
+                                .testTag("records-filter-end-date-picker")
+                                .semantics { contentDescription = "Pick end date" }
+                        ) {
+                            Text(text = "Pick")
+                        }
+                    },
+                    readOnly = true,
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -327,4 +367,25 @@ private fun RecordsFilterDialog(
             }
         }
     )
+}
+
+private fun showFilterDatePicker(
+    context: Context,
+    draftValue: String,
+    onDateChanged: (String) -> Unit
+) {
+    val initialDate = draftValue.toLocalDateOrToday()
+    DatePickerDialog(
+        context,
+        { _, year, month, dayOfMonth ->
+            onDateChanged(LocalDate.of(year, month + 1, dayOfMonth).toString())
+        },
+        initialDate.year,
+        initialDate.monthValue - 1,
+        initialDate.dayOfMonth
+    ).show()
+}
+
+private fun String.toLocalDateOrToday(): LocalDate {
+    return runCatching { LocalDate.parse(this) }.getOrDefault(LocalDate.now())
 }

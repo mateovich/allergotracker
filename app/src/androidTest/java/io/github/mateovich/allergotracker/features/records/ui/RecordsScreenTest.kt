@@ -1,5 +1,7 @@
 package io.github.mateovich.allergotracker.features.records.ui
 
+import android.view.View
+import android.widget.DatePicker
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,6 +24,13 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.UiController
+import androidx.test.espresso.ViewAction
+import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.matcher.RootMatchers.isDialog
+import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
+import androidx.test.espresso.matcher.ViewMatchers.withText
 import io.github.mateovich.allergotracker.core.common.result.AppResult
 import io.github.mateovich.allergotracker.core.common.error.DomainError
 import io.github.mateovich.allergotracker.features.exposure.domain.DeleteExposureEventUseCase
@@ -88,6 +97,7 @@ import kotlinx.coroutines.runBlocking
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import org.hamcrest.Matcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -864,8 +874,50 @@ class RecordsScreenTest {
         }
 
         composeRule.onNodeWithTag("records-filter-action").performClick()
-        composeRule.onNodeWithTag("records-filter-start-date").performTextReplacement(includedDate.toString())
-        composeRule.onNodeWithTag("records-filter-end-date").performTextReplacement(includedDate.toString())
+        composeRule.onNodeWithTag("records-filter-start-date-picker").performClick()
+        setDatePicker(2026, 3, 20)
+        composeRule.onNodeWithTag("records-filter-end-date-picker").performClick()
+        setDatePicker(2026, 3, 20)
+        composeRule.onNodeWithTag("records-filter-apply").performClick()
+
+        composeRule.onNodeWithText("Tea").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Pollen").assertCountEquals(0)
+        composeRule.onNodeWithText("2026-03-20 to 2026-03-20").assertIsDisplayed()
+    }
+
+    @Test
+    fun filter_dialog_applies_date_range_selected_with_native_pickers() {
+        val fixedNow = 1_700_000_000_000L
+        val zoneId = ZoneId.systemDefault()
+        val includedDate = LocalDate.of(2026, 3, 20)
+        val store = ReactiveRecordStore(
+            ingestion = IngestionEvent(
+                7L,
+                "Tea",
+                2,
+                includedDate.atStartOfDay(zoneId).plusHours(9).toInstant().toEpochMilli(),
+                "with honey"
+            ),
+            exposure = ExposureEvent(
+                5L,
+                "Pollen",
+                includedDate.minusDays(1).atStartOfDay(zoneId).plusHours(8).toInstant().toEpochMilli(),
+                "outside"
+            )
+        )
+
+        composeRule.setContent {
+            RecordsScreen(
+                onNavigateToRoute = {},
+                viewModelFactory = recordsFactoryFor(store.recordsRepository(), fixedNow)
+            )
+        }
+
+        composeRule.onNodeWithTag("records-filter-action").performClick()
+        composeRule.onNodeWithTag("records-filter-start-date-picker").performClick()
+        setDatePicker(2026, 3, 20)
+        composeRule.onNodeWithTag("records-filter-end-date-picker").performClick()
+        setDatePicker(2026, 3, 20)
         composeRule.onNodeWithTag("records-filter-apply").performClick()
 
         composeRule.onNodeWithText("Tea").assertIsDisplayed()
@@ -1202,6 +1254,25 @@ private fun recordsFactoryFor(
                 observeRecordCountUseCase = ObserveRecordCountUseCase(recordsRepository),
                 observeRecordsUseCase = ObserveRecordsUseCase(recordsRepository)
             ) as T
+        }
+    }
+}
+
+private fun setDatePicker(year: Int, month: Int, day: Int) {
+    onView(isAssignableFrom(DatePicker::class.java))
+        .perform(setDatePickerValue(year, month, day))
+    onView(withText(android.R.string.ok)).inRoot(isDialog()).perform(click())
+}
+
+private fun setDatePickerValue(year: Int, month: Int, day: Int): ViewAction {
+    return object : ViewAction {
+        override fun getConstraints(): Matcher<View> = isAssignableFrom(DatePicker::class.java)
+
+        override fun getDescription(): String = "set date picker value"
+
+        override fun perform(uiController: UiController, view: View) {
+            (view as DatePicker).updateDate(year, month - 1, day)
+            uiController.loopMainThreadUntilIdle()
         }
     }
 }

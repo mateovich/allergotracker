@@ -30,6 +30,7 @@ java_pid*.hprof
 _bmad/
 _bmad-output/
 bmad_output/
+project-context.md
 .agents/
 .opencode/
 AGENTS.md
