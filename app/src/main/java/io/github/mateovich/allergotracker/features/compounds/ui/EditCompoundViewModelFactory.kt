@@ -9,12 +9,14 @@ import io.github.mateovich.allergotracker.features.compounds.domain.MergeReusabl
 import io.github.mateovich.allergotracker.features.compounds.domain.ObserveReusableCompoundsUseCase
 import io.github.mateovich.allergotracker.features.compounds.domain.RetireReusableCompoundUseCase
 import io.github.mateovich.allergotracker.features.compounds.domain.UpdateReusableCompoundUseCase
+import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReusableIngredientUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.ObserveReusableIngredientsUseCase
 
 class EditCompoundViewModelFactory(
     private val compoundId: Long,
     private val getReusableCompoundUseCase: GetReusableCompoundUseCase,
     private val updateReusableCompoundUseCase: UpdateReusableCompoundUseCase,
+    private val createReusableIngredientUseCase: CreateReusableIngredientUseCase,
     private val observeReusableIngredients: ObserveReusableIngredientsUseCase,
     private val observeReusableCompounds: ObserveReusableCompoundsUseCase,
     private val getReusableCompoundMergePreviewUseCase: GetReusableCompoundMergePreviewUseCase,
@@ -28,6 +30,7 @@ class EditCompoundViewModelFactory(
                 compoundId = compoundId,
                 getReusableCompoundUseCase = getReusableCompoundUseCase,
                 updateReusableCompoundUseCase = updateReusableCompoundUseCase,
+                createReusableIngredientUseCase = createReusableIngredientUseCase,
                 observeReusableIngredients = observeReusableIngredients,
                 observeReusableCompounds = observeReusableCompounds,
                 getReusableCompoundMergePreviewUseCase = getReusableCompoundMergePreviewUseCase,

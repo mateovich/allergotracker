@@ -553,6 +553,7 @@ class AppContainer(appContext: Context) {
             reusableId,
             getReusableCompoundUseCase,
             updateReusableCompoundUseCase,
+            createReusableIngredientUseCase,
             observeReusableIngredientsUseCase,
             observeReusableCompoundsUseCase,
             getReusableCompoundMergePreviewUseCase,

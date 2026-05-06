@@ -16,7 +16,10 @@ import io.github.mateovich.allergotracker.features.compounds.domain.RetireReusab
 import io.github.mateovich.allergotracker.features.compounds.domain.UpdateReusableCompoundCommand
 import io.github.mateovich.allergotracker.features.compounds.domain.UpdateReusableCompoundComponentCommand
 import io.github.mateovich.allergotracker.features.compounds.domain.UpdateReusableCompoundUseCase
+import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReusableIngredientCommand
+import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReusableIngredientUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.ObserveReusableIngredientsUseCase
+import io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredient
 import io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEntityKind
 import io.github.mateovich.allergotracker.features.ingestion.ui.IngestionReusableSelectionResult
 import kotlinx.coroutines.channels.Channel
@@ -30,6 +33,7 @@ class EditCompoundViewModel(
     private val compoundId: Long,
     private val getReusableCompoundUseCase: GetReusableCompoundUseCase,
     private val updateReusableCompoundUseCase: UpdateReusableCompoundUseCase,
+    private val createReusableIngredientUseCase: CreateReusableIngredientUseCase,
     private val observeReusableIngredients: ObserveReusableIngredientsUseCase,
     private val observeReusableCompounds: ObserveReusableCompoundsUseCase,
     private val getReusableCompoundMergePreviewUseCase: GetReusableCompoundMergePreviewUseCase,
@@ -131,6 +135,28 @@ class EditCompoundViewModel(
             is EditCompoundUiIntent.UpdateComponentProportion -> updateComponentProportion(intent.index, intent.value)
             is EditCompoundUiIntent.AdjustComponentProportion -> applyAdjustedProportion(intent.index, intent.basisPoints)
             is EditCompoundUiIntent.RemoveComponent -> removeComponent(intent.index)
+            is EditCompoundUiIntent.CreateInlineIngredient -> createInlineIngredient(intent.name)
+            is EditCompoundUiIntent.UpdateInlineIngredientName -> updateState {
+                it.copy(inlineIngredientName = intent.value, inlineIngredientError = null)
+            }
+            is EditCompoundUiIntent.ShowInlineIngredientDialog -> updateState {
+                it.copy(
+                    showInlineIngredientDialog = true,
+                    inlineIngredientName = intent.prefillName,
+                    inlineIngredientError = null
+                )
+            }
+            EditCompoundUiIntent.CancelInlineIngredientCreation -> updateState {
+                if (it.isCreatingInlineIngredient) {
+                    return@updateState it
+                }
+                it.copy(
+                    showInlineIngredientDialog = false,
+                    inlineIngredientName = "",
+                    inlineIngredientError = null,
+                    isCreatingInlineIngredient = false
+                )
+            }
             EditCompoundUiIntent.Save -> save()
             EditCompoundUiIntent.RequestMergeFlow -> openMergeDialog()
             is EditCompoundUiIntent.UpdateMergeDestinationQuery -> updateState {
@@ -163,6 +189,31 @@ class EditCompoundViewModel(
             }
 
             EditCompoundUiIntent.ConfirmRetirement -> retire()
+        }
+    }
+
+    private fun createInlineIngredient(name: String) {
+        val currentState = mutableState.value
+        if (currentState.isCreatingInlineIngredient) return
+
+        updateState { it.copy(isCreatingInlineIngredient = true, inlineIngredientError = null) }
+        viewModelScope.launch {
+            when (
+                val result = createReusableIngredientUseCase(
+                    CreateReusableIngredientCommand(name = name, notes = null)
+                )
+            ) {
+                is AppResult.Success -> updateState { state ->
+                    state.addCreatedIngredientComponent(result.value)
+                }
+
+                is AppResult.Error -> updateState {
+                    it.copy(
+                        isCreatingInlineIngredient = false,
+                        inlineIngredientError = result.error.fieldError("name") ?: result.error.message
+                    )
+                }
+            }
         }
     }
 
@@ -645,6 +696,47 @@ class EditCompoundViewModel(
                 component.copy(name = component.resolveName(allCatalogOptions()))
             }
         ).withDerivedFields()
+    }
+
+    private fun EditCompoundUiState.addCreatedIngredientComponent(
+        ingredient: ReusableIngredient
+    ): EditCompoundUiState {
+        val clearedState = copy(
+            isCreatingInlineIngredient = false,
+            showInlineIngredientDialog = false,
+            inlineIngredientName = "",
+            inlineIngredientError = null,
+            componentSearchQuery = "",
+            selectedPreset = null,
+            componentsError = null,
+            formMessage = "",
+            isFormMessageError = false,
+            isFormMessageSticky = false
+        )
+        val existingIndex = clearedState.components.indexOfFirst {
+            it.kind == CompoundComponentKind.INGREDIENT.storageValue && it.reusableEntityId == ingredient.id
+        }
+        if (existingIndex >= 0) {
+            return clearedState.withDerivedFields().refreshAvailableComponents()
+        }
+        val nextComponents = if (clearedState.components.isEmpty()) {
+            listOf(
+                CompoundComponentRowUiModel(
+                    kind = CompoundComponentKind.INGREDIENT.storageValue,
+                    reusableEntityId = ingredient.id,
+                    name = ingredient.name,
+                    proportionBasisPoints = COMPOUND_TOTAL_BASIS_POINTS,
+                    proportionPercent = COMPOUND_TOTAL_BASIS_POINTS.toPercentInput()
+                )
+            )
+        } else {
+            clearedState.components + CompoundComponentRowUiModel(
+                kind = CompoundComponentKind.INGREDIENT.storageValue,
+                reusableEntityId = ingredient.id,
+                name = ingredient.name
+            )
+        }
+        return clearedState.copy(components = nextComponents).withDerivedFields().refreshAvailableComponents()
     }
 
     private fun EditCompoundUiState.refreshMergeDestinationOptions(): EditCompoundUiState {

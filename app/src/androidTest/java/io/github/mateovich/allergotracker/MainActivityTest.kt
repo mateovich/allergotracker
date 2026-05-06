@@ -7,6 +7,7 @@ import android.widget.TimePicker
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertWidthIsAtLeast
@@ -789,6 +790,32 @@ class MainActivityTest {
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Breakfast mix plus")
         composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable compound selected: Breakfast mix plus")
+    }
+
+    @Test
+    fun reusable_compound_edit_flow_can_create_ingredient_inline_and_use_it_immediately() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+
+        createReusableCompoundInline("Breakfast mix", "Oat milk")
+
+        waitForTag("ingestion-reusable-edit")
+        composeRule.onNodeWithTag("ingestion-reusable-edit").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("edit-compound-form-screen").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("edit-compound-component-search").performTextReplacement("Oat milk")
+        composeRule.onNodeWithTag("edit-compound-create-inline-ingredient")
+            .assertTextContains("'Oat milk' already saved as ingredient")
+            .assertIsNotEnabled()
+
+        composeRule.onNodeWithTag("edit-compound-component-search").performTextReplacement("Cocoa")
+        composeRule.onNodeWithTag("edit-compound-create-inline-ingredient").performClick()
+        waitForTag("edit-compound-inline-ingredient-name")
+        composeRule.onNodeWithTag("edit-compound-inline-ingredient-name").performTextReplacement("Cocoa")
+        composeRule.onNodeWithTag("edit-compound-inline-ingredient-save").performClick()
+
+        composeRule.onNodeWithText("Cocoa (ingredient)").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("edit-compound-create-inline-ingredient").assertCountEquals(0)
     }
 
     @Test

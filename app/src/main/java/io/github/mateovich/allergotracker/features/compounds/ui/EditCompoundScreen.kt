@@ -21,7 +21,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
@@ -132,7 +135,7 @@ fun EditCompoundScreen(
                 onSearchQueryChange = { viewModel.onIntent(EditCompoundUiIntent.UpdateComponentSearchQuery(it)) },
                 onAddIngredient = { viewModel.onIntent(EditCompoundUiIntent.AddIngredientComponent(it)) },
                 onAddCompound = { viewModel.onIntent(EditCompoundUiIntent.AddCompoundComponent(it)) },
-                onCreateIngredient = null,
+                onCreateIngredient = { viewModel.onIntent(EditCompoundUiIntent.ShowInlineIngredientDialog(it)) },
                 onApplyPreset = { viewModel.onIntent(EditCompoundUiIntent.ApplyPreset(it)) },
                 onProportionTextChange = { index, value ->
                     viewModel.onIntent(EditCompoundUiIntent.UpdateComponentProportion(index, value))
@@ -160,6 +163,17 @@ fun EditCompoundScreen(
                     modifier = Modifier.testTag("edit-compound-form-message")
                 )
             }
+        }
+
+        if (state.showInlineIngredientDialog) {
+            EditCompoundInlineIngredientDialog(
+                name = state.inlineIngredientName,
+                isSaving = state.isCreatingInlineIngredient,
+                errorMessage = state.inlineIngredientError,
+                onNameChange = { viewModel.onIntent(EditCompoundUiIntent.UpdateInlineIngredientName(it)) },
+                onSave = { name -> viewModel.onIntent(EditCompoundUiIntent.CreateInlineIngredient(name)) },
+                onCancel = { viewModel.onIntent(EditCompoundUiIntent.CancelInlineIngredientCreation) }
+            )
         }
 
         if (state.isMergeDialogVisible) {
@@ -297,6 +311,70 @@ fun EditCompoundScreen(
             }
         }
     }
+}
+
+@Composable
+private fun EditCompoundInlineIngredientDialog(
+    name: String,
+    isSaving: Boolean,
+    errorMessage: String?,
+    onNameChange: (String) -> Unit,
+    onSave: (String) -> Unit,
+    onCancel: () -> Unit
+) {
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!isSaving) onCancel() },
+        title = { Text("Create new ingredient") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = onNameChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .testTag("edit-compound-inline-ingredient-name"),
+                    label = { Text("Ingredient name") },
+                    supportingText = {
+                        errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    },
+                    isError = errorMessage != null,
+                    singleLine = true,
+                    enabled = !isSaving
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSave(name) },
+                enabled = !isSaving && name.isNotBlank(),
+                modifier = Modifier.testTag("edit-compound-inline-ingredient-save")
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.padding(end = 8.dp),
+                        strokeWidth = 2.dp
+                    )
+                }
+                Text(if (isSaving) "Saving..." else "Save")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onCancel,
+                enabled = !isSaving,
+                modifier = Modifier.testTag("edit-compound-inline-ingredient-cancel")
+            ) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 private fun buildCompoundMergeMessage(preview: ReusableCompoundMergePreview): String {

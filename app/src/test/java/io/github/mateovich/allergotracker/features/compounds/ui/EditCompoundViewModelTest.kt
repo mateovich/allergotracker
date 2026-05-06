@@ -16,7 +16,11 @@ import io.github.mateovich.allergotracker.features.compounds.domain.ReusableComp
 import io.github.mateovich.allergotracker.features.compounds.domain.RetireReusableCompoundUseCase
 import io.github.mateovich.allergotracker.features.compounds.domain.UpdateReusableCompoundCommand
 import io.github.mateovich.allergotracker.features.compounds.domain.UpdateReusableCompoundUseCase
+import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReusableIngredientCommand
+import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReusableIngredientUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.ObserveReusableIngredientsUseCase
+import io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredient
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,6 +67,94 @@ class EditCompoundViewModelTest {
         assertEquals(2, viewModel.state.value.components.size)
         assertEquals("100% total", viewModel.state.value.totalPercentLabel)
         assertTrue(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun inline_ingredient_creation_adds_component_and_preserves_edit_state() = runBlocking {
+        val repository = FakeEditCompoundRepository()
+        val ingredientRepository = FakeCreateIngredientRepository()
+        val viewModel = buildViewModel(repository, createIngredientRepository = ingredientRepository)
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.UpdateName("Breakfast mix plus"))
+        viewModel.onIntent(EditCompoundUiIntent.UpdateNotes("Unsaved note"))
+        viewModel.onIntent(EditCompoundUiIntent.ShowInlineIngredientDialog("Cocoa"))
+        viewModel.onIntent(EditCompoundUiIntent.CreateInlineIngredient("Cocoa"))
+
+        assertFalse(viewModel.state.value.showInlineIngredientDialog)
+        assertFalse(viewModel.state.value.isCreatingInlineIngredient)
+        assertEquals("Breakfast mix plus", viewModel.state.value.name)
+        assertEquals("Unsaved note", viewModel.state.value.notes)
+        assertEquals(listOf("Oat milk", "Berry base", "Cocoa"), viewModel.state.value.components.map { it.name })
+        assertTrue(viewModel.state.value.filteredComponents.none { it.kind == "ingredient" && it.id == 21L })
+        assertEquals(CreateReusableIngredientCommand(name = "Cocoa", notes = null), ingredientRepository.createdCommands.single())
+    }
+
+    @Test
+    fun inline_ingredient_validation_error_stays_in_dialog_and_clears_on_name_change() = runBlocking {
+        val viewModel = buildViewModel(
+            repository = FakeEditCompoundRepository(),
+            createIngredientRepository = FakeCreateIngredientRepository(
+                createResult = AppResult.Error(
+                    DomainError.ValidationError(
+                        message = "Please fix the highlighted fields.",
+                        fieldErrors = mapOf("name" to "An ingredient with this name already exists.")
+                    )
+                )
+            )
+        )
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.ShowInlineIngredientDialog("Cocoa"))
+        viewModel.onIntent(EditCompoundUiIntent.CreateInlineIngredient("Cocoa"))
+
+        assertTrue(viewModel.state.value.showInlineIngredientDialog)
+        assertFalse(viewModel.state.value.isCreatingInlineIngredient)
+        assertEquals("An ingredient with this name already exists.", viewModel.state.value.inlineIngredientError)
+
+        viewModel.onIntent(EditCompoundUiIntent.UpdateInlineIngredientName("Cocoa powder"))
+
+        assertEquals("Cocoa powder", viewModel.state.value.inlineIngredientName)
+        assertNull(viewModel.state.value.inlineIngredientError)
+    }
+
+    @Test
+    fun cancel_inline_ingredient_creation_preserves_loaded_edit_state() = runBlocking {
+        val viewModel = buildViewModel(FakeEditCompoundRepository())
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.UpdateName("Breakfast mix plus"))
+        viewModel.onIntent(EditCompoundUiIntent.ShowInlineIngredientDialog("Cocoa"))
+        viewModel.onIntent(EditCompoundUiIntent.CancelInlineIngredientCreation)
+
+        assertFalse(viewModel.state.value.showInlineIngredientDialog)
+        assertEquals("", viewModel.state.value.inlineIngredientName)
+        assertNull(viewModel.state.value.inlineIngredientError)
+        assertEquals("Breakfast mix plus", viewModel.state.value.name)
+        assertEquals(listOf("Oat milk", "Berry base"), viewModel.state.value.components.map { it.name })
+    }
+
+    @Test
+    fun duplicate_inline_ingredient_submission_is_ignored_while_busy() = runBlocking {
+        val createGate = CompletableDeferred<Unit>()
+        val ingredientRepository = FakeCreateIngredientRepository(createGate = createGate)
+        val viewModel = buildViewModel(
+            repository = FakeEditCompoundRepository(),
+            createIngredientRepository = ingredientRepository
+        )
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.ShowInlineIngredientDialog("Cocoa"))
+        viewModel.onIntent(EditCompoundUiIntent.CreateInlineIngredient("Cocoa"))
+        viewModel.onIntent(EditCompoundUiIntent.CreateInlineIngredient("Cocoa"))
+        viewModel.onIntent(EditCompoundUiIntent.CancelInlineIngredientCreation)
+
+        assertEquals(1, ingredientRepository.createdCommands.size)
+        assertTrue(viewModel.state.value.showInlineIngredientDialog)
+        assertTrue(viewModel.state.value.isCreatingInlineIngredient)
+
+        createGate.complete(Unit)
+        Unit
     }
 
     @Test
@@ -469,7 +561,8 @@ class EditCompoundViewModelTest {
         countMergeIngestionReferences: suspend (Long) -> Int = { 0 },
         countMergeParentReferences: suspend (Long) -> Int = { 0 },
         countConflictingParentCompounds: suspend (Long, Long) -> Int = { _, _ -> 0 },
-        countRecursiveParentCompounds: suspend (Long, Long) -> Int = { _, _ -> 0 }
+        countRecursiveParentCompounds: suspend (Long, Long) -> Int = { _, _ -> 0 },
+        createIngredientRepository: FakeCreateIngredientRepository = FakeCreateIngredientRepository()
     ): EditCompoundViewModel {
         val impactUseCase = GetReusableCompoundRetirementImpactUseCase(
             repository = repository,
@@ -487,6 +580,7 @@ class EditCompoundViewModelTest {
             compoundId = 9L,
             getReusableCompoundUseCase = GetReusableCompoundUseCase(repository),
             updateReusableCompoundUseCase = UpdateReusableCompoundUseCase(repository),
+            createReusableIngredientUseCase = CreateReusableIngredientUseCase(createIngredientRepository),
             observeReusableIngredients = ObserveReusableIngredientsUseCase(FakeObserveIngredientsRepository()),
             observeReusableCompounds = ObserveReusableCompoundsUseCase(repository),
             getReusableCompoundMergePreviewUseCase = mergePreviewUseCase,
@@ -644,5 +738,40 @@ private class FakeObserveIngredientsRepository : io.github.mateovich.allergotrac
         command: io.github.mateovich.allergotracker.features.ingredients.domain.CreateReusableIngredientCommand
     ): AppResult<io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredient> = error("unused")
 
-    override fun observeIngredients(): Flow<List<io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredient>> = emptyFlow()
+    override fun observeIngredients(): Flow<List<io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredient>> {
+        return MutableStateFlow(
+            listOf(
+                io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredient(
+                    id = 7L,
+                    name = "Oat milk",
+                    notes = null,
+                    createdAtEpochMs = 1L,
+                    updatedAtEpochMs = 2L
+                )
+            )
+        )
+    }
+}
+
+private class FakeCreateIngredientRepository(
+    private val createResult: AppResult<ReusableIngredient> = AppResult.Success(
+        ReusableIngredient(
+            id = 21L,
+            name = "Cocoa",
+            notes = null,
+            createdAtEpochMs = 1L,
+            updatedAtEpochMs = 2L
+        )
+    ),
+    private val createGate: CompletableDeferred<Unit>? = null
+) : io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredientRepository {
+    val createdCommands = mutableListOf<CreateReusableIngredientCommand>()
+
+    override suspend fun createIngredient(command: CreateReusableIngredientCommand): AppResult<ReusableIngredient> {
+        createdCommands += command
+        createGate?.await()
+        return createResult
+    }
+
+    override fun observeIngredients(): Flow<List<ReusableIngredient>> = emptyFlow()
 }

@@ -26,6 +26,10 @@ data class EditCompoundUiState(
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val canSave: Boolean = false,
+    val isCreatingInlineIngredient: Boolean = false,
+    val inlineIngredientError: String? = null,
+    val showInlineIngredientDialog: Boolean = false,
+    val inlineIngredientName: String = "",
     val isMergeDialogVisible: Boolean = false,
     val mergeDestinationQuery: String = "",
     val mergeDestinationOptions: List<ReusableCompound> = emptyList(),
@@ -50,6 +54,10 @@ sealed interface EditCompoundUiIntent {
     data class UpdateComponentProportion(val index: Int, val value: String) : EditCompoundUiIntent
     data class AdjustComponentProportion(val index: Int, val basisPoints: Int) : EditCompoundUiIntent
     data class RemoveComponent(val index: Int) : EditCompoundUiIntent
+    data class CreateInlineIngredient(val name: String) : EditCompoundUiIntent
+    data class UpdateInlineIngredientName(val value: String) : EditCompoundUiIntent
+    data class ShowInlineIngredientDialog(val prefillName: String) : EditCompoundUiIntent
+    data object CancelInlineIngredientCreation : EditCompoundUiIntent
     data object Save : EditCompoundUiIntent
     data object RequestMergeFlow : EditCompoundUiIntent
     data class UpdateMergeDestinationQuery(val value: String) : EditCompoundUiIntent

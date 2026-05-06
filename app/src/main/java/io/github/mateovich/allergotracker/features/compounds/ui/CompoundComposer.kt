@@ -42,6 +42,8 @@ fun CompoundComposer(
     val normalizedQuery = componentSearchQuery.trim().replace(Regex("\\s+"), " ").lowercase()
     val hasExactIngredientMatch = filteredComponents.any { option ->
         option.kind == "ingredient" && option.name.trim().replace(Regex("\\s+"), " ").lowercase() == normalizedQuery
+    } || components.any { component ->
+        component.kind == "ingredient" && component.name.trim().replace(Regex("\\s+"), " ").lowercase() == normalizedQuery
     }
 
     OutlinedTextField(
