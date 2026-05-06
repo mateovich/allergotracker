@@ -2,6 +2,8 @@ package io.github.mateovich.allergotracker.features.outbreak.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.mateovich.allergotracker.core.common.duration.DURATION_VALIDATION_MESSAGE
+import io.github.mateovich.allergotracker.core.common.duration.parseOptionalDurationMinutes
 import io.github.mateovich.allergotracker.core.common.error.DomainError
 import io.github.mateovich.allergotracker.core.common.result.AppResult
 import io.github.mateovich.allergotracker.features.eventcatalog.domain.ObserveReusableEventCatalogUseCase
@@ -214,6 +216,10 @@ class CreateOutbreakViewModel(
                 )
             }
 
+            is CreateOutbreakUiIntent.UpdateDurationMinutes -> updateState {
+                it.copy(durationMinutes = intent.value, durationMinutesError = null, formMessage = "")
+            }
+
             is CreateOutbreakUiIntent.UpdateNotes -> updateState {
                 it.copy(notes = intent.value)
             }
@@ -240,6 +246,12 @@ class CreateOutbreakViewModel(
     private fun save() {
         val currentState = mutableState.value
         if (currentState.isSaving) return
+        val durationMinutes = try {
+            parseOptionalDurationMinutes(currentState.durationMinutes)
+        } catch (_: IllegalArgumentException) {
+            currentState.showDurationError()
+            return
+        }
 
         updateState { it.copy(isSaving = true, formMessage = "") }
         viewModelScope.launch {
@@ -250,6 +262,7 @@ class CreateOutbreakViewModel(
                         bodyLocation = currentState.bodyLocation,
                         occurredAtEpochMs = currentState.occurredAtEpochMs,
                         notes = currentState.notes,
+                        durationMinutes = durationMinutes,
                         intensityLevel = currentState.selectedIntensityLevel,
                         outbreakDescriptorCatalogId = currentState.selectedOutbreakDescriptorCatalogId,
                         bodyLocationCatalogId = currentState.selectedBodyLocationCatalogId
@@ -269,6 +282,7 @@ class CreateOutbreakViewModel(
                             outbreakDescriptorError = error.fieldError("outbreakDescriptor"),
                             bodyLocationError = error.fieldError("bodyLocation"),
                             intensityError = error.fieldError("intensityLevel"),
+                            durationMinutesError = error.fieldError("durationMinutes"),
                             occurredAtError = error.fieldError("occurredAtEpochMs"),
                             formMessage = error.message,
                             canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
@@ -335,6 +349,16 @@ class CreateOutbreakViewModel(
             filteredBodyLocations = availableBodyLocations.filterForQuery(bodyLocation),
             showCreateBodyLocationOption = bodyLocation.trim().isNotBlank() && !availableBodyLocations.hasExactName(bodyLocation)
         )
+    }
+
+    private fun CreateOutbreakUiState.showDurationError() {
+        updateState {
+            it.copy(
+                durationMinutesError = DURATION_VALIDATION_MESSAGE,
+                formMessage = "Please fix the highlighted fields.",
+                isSaving = false
+            )
+        }
     }
 
     private fun CreateOutbreakUiState.withOccurredAt(

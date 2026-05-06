@@ -2,6 +2,8 @@ package io.github.mateovich.allergotracker.features.exposure.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.mateovich.allergotracker.core.common.duration.DURATION_VALIDATION_MESSAGE
+import io.github.mateovich.allergotracker.core.common.duration.parseOptionalDurationMinutes
 import io.github.mateovich.allergotracker.core.common.error.DomainError
 import io.github.mateovich.allergotracker.core.common.result.AppResult
 import io.github.mateovich.allergotracker.features.eventcatalog.domain.ObserveReusableEventCatalogUseCase
@@ -136,6 +138,9 @@ class EditExposureViewModel(
                 )
             }
             is EditExposureUiIntent.UpdatePlace -> updateState { it.copy(place = intent.value) }
+            is EditExposureUiIntent.UpdateDurationMinutes -> updateState {
+                it.copy(durationMinutes = intent.value, durationMinutesError = null, formMessage = "")
+            }
             is EditExposureUiIntent.UpdateNotes -> updateState { it.copy(notes = intent.value) }
             is EditExposureUiIntent.SelectIntensityLevel -> updateState {
                 it.copy(
@@ -176,6 +181,7 @@ class EditExposureViewModel(
                             exposureType = event.exposureType,
                             deleteRecordLabel = event.exposureType,
                             place = event.place.orEmpty(),
+                            durationMinutes = event.durationMinutes?.toString().orEmpty(),
                             notes = event.notes.orEmpty(),
                             selectedIntensityLevel = event.intensityLevel,
                             selectedExposureTypeCatalogId = event.exposureTypeCatalogId,
@@ -198,6 +204,12 @@ class EditExposureViewModel(
     private fun save() {
         val currentState = mutableState.value
         if (!currentState.canSave || currentState.isSaving || currentState.isDeleting || currentState.isLoading) return
+        val durationMinutes = try {
+            parseOptionalDurationMinutes(currentState.durationMinutes)
+        } catch (_: IllegalArgumentException) {
+            currentState.showDurationError()
+            return
+        }
         updateState { it.copy(isSaving = true, formMessage = "") }
         viewModelScope.launch {
             when (
@@ -206,6 +218,7 @@ class EditExposureViewModel(
                         id = recordId,
                         exposureType = currentState.exposureType,
                         occurredAtEpochMs = currentState.occurredAtEpochMs,
+                        durationMinutes = durationMinutes,
                         place = currentState.place,
                         notes = currentState.notes,
                         intensityLevel = currentState.selectedIntensityLevel,
@@ -223,6 +236,7 @@ class EditExposureViewModel(
                         it.copy(
                             isSaving = false,
                             exposureTypeError = error.fieldError("exposureType"),
+                            durationMinutesError = error.fieldError("durationMinutes"),
                             intensityLevelError = error.fieldError("intensityLevel"),
                             occurredAtError = error.fieldError("occurredAtEpochMs"),
                             formMessage = error.message,
@@ -302,6 +316,16 @@ class EditExposureViewModel(
             filteredExposureTypes = filteredOptions,
             showCreateExposureTypeOption = exposureType.trim().isNotBlank() && !availableExposureTypes.hasExactName(exposureType)
         )
+    }
+
+    private fun EditExposureUiState.showDurationError() {
+        updateState {
+            it.copy(
+                durationMinutesError = DURATION_VALIDATION_MESSAGE,
+                formMessage = "Please fix the highlighted fields.",
+                isSaving = false
+            )
+        }
     }
 
     private fun EditExposureUiState.withOccurredAt(

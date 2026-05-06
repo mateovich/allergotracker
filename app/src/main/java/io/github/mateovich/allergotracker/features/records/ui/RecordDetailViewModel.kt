@@ -2,6 +2,7 @@ package io.github.mateovich.allergotracker.features.records.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.mateovich.allergotracker.core.common.duration.formatDurationMinutes
 import io.github.mateovich.allergotracker.core.common.result.AppResult
 import io.github.mateovich.allergotracker.features.records.domain.ObserveRecordDetailUseCase
 import io.github.mateovich.allergotracker.features.records.domain.RecordDetail
@@ -107,6 +108,7 @@ class RecordDetailViewModel(
             is RecordDetail.Exposure -> listOf(
                 RecordDetailFieldUiModel(label = "Exposure", value = exposureType),
                 RecordDetailFieldUiModel(label = "Place", value = place.orEmpty().ifBlank { "None" }),
+                RecordDetailFieldUiModel(label = "Duration", value = formatDurationMinutes(durationMinutes)),
                 RecordDetailFieldUiModel(label = "Intensity", value = intensityLabel),
                 RecordDetailFieldUiModel(label = "Notes", value = notes.orEmpty().ifBlank { "None" })
             )
@@ -114,6 +116,7 @@ class RecordDetailViewModel(
             is RecordDetail.Outbreak -> listOf(
                 RecordDetailFieldUiModel(label = "Descriptor", value = outbreakDescriptor),
                 RecordDetailFieldUiModel(label = "Body location", value = bodyLocation),
+                RecordDetailFieldUiModel(label = "Duration", value = formatDurationMinutes(durationMinutes)),
                 RecordDetailFieldUiModel(label = "Intensity", value = intensityLabel),
                 RecordDetailFieldUiModel(label = "Notes", value = notes.orEmpty().ifBlank { "None" })
             )

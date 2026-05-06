@@ -292,8 +292,50 @@ class CreateOutbreakViewModelTest {
         assertEquals(1, createCalls)
     }
 
+    @Test
+    fun save_includes_valid_duration_minutes() = runBlocking {
+        var savedCommand: CreateOutbreakEventCommand? = null
+        val viewModel = buildViewModel(onCreateOutbreak = { savedCommand = it })
+
+        viewModel.onIntent(CreateOutbreakUiIntent.UpdateOutbreakDescriptor("Skin flare"))
+        viewModel.onIntent(CreateOutbreakUiIntent.UpdateBodyLocation("Left arm"))
+        viewModel.onIntent(CreateOutbreakUiIntent.UpdateDurationMinutes("90"))
+        viewModel.onIntent(CreateOutbreakUiIntent.Save)
+
+        assertEquals(90, savedCommand?.durationMinutes)
+    }
+
+    @Test
+    fun blank_duration_is_saved_as_absent() = runBlocking {
+        var savedCommand: CreateOutbreakEventCommand? = null
+        val viewModel = buildViewModel(onCreateOutbreak = { savedCommand = it })
+
+        viewModel.onIntent(CreateOutbreakUiIntent.UpdateOutbreakDescriptor("Skin flare"))
+        viewModel.onIntent(CreateOutbreakUiIntent.UpdateBodyLocation("Left arm"))
+        viewModel.onIntent(CreateOutbreakUiIntent.UpdateDurationMinutes(""))
+        viewModel.onIntent(CreateOutbreakUiIntent.Save)
+
+        assertEquals(null, savedCommand?.durationMinutes)
+    }
+
+    @Test
+    fun invalid_duration_blocks_save_with_inline_error() {
+        var saved = false
+        val viewModel = buildViewModel(onCreateOutbreak = { saved = true })
+
+        viewModel.onIntent(CreateOutbreakUiIntent.UpdateOutbreakDescriptor("Skin flare"))
+        viewModel.onIntent(CreateOutbreakUiIntent.UpdateBodyLocation("Left arm"))
+        viewModel.onIntent(CreateOutbreakUiIntent.UpdateDurationMinutes("-5"))
+        viewModel.onIntent(CreateOutbreakUiIntent.Save)
+
+        assertFalse(saved)
+        assertEquals("Enter a positive duration in minutes.", viewModel.state.value.durationMinutesError)
+        assertEquals("Please fix the highlighted fields.", viewModel.state.value.formMessage)
+    }
+
     private fun buildViewModel(
-        availableCatalog: List<ReusableEventCatalog> = emptyList()
+        availableCatalog: List<ReusableEventCatalog> = emptyList(),
+        onCreateOutbreak: (CreateOutbreakEventCommand) -> Unit = {}
     ): CreateOutbreakViewModel {
         val timeProvider = object : CurrentTimeProvider {
             override fun nowEpochMillis(): Long = fixedNow
@@ -303,6 +345,7 @@ class CreateOutbreakViewModelTest {
             createOutbreakEventUseCase = CreateOutbreakEventUseCase(
                 repository = object : OutbreakRepository {
                     override suspend fun createOutbreak(command: CreateOutbreakEventCommand): AppResult<OutbreakEvent> {
+                        onCreateOutbreak(command)
                         return AppResult.Success(
                             OutbreakEvent(
                                 id = 17L,

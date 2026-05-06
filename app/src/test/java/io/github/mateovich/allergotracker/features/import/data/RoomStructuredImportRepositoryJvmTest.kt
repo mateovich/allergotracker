@@ -3,6 +3,7 @@ package io.github.mateovich.allergotracker.features.import.data
 import io.github.mateovich.allergotracker.core.common.result.AppResult
 import io.github.mateovich.allergotracker.core.export.schema.ExposureExportDto
 import io.github.mateovich.allergotracker.core.export.schema.IngestionExportDto
+import io.github.mateovich.allergotracker.core.export.schema.OutbreakExportDto
 import io.github.mateovich.allergotracker.core.export.schema.ReusableEntityReferenceDto
 import io.github.mateovich.allergotracker.core.export.schema.ReusableEventCatalogExportDto
 import io.github.mateovich.allergotracker.core.export.schema.VersionedExportDataDto
@@ -49,6 +50,7 @@ import org.junit.Test
 
 class RoomStructuredImportRepositoryJvmTest {
     private val exposureCommands = mutableListOf<CreateExposureEventCommand>()
+    private val outbreakCommands = mutableListOf<CreateOutbreakEventCommand>()
     private val repository = RoomStructuredImportRepository(
         reusableIngredientDao = FakeReusableIngredientDao(),
         reusableCompoundDao = FakeReusableCompoundDao(),
@@ -65,7 +67,7 @@ class RoomStructuredImportRepositoryJvmTest {
             currentTimeProvider = CurrentTimeProvider { FIXED_NOW }
         ),
         createOutbreakEventUseCase = CreateOutbreakEventUseCase(
-            repository = FakeOutbreakRepository(),
+            repository = FakeOutbreakRepository(outbreakCommands),
             currentTimeProvider = CurrentTimeProvider { FIXED_NOW }
         ),
         nowEpochMillis = { FIXED_NOW },
@@ -102,6 +104,27 @@ class RoomStructuredImportRepositoryJvmTest {
 
         assertTrue(result is AppResult.Success)
         assertEquals(listOf("Garage", null), exposureCommands.map { it.place })
+    }
+
+    @Test
+    fun apply_preserves_duration_and_accepts_missing_duration_from_older_exports() = runBlocking {
+        val reviewResult = repository.review(document(), durationEnvelope())
+        require(reviewResult is AppResult.Success)
+
+        val result = repository.apply(reviewResult.value)
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(listOf(45, null), exposureCommands.map { it.durationMinutes })
+        assertEquals(listOf(90, null), outbreakCommands.map { it.durationMinutes })
+    }
+
+    @Test
+    fun review_rejects_invalid_duration_values() = runBlocking {
+        val review = repository.review(document(), invalidDurationEnvelope())
+
+        assertTrue(review is AppResult.Error)
+        review as AppResult.Error
+        assertEquals("Enter a positive duration in minutes.", review.error.message)
     }
 
     private fun document(): ImportDocumentContent {
@@ -169,6 +192,75 @@ class RoomStructuredImportRepositoryJvmTest {
                         occurredAt = "2023-11-14T22:13:20Z",
                         notes = null,
                         intensityLevel = 3,
+                        createdAt = "2023-11-14T22:13:20Z"
+                    )
+                )
+            )
+        )
+    }
+
+    private fun durationEnvelope(): VersionedExportEnvelopeDto {
+        return VersionedExportEnvelopeDto(
+            schemaVersion = "2.0.0",
+            exportedAt = "2023-11-14T22:13:20Z",
+            data = VersionedExportDataDto(
+                exposures = listOf(
+                    ExposureExportDto(
+                        id = 30L,
+                        exposureType = "Dust",
+                        occurredAt = "2023-11-14T22:13:20Z",
+                        notes = null,
+                        durationMinutes = 45,
+                        intensityLevel = 2,
+                        createdAt = "2023-11-14T22:13:20Z"
+                    ),
+                    ExposureExportDto(
+                        id = 31L,
+                        exposureType = "Pollen",
+                        occurredAt = "2023-11-14T22:13:20Z",
+                        notes = null,
+                        intensityLevel = 3,
+                        createdAt = "2023-11-14T22:13:20Z"
+                    )
+                ),
+                outbreaks = listOf(
+                    OutbreakExportDto(
+                        id = 40L,
+                        outbreakDescriptor = "Skin flare",
+                        bodyLocation = "Left arm",
+                        occurredAt = "2023-11-14T22:13:20Z",
+                        notes = null,
+                        durationMinutes = 90,
+                        intensityLevel = 4,
+                        createdAt = "2023-11-14T22:13:20Z"
+                    ),
+                    OutbreakExportDto(
+                        id = 41L,
+                        outbreakDescriptor = "Skin flare",
+                        bodyLocation = "Right arm",
+                        occurredAt = "2023-11-14T22:13:20Z",
+                        notes = null,
+                        intensityLevel = 3,
+                        createdAt = "2023-11-14T22:13:20Z"
+                    )
+                )
+            )
+        )
+    }
+
+    private fun invalidDurationEnvelope(): VersionedExportEnvelopeDto {
+        return VersionedExportEnvelopeDto(
+            schemaVersion = "2.0.0",
+            exportedAt = "2023-11-14T22:13:20Z",
+            data = VersionedExportDataDto(
+                exposures = listOf(
+                    ExposureExportDto(
+                        id = 50L,
+                        exposureType = "Dust",
+                        occurredAt = "2023-11-14T22:13:20Z",
+                        notes = null,
+                        durationMinutes = 0,
+                        intensityLevel = 2,
                         createdAt = "2023-11-14T22:13:20Z"
                     )
                 )
@@ -248,7 +340,14 @@ class RoomStructuredImportRepositoryJvmTest {
         override suspend fun createExposure(command: CreateExposureEventCommand): AppResult<ExposureEvent> {
             createdCommands += command
             return AppResult.Success(
-                ExposureEvent(100L + createdCommands.size, command.exposureType, command.occurredAtEpochMs, command.notes, place = command.place)
+                ExposureEvent(
+                    100L + createdCommands.size,
+                    command.exposureType,
+                    command.occurredAtEpochMs,
+                    command.notes,
+                    place = command.place,
+                    durationMinutes = command.durationMinutes
+                )
             )
         }
         override suspend fun getExposure(id: Long): AppResult<ExposureEvent> = error("unused")
@@ -256,8 +355,22 @@ class RoomStructuredImportRepositoryJvmTest {
         override suspend fun deleteExposure(id: Long): AppResult<Unit> = error("unused")
     }
 
-    private class FakeOutbreakRepository : OutbreakRepository {
-        override suspend fun createOutbreak(command: CreateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
+    private class FakeOutbreakRepository(
+        private val createdCommands: MutableList<CreateOutbreakEventCommand>
+    ) : OutbreakRepository {
+        override suspend fun createOutbreak(command: CreateOutbreakEventCommand): AppResult<OutbreakEvent> {
+            createdCommands += command
+            return AppResult.Success(
+                OutbreakEvent(
+                    200L + createdCommands.size,
+                    command.outbreakDescriptor,
+                    command.bodyLocation,
+                    command.occurredAtEpochMs,
+                    command.notes,
+                    durationMinutes = command.durationMinutes
+                )
+            )
+        }
         override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> = error("unused")
         override suspend fun updateOutbreak(command: io.github.mateovich.allergotracker.features.outbreak.domain.UpdateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
         override suspend fun deleteOutbreak(id: Long): AppResult<Unit> = error("unused")

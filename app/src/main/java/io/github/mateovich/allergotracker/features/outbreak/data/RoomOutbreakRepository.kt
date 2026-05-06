@@ -34,6 +34,7 @@ class RoomOutbreakRepository(
                 bodyLocation = command.bodyLocation,
                 occurredAtEpochMs = command.occurredAtEpochMs,
                 notes = command.notes,
+                durationMinutes = command.durationMinutes,
                 intensityLevel = command.intensityLevel,
                 createdAtEpochMs = currentTimeProvider.nowEpochMillis(),
                 outbreakDescriptorCatalogId = outbreakDescriptorCatalogId,
@@ -47,6 +48,7 @@ class RoomOutbreakRepository(
                     bodyLocation = entity.bodyLocation,
                     occurredAtEpochMs = entity.occurredAtEpochMs,
                     notes = entity.notes,
+                    durationMinutes = entity.durationMinutes,
                     intensityLevel = entity.intensityLevel,
                     outbreakDescriptorCatalogId = entity.outbreakDescriptorCatalogId,
                     bodyLocationCatalogId = entity.bodyLocationCatalogId
@@ -80,6 +82,7 @@ class RoomOutbreakRepository(
                 bodyLocation = command.bodyLocation,
                 occurredAtEpochMs = command.occurredAtEpochMs,
                 notes = command.notes,
+                durationMinutes = command.durationMinutes,
                 intensityLevel = command.intensityLevel,
                 outbreakDescriptorCatalogId = resolveCatalogId(
                     kind = ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR,
@@ -127,6 +130,7 @@ class RoomOutbreakRepository(
             bodyLocation = bodyLocation,
             occurredAtEpochMs = occurredAtEpochMs,
             notes = notes,
+            durationMinutes = durationMinutes,
             intensityLevel = intensityLevel,
             outbreakDescriptorCatalogId = outbreakDescriptorCatalogId,
             bodyLocationCatalogId = bodyLocationCatalogId

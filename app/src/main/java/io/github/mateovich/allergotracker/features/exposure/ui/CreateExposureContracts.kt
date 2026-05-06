@@ -28,6 +28,7 @@ data class CreateExposureUiState(
     val title: String = "Create Exposure",
     val exposureType: String = "",
     val place: String = "",
+    val durationMinutes: String = "",
     val notes: String = "",
     val selectedIntensityLevel: Int = 3,
     val occurredAtEpochMs: Long = 0L,
@@ -44,6 +45,7 @@ data class CreateExposureUiState(
     val filteredExposureTypes: List<ReusableEventCatalogOptionUiModel> = emptyList(),
     val showCreateExposureTypeOption: Boolean = false,
     val exposureTypeError: String? = null,
+    val durationMinutesError: String? = null,
     val intensityLevelError: String? = null,
     val occurredAtError: String? = null,
     val formMessage: String = "",
@@ -59,6 +61,7 @@ sealed interface CreateExposureUiIntent {
     data object ClearRetiredExposureCatalogSelection : CreateExposureUiIntent
     data object EditSelectedExposureCatalog : CreateExposureUiIntent
     data class UpdatePlace(val value: String) : CreateExposureUiIntent
+    data class UpdateDurationMinutes(val value: String) : CreateExposureUiIntent
     data class UpdateNotes(val value: String) : CreateExposureUiIntent
     data class SelectIntensityLevel(val level: Int) : CreateExposureUiIntent
     data class SelectOccurredOn(val value: LocalDate) : CreateExposureUiIntent

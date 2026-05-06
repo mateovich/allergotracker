@@ -371,17 +371,24 @@ class EditExposureViewModelTest {
     }
 
     @Test
-    fun load_and_save_preserve_optional_place() = runBlocking {
+    fun load_and_save_preserve_optional_place_and_duration() = runBlocking {
         var savedCommand: UpdateExposureEventCommand? = null
         val repository = object : ExposureRepository {
             override suspend fun createExposure(command: io.github.mateovich.allergotracker.features.exposure.domain.CreateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
             override suspend fun getExposure(id: Long): AppResult<ExposureEvent> = AppResult.Success(
-                ExposureEvent(id, "Pollen", existingOccurredAt, "outside", place = "Park")
+                ExposureEvent(id, "Pollen", existingOccurredAt, "outside", place = "Park", durationMinutes = 45)
             )
             override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> {
                 savedCommand = command
                 return AppResult.Success(
-                    ExposureEvent(command.id, command.exposureType, command.occurredAtEpochMs, command.notes, place = command.place)
+                    ExposureEvent(
+                        command.id,
+                        command.exposureType,
+                        command.occurredAtEpochMs,
+                        command.notes,
+                        place = command.place,
+                        durationMinutes = command.durationMinutes
+                    )
                 )
             }
             override suspend fun deleteExposure(id: Long): AppResult<Unit> = AppResult.Success(Unit)
@@ -396,11 +403,14 @@ class EditExposureViewModelTest {
 
         viewModel.onIntent(EditExposureUiIntent.Load)
         assertEquals("Park", viewModel.state.value.place)
+        assertEquals("45", viewModel.state.value.durationMinutes)
 
         viewModel.onIntent(EditExposureUiIntent.UpdatePlace("Office"))
+        viewModel.onIntent(EditExposureUiIntent.UpdateDurationMinutes("60"))
         viewModel.onIntent(EditExposureUiIntent.Save)
 
         assertEquals("Office", savedCommand?.place)
+        assertEquals(60, savedCommand?.durationMinutes)
     }
 
     @Test

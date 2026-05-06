@@ -1,6 +1,7 @@
 package io.github.mateovich.allergotracker.features.outbreak.domain
 
 import io.github.mateovich.allergotracker.core.common.error.DomainError
+import io.github.mateovich.allergotracker.core.common.duration.DURATION_VALIDATION_MESSAGE
 import io.github.mateovich.allergotracker.core.common.result.AppResult
 import io.github.mateovich.allergotracker.features.eventcatalog.domain.ReusableEventCatalog
 import io.github.mateovich.allergotracker.features.ingestion.domain.CurrentTimeProvider
@@ -29,6 +30,9 @@ class CreateOutbreakEventUseCase(
             }
             if (fromLevel(sanitizedCommand.intensityLevel) == null) {
                 put("intensityLevel", "Choose a valid intensity.")
+            }
+            if (sanitizedCommand.durationMinutes != null && sanitizedCommand.durationMinutes <= 0) {
+                put("durationMinutes", DURATION_VALIDATION_MESSAGE)
             }
             if (sanitizedCommand.occurredAtEpochMs <= 0L) {
                 put("occurredAtEpochMs", "Choose a valid time.")

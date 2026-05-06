@@ -36,5 +36,7 @@ data class ExposureEventEntity(
     @ColumnInfo(name = "exposure_type_catalog_id")
     val exposureTypeCatalogId: Long? = null,
     @ColumnInfo(name = "place")
-    val place: String? = null
+    val place: String? = null,
+    @ColumnInfo(name = "duration_minutes")
+    val durationMinutes: Int? = null
 )

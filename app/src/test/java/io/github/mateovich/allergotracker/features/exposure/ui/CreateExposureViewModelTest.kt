@@ -289,6 +289,44 @@ class CreateExposureViewModelTest {
         assertEquals("", viewModel.state.value.place)
     }
 
+    @Test
+    fun save_includes_valid_duration_minutes() = runBlocking {
+        var savedCommand: CreateExposureEventCommand? = null
+        val viewModel = buildViewModel(onCreateExposure = { savedCommand = it })
+
+        viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType("Pollen"))
+        viewModel.onIntent(CreateExposureUiIntent.UpdateDurationMinutes("45"))
+        viewModel.onIntent(CreateExposureUiIntent.Save)
+
+        assertEquals(45, savedCommand?.durationMinutes)
+    }
+
+    @Test
+    fun blank_duration_is_saved_as_absent() = runBlocking {
+        var savedCommand: CreateExposureEventCommand? = null
+        val viewModel = buildViewModel(onCreateExposure = { savedCommand = it })
+
+        viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType("Pollen"))
+        viewModel.onIntent(CreateExposureUiIntent.UpdateDurationMinutes("   "))
+        viewModel.onIntent(CreateExposureUiIntent.Save)
+
+        assertEquals(null, savedCommand?.durationMinutes)
+    }
+
+    @Test
+    fun invalid_duration_blocks_save_with_inline_error() {
+        var saved = false
+        val viewModel = buildViewModel(onCreateExposure = { saved = true })
+
+        viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType("Pollen"))
+        viewModel.onIntent(CreateExposureUiIntent.UpdateDurationMinutes("0"))
+        viewModel.onIntent(CreateExposureUiIntent.Save)
+
+        assertFalse(saved)
+        assertEquals("Enter a positive duration in minutes.", viewModel.state.value.durationMinutesError)
+        assertEquals("Please fix the highlighted fields.", viewModel.state.value.formMessage)
+    }
+
     private fun buildViewModel(
         availableCatalog: List<ReusableEventCatalog> = emptyList(),
         onCreateExposure: (CreateExposureEventCommand) -> Unit = {}

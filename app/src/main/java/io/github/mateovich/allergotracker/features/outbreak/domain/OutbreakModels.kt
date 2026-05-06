@@ -7,7 +7,8 @@ data class CreateOutbreakEventCommand(
     val notes: String?,
     val intensityLevel: Int = DEFAULT_INTENSITY_LEVEL,
     val outbreakDescriptorCatalogId: Long? = null,
-    val bodyLocationCatalogId: Long? = null
+    val bodyLocationCatalogId: Long? = null,
+    val durationMinutes: Int? = null
 )
 
 data class UpdateOutbreakEventCommand(
@@ -18,7 +19,8 @@ data class UpdateOutbreakEventCommand(
     val notes: String?,
     val intensityLevel: Int = DEFAULT_INTENSITY_LEVEL,
     val outbreakDescriptorCatalogId: Long? = null,
-    val bodyLocationCatalogId: Long? = null
+    val bodyLocationCatalogId: Long? = null,
+    val durationMinutes: Int? = null
 )
 
 data class OutbreakEvent(
@@ -29,7 +31,8 @@ data class OutbreakEvent(
     val notes: String?,
     val intensityLevel: Int = DEFAULT_INTENSITY_LEVEL,
     val outbreakDescriptorCatalogId: Long? = null,
-    val bodyLocationCatalogId: Long? = null
+    val bodyLocationCatalogId: Long? = null,
+    val durationMinutes: Int? = null
 )
 
 data class CreateOutbreakDefaults(

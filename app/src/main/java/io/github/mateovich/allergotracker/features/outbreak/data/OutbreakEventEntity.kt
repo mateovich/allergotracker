@@ -45,5 +45,7 @@ data class OutbreakEventEntity(
     @ColumnInfo(name = "outbreak_descriptor_catalog_id")
     val outbreakDescriptorCatalogId: Long? = null,
     @ColumnInfo(name = "body_location_catalog_id")
-    val bodyLocationCatalogId: Long? = null
+    val bodyLocationCatalogId: Long? = null,
+    @ColumnInfo(name = "duration_minutes")
+    val durationMinutes: Int? = null
 )

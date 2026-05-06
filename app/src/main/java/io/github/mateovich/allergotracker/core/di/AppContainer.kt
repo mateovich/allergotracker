@@ -19,6 +19,7 @@ import io.github.mateovich.allergotracker.core.database.migrations.Migration_10_
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_11_12
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_12_13
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_13_14
+import io.github.mateovich.allergotracker.core.database.migrations.Migration_14_15
 import io.github.mateovich.allergotracker.features.compounds.data.RoomReusableCompoundRepository
 import io.github.mateovich.allergotracker.features.compounds.domain.CreateReusableCompoundUseCase
 import io.github.mateovich.allergotracker.features.compounds.domain.CompoundChildEdge
@@ -116,7 +117,7 @@ class AppContainer(appContext: Context) {
         appContext,
         AppDatabase::class.java,
         "app_database"
-    ).addMigrations(Migration_1_2, Migration_2_3, Migration_3_4, Migration_4_5, Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12, Migration_12_13, Migration_13_14).build()
+    ).addMigrations(Migration_1_2, Migration_2_3, Migration_3_4, Migration_4_5, Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12, Migration_12_13, Migration_13_14, Migration_14_15).build()
 
     private val homeDao: HomeDao = appDatabase.homeDao()
     private val ingestionEventDao = appDatabase.ingestionEventDao()

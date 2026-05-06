@@ -38,6 +38,7 @@ class RecordDetailViewModelTest {
                             exposureType = "Pollen",
                             place = "Park",
                             intensityLabel = "Intensity 2",
+                            durationMinutes = 1,
                             notes = "outside"
                         )
                     )
@@ -48,11 +49,12 @@ class RecordDetailViewModelTest {
         viewModel.onIntent(RecordDetailUiIntent.Load)
 
         assertEquals(
-            listOf("Exposure", "Place", "Intensity", "Notes"),
+            listOf("Exposure", "Place", "Duration", "Intensity", "Notes"),
             viewModel.state.value.fields.map { it.label }
         )
         assertEquals("Park", viewModel.state.value.fields[1].value)
-        assertEquals("Intensity 2", viewModel.state.value.fields[2].value)
+        assertEquals("1 minute", viewModel.state.value.fields[2].value)
+        assertEquals("Intensity 2", viewModel.state.value.fields[3].value)
     }
 
     @Test
@@ -69,6 +71,7 @@ class RecordDetailViewModelTest {
                             outbreakDescriptor = "Skin flare",
                             bodyLocation = "Left arm",
                             intensityLabel = "Intensity 4",
+                            durationMinutes = 90,
                             notes = "after workout"
                         )
                     )
@@ -79,10 +82,11 @@ class RecordDetailViewModelTest {
         viewModel.onIntent(RecordDetailUiIntent.Load)
 
         assertEquals(
-            listOf("Descriptor", "Body location", "Intensity", "Notes"),
+            listOf("Descriptor", "Body location", "Duration", "Intensity", "Notes"),
             viewModel.state.value.fields.map { it.label }
         )
-        assertEquals("Intensity 4", viewModel.state.value.fields[2].value)
+        assertEquals("90 minutes", viewModel.state.value.fields[2].value)
+        assertEquals("Intensity 4", viewModel.state.value.fields[3].value)
     }
 
     @Test

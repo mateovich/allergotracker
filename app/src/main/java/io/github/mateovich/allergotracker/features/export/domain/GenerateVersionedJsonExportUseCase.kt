@@ -190,6 +190,7 @@ private fun ExportSnapshot.toDto(
                 occurredAt = record.occurredAtEpochMs.toUtcIsoString(),
                 place = record.place,
                 notes = record.notes,
+                durationMinutes = record.durationMinutes,
                 intensityLevel = record.intensityLevel,
                 exposureTypeCatalogRef = record.exposureTypeCatalogRef?.toDto(),
                 createdAt = record.createdAtEpochMs.toUtcIsoString()
@@ -202,6 +203,7 @@ private fun ExportSnapshot.toDto(
                 bodyLocation = record.bodyLocation,
                 occurredAt = record.occurredAtEpochMs.toUtcIsoString(),
                 notes = record.notes,
+                durationMinutes = record.durationMinutes,
                 intensityLevel = record.intensityLevel,
                 outbreakDescriptorCatalogRef = record.outbreakDescriptorCatalogRef?.toDto(),
                 bodyLocationCatalogRef = record.bodyLocationCatalogRef?.toDto(),

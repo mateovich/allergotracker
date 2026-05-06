@@ -5,6 +5,7 @@ import io.github.mateovich.allergotracker.core.database.migrations.Migration_10_
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_11_12
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_12_13
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_13_14
+import io.github.mateovich.allergotracker.core.database.migrations.Migration_14_15
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_2_3
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_3_4
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_4_5
@@ -32,7 +33,7 @@ class RoomScaffoldTest {
         assertTrue(source.contains("ReusableCompoundEntity::class"))
         assertTrue(source.contains("ReusableCompoundComponentEntity::class"))
         assertTrue(source.contains("ReusableEventCatalogEntity::class"))
-        assertTrue(source.contains("version = 14"))
+        assertTrue(source.contains("version = 15"))
         assertTrue(source.contains("exportSchema = true"))
         assertTrue(source.contains("abstract fun homeDao(): HomeDao"))
         assertTrue(source.contains("abstract fun ingestionEventDao(): IngestionEventDao"))
@@ -137,6 +138,21 @@ class RoomScaffoldTest {
 
         assertTrue(migrationFile.readText().contains("ALTER TABLE exposure_events ADD COLUMN place TEXT"))
         assertTrue(schemaFile.readText().contains("\"columnName\": \"place\""))
+    }
+
+    @Test
+    fun exposure_and_outbreak_duration_migration_14_15_is_declared() {
+        assertEquals(14, Migration_14_15.startVersion)
+        assertEquals(15, Migration_14_15.endVersion)
+
+        val migrationFile = resolveProjectFile("src/main/java/io/github/mateovich/allergotracker/core/database/migrations/Migration_14_15.kt")
+        val schemaFile = resolveProjectFile("schemas/io.github.mateovich.allergotracker.core.database.AppDatabase/15.json")
+        val migrationSource = migrationFile.readText()
+        val schemaSource = schemaFile.readText()
+
+        assertTrue(migrationSource.contains("ALTER TABLE exposure_events ADD COLUMN duration_minutes INTEGER"))
+        assertTrue(migrationSource.contains("ALTER TABLE outbreak_events ADD COLUMN duration_minutes INTEGER"))
+        assertTrue(schemaSource.contains("\"columnName\": \"duration_minutes\""))
     }
 
     private fun resolveProjectFile(relativeToAppModule: String): File {

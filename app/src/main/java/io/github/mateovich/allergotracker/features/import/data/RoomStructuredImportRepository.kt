@@ -1,5 +1,6 @@
 package io.github.mateovich.allergotracker.features.import.data
 
+import io.github.mateovich.allergotracker.core.common.duration.DURATION_VALIDATION_MESSAGE
 import io.github.mateovich.allergotracker.core.common.error.DomainError
 import io.github.mateovich.allergotracker.core.common.result.AppResult
 import io.github.mateovich.allergotracker.core.export.schema.EXPORT_SCHEMA_VERSION
@@ -25,22 +26,22 @@ import io.github.mateovich.allergotracker.features.eventcatalog.data.ReusableEve
 import io.github.mateovich.allergotracker.features.eventcatalog.domain.ReusableEventCatalogKind
 import io.github.mateovich.allergotracker.features.eventcatalog.domain.canonicalizeReusableEventCatalogName
 import io.github.mateovich.allergotracker.features.eventcatalog.domain.normalizeReusableEventCatalogName
-import io.github.mateovich.allergotracker.features.import.domain.ImportDocumentContent
-import io.github.mateovich.allergotracker.features.import.domain.PreparedStructuredImport
-import io.github.mateovich.allergotracker.features.import.domain.StructuredImportApplyResult
-import io.github.mateovich.allergotracker.features.import.domain.StructuredImportRepository
-import io.github.mateovich.allergotracker.features.import.domain.StructuredImportReview
-import io.github.mateovich.allergotracker.features.import.domain.StructuredImportSummary
+import io.github.mateovich.allergotracker.features.exposure.domain.CreateExposureEventCommand
+import io.github.mateovich.allergotracker.features.exposure.domain.CreateExposureEventUseCase
 import io.github.mateovich.allergotracker.features.ingredients.data.ReusableIngredientDao
 import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReusableIngredientCommand
 import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReusableIngredientUseCase
 import io.github.mateovich.allergotracker.features.ingestion.domain.CreateIngestionEventCommand
 import io.github.mateovich.allergotracker.features.ingestion.domain.CreateIngestionEventUseCase
 import io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEntityKind
+import io.github.mateovich.allergotracker.features.import.domain.ImportDocumentContent
+import io.github.mateovich.allergotracker.features.import.domain.PreparedStructuredImport
+import io.github.mateovich.allergotracker.features.import.domain.StructuredImportApplyResult
+import io.github.mateovich.allergotracker.features.import.domain.StructuredImportRepository
+import io.github.mateovich.allergotracker.features.import.domain.StructuredImportReview
+import io.github.mateovich.allergotracker.features.import.domain.StructuredImportSummary
 import io.github.mateovich.allergotracker.features.outbreak.domain.CreateOutbreakEventCommand
 import io.github.mateovich.allergotracker.features.outbreak.domain.CreateOutbreakEventUseCase
-import io.github.mateovich.allergotracker.features.exposure.domain.CreateExposureEventCommand
-import io.github.mateovich.allergotracker.features.exposure.domain.CreateExposureEventUseCase
 import io.github.mateovich.allergotracker.features.import.domain.StructuredImportSummary as Summary
 import java.time.Instant
 import kotlinx.coroutines.CancellationException
@@ -195,6 +196,7 @@ class RoomStructuredImportRepository(
                                 occurredAtEpochMs = exposure.occurredAt.toEpochMillis(),
                                 place = exposure.place,
                                 notes = exposure.notes,
+                                durationMinutes = exposure.durationMinutes,
                                 intensityLevel = exposure.intensityLevel,
                                 exposureTypeCatalogId = mappedCatalog?.id
                             )
@@ -215,6 +217,7 @@ class RoomStructuredImportRepository(
                                 bodyLocation = bodyLocation?.name ?: outbreak.bodyLocation,
                                 occurredAtEpochMs = outbreak.occurredAt.toEpochMillis(),
                                 notes = outbreak.notes,
+                                durationMinutes = outbreak.durationMinutes,
                                 intensityLevel = outbreak.intensityLevel,
                                 outbreakDescriptorCatalogId = descriptor?.id,
                                 bodyLocationCatalogId = bodyLocation?.id
@@ -428,7 +431,16 @@ class RoomStructuredImportRepository(
 
         validateExposureCatalogReference(envelope.data.exposures, catalogByKey)?.let { return it }
         validateOutbreakCatalogReference(envelope.data.outbreaks, catalogByKey)?.let { return it }
+        validateDurations(envelope.data.exposures.map { it.durationMinutes } + envelope.data.outbreaks.map { it.durationMinutes })?.let { return it }
         return null
+    }
+
+    private fun validateDurations(durationMinutes: List<Int?>): DomainError? {
+        return if (durationMinutes.any { it != null && it <= 0 }) {
+            DomainError.ImportError(DURATION_VALIDATION_MESSAGE)
+        } else {
+            null
+        }
     }
 
     private fun validateExposureCatalogReference(

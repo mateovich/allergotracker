@@ -65,6 +65,7 @@ class RoomExportSnapshotRepository(
                                 exposureType = entity.exposureType,
                                 occurredAtEpochMs = entity.occurredAtEpochMs,
                                 notes = entity.notes,
+                                durationMinutes = entity.durationMinutes,
                                 intensityLevel = entity.intensityLevel,
                                 exposureTypeCatalogRef = entity.toCatalogReferenceOrNull(
                                     expectedKind = ReusableEventCatalogKind.EXPOSURE_TYPE.storageValue,
@@ -83,6 +84,7 @@ class RoomExportSnapshotRepository(
                                 bodyLocation = entity.bodyLocation,
                                 occurredAtEpochMs = entity.occurredAtEpochMs,
                                 notes = entity.notes,
+                                durationMinutes = entity.durationMinutes,
                                 intensityLevel = entity.intensityLevel,
                                 outbreakDescriptorCatalogRef = entity.outbreakDescriptorCatalogId.toCatalogReferenceOrNull(
                                     expectedKind = ReusableEventCatalogKind.OUTBREAK_DESCRIPTOR.storageValue,

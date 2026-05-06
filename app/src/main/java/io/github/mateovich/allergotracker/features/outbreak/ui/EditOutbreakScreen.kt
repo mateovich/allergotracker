@@ -248,6 +248,15 @@ fun EditOutbreakScreen(
                     }
                 }
             )
+            OutlinedTextField(
+                value = state.durationMinutes,
+                onValueChange = { viewModel.onIntent(EditOutbreakUiIntent.UpdateDurationMinutes(it)) },
+                modifier = Modifier.fillMaxWidth().testTag("edit-outbreak-duration-minutes"),
+                label = { Text("Duration (minutes)") },
+                supportingText = { Text(state.durationMinutesError ?: "Optional") },
+                isError = state.durationMinutesError != null,
+                singleLine = true
+            )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = "How intense was it?", style = MaterialTheme.typography.titleSmall)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

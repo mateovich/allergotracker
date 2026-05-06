@@ -242,6 +242,16 @@ fun EditExposureScreen(
                 singleLine = true
             )
 
+            OutlinedTextField(
+                value = state.durationMinutes,
+                onValueChange = { viewModel.onIntent(EditExposureUiIntent.UpdateDurationMinutes(it)) },
+                modifier = Modifier.fillMaxWidth().testTag("edit-exposure-duration-minutes"),
+                label = { Text("Duration (minutes)") },
+                supportingText = { Text(state.durationMinutesError ?: "Optional") },
+                isError = state.durationMinutesError != null,
+                singleLine = true
+            )
+
             DateTimePickerSection(
                 title = "When did it happen?",
                 timeLabel = state.occurredAtLabel,

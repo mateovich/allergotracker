@@ -6,7 +6,8 @@ data class CreateExposureEventCommand(
     val notes: String?,
     val place: String? = null,
     val intensityLevel: Int = DEFAULT_INTENSITY_LEVEL,
-    val exposureTypeCatalogId: Long? = null
+    val exposureTypeCatalogId: Long? = null,
+    val durationMinutes: Int? = null
 )
 
 data class UpdateExposureEventCommand(
@@ -16,7 +17,8 @@ data class UpdateExposureEventCommand(
     val notes: String?,
     val place: String? = null,
     val intensityLevel: Int = DEFAULT_INTENSITY_LEVEL,
-    val exposureTypeCatalogId: Long? = null
+    val exposureTypeCatalogId: Long? = null,
+    val durationMinutes: Int? = null
 )
 
 data class ExposureEvent(
@@ -26,7 +28,8 @@ data class ExposureEvent(
     val notes: String?,
     val place: String? = null,
     val intensityLevel: Int = DEFAULT_INTENSITY_LEVEL,
-    val exposureTypeCatalogId: Long? = null
+    val exposureTypeCatalogId: Long? = null,
+    val durationMinutes: Int? = null
 )
 
 data class CreateExposureDefaults(

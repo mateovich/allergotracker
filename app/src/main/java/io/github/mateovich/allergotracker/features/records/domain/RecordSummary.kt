@@ -32,6 +32,7 @@ sealed interface RecordDetailSnapshot {
 
     data class Exposure(
         val intensityLabel: String,
+        val durationMinutes: Int? = null,
         val place: String?,
         val notes: String?
     ) : RecordDetailSnapshot
@@ -39,6 +40,7 @@ sealed interface RecordDetailSnapshot {
     data class Outbreak(
         val bodyLocation: String,
         val intensityLabel: String,
+        val durationMinutes: Int? = null,
         val notes: String?
     ) : RecordDetailSnapshot
 }

@@ -9,6 +9,7 @@ data class EditExposureUiState(
     val exposureType: String = "",
     val deleteRecordLabel: String = "",
     val place: String = "",
+    val durationMinutes: String = "",
     val notes: String = "",
     val selectedIntensityLevel: Int = 3,
     val occurredAtEpochMs: Long = 0L,
@@ -25,6 +26,7 @@ data class EditExposureUiState(
     val filteredExposureTypes: List<ReusableEventCatalogOptionUiModel> = emptyList(),
     val showCreateExposureTypeOption: Boolean = false,
     val exposureTypeError: String? = null,
+    val durationMinutesError: String? = null,
     val intensityLevelError: String? = null,
     val occurredAtError: String? = null,
     val formMessage: String = "",
@@ -45,6 +47,7 @@ sealed interface EditExposureUiIntent {
     data object ClearRetiredExposureCatalogSelection : EditExposureUiIntent
     data object EditSelectedExposureCatalog : EditExposureUiIntent
     data class UpdatePlace(val value: String) : EditExposureUiIntent
+    data class UpdateDurationMinutes(val value: String) : EditExposureUiIntent
     data class UpdateNotes(val value: String) : EditExposureUiIntent
     data class SelectIntensityLevel(val level: Int) : EditExposureUiIntent
     data class SelectOccurredOn(val value: LocalDate) : EditExposureUiIntent

@@ -9,6 +9,7 @@ data class EditOutbreakUiState(
     val outbreakDescriptor: String = "",
     val bodyLocation: String = "",
     val deleteRecordLabel: String = "",
+    val durationMinutes: String = "",
     val notes: String = "",
     val occurredAtEpochMs: Long = 0L,
     val occurredAtInput: String = "",
@@ -32,6 +33,7 @@ data class EditOutbreakUiState(
     val outbreakDescriptorError: String? = null,
     val bodyLocationError: String? = null,
     val intensityError: String? = null,
+    val durationMinutesError: String? = null,
     val occurredAtError: String? = null,
     val formMessage: String = "",
     val isLoading: Boolean = true,
@@ -57,6 +59,7 @@ sealed interface EditOutbreakUiIntent {
     data object ClearRetiredBodyLocationCatalogSelection : EditOutbreakUiIntent
     data object EditSelectedBodyLocationCatalog : EditOutbreakUiIntent
     data class SelectIntensityLevel(val level: Int) : EditOutbreakUiIntent
+    data class UpdateDurationMinutes(val value: String) : EditOutbreakUiIntent
     data class UpdateNotes(val value: String) : EditOutbreakUiIntent
     data class SelectOccurredOn(val value: LocalDate) : EditOutbreakUiIntent
     data class SelectOccurredTime(val value: LocalTime) : EditOutbreakUiIntent

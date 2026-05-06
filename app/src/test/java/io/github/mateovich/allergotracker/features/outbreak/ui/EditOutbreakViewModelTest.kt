@@ -54,6 +54,7 @@ class EditOutbreakViewModelTest {
         assertEquals("Left arm", viewModel.state.value.bodyLocation)
         assertEquals("Skin flare at Left arm", viewModel.state.value.deleteRecordLabel)
         assertEquals("after workout", viewModel.state.value.notes)
+        assertEquals("75", viewModel.state.value.durationMinutes)
         assertEquals(
             listOf("Intensity 1", "Intensity 2", "Intensity 3", "Intensity 4", "Intensity 5"),
             viewModel.state.value.intensityOptions.map { it.label }
@@ -72,7 +73,7 @@ class EditOutbreakViewModelTest {
         var savedCommand: UpdateOutbreakEventCommand? = null
         val repository = object : OutbreakRepository {
             override suspend fun createOutbreak(command: io.github.mateovich.allergotracker.features.outbreak.domain.CreateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
-            override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> = AppResult.Success(OutbreakEvent(id, "Skin flare", "Left arm", existingOccurredAt, "after workout"))
+            override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> = AppResult.Success(OutbreakEvent(id, "Skin flare", "Left arm", existingOccurredAt, "after workout", durationMinutes = 75))
             override suspend fun updateOutbreak(command: UpdateOutbreakEventCommand): AppResult<OutbreakEvent> {
                 savedCommand = command
                 return AppResult.Success(
@@ -98,10 +99,12 @@ class EditOutbreakViewModelTest {
 
         viewModel.onIntent(EditOutbreakUiIntent.Load)
         viewModel.onIntent(EditOutbreakUiIntent.SelectIntensityLevel(4))
+        viewModel.onIntent(EditOutbreakUiIntent.UpdateDurationMinutes("95"))
         viewModel.onIntent(EditOutbreakUiIntent.Save)
 
         assertEquals(4, viewModel.state.value.selectedIntensityLevel)
         assertEquals(4, savedCommand?.intensityLevel)
+        assertEquals(95, savedCommand?.durationMinutes)
     }
 
     @Test
@@ -224,7 +227,7 @@ class EditOutbreakViewModelTest {
             override suspend fun createOutbreak(command: io.github.mateovich.allergotracker.features.outbreak.domain.CreateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
 
             override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> {
-                return AppResult.Success(OutbreakEvent(id, "Skin flare", "Left arm", existingOccurredAt, "after workout"))
+                return AppResult.Success(OutbreakEvent(id, "Skin flare", "Left arm", existingOccurredAt, "after workout", durationMinutes = 75))
             }
 
             override suspend fun updateOutbreak(command: UpdateOutbreakEventCommand): AppResult<OutbreakEvent> {
@@ -514,7 +517,7 @@ class EditOutbreakViewModelTest {
             override suspend fun createOutbreak(command: io.github.mateovich.allergotracker.features.outbreak.domain.CreateOutbreakEventCommand): AppResult<OutbreakEvent> = error("unused")
 
             override suspend fun getOutbreak(id: Long): AppResult<OutbreakEvent> {
-                return AppResult.Success(OutbreakEvent(id, "Skin flare", "Left arm", existingOccurredAt, "after workout"))
+                return AppResult.Success(OutbreakEvent(id, "Skin flare", "Left arm", existingOccurredAt, "after workout", durationMinutes = 75))
             }
 
             override suspend fun updateOutbreak(command: UpdateOutbreakEventCommand): AppResult<OutbreakEvent> {

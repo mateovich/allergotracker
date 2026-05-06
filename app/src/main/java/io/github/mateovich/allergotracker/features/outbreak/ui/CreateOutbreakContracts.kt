@@ -28,6 +28,7 @@ data class CreateOutbreakUiState(
     val title: String = "Create Outbreak",
     val outbreakDescriptor: String = "",
     val bodyLocation: String = "",
+    val durationMinutes: String = "",
     val notes: String = "",
     val occurredAtEpochMs: Long = 0L,
     val occurredAtInput: String = "",
@@ -51,6 +52,7 @@ data class CreateOutbreakUiState(
     val outbreakDescriptorError: String? = null,
     val bodyLocationError: String? = null,
     val intensityError: String? = null,
+    val durationMinutesError: String? = null,
     val occurredAtError: String? = null,
     val formMessage: String = "",
     val isSaving: Boolean = false,
@@ -71,6 +73,7 @@ sealed interface CreateOutbreakUiIntent {
     data object ClearRetiredBodyLocationCatalogSelection : CreateOutbreakUiIntent
     data object EditSelectedBodyLocationCatalog : CreateOutbreakUiIntent
     data class SelectIntensityLevel(val level: Int) : CreateOutbreakUiIntent
+    data class UpdateDurationMinutes(val value: String) : CreateOutbreakUiIntent
     data class UpdateNotes(val value: String) : CreateOutbreakUiIntent
     data class SelectOccurredOn(val value: LocalDate) : CreateOutbreakUiIntent
     data class SelectOccurredTime(val value: LocalTime) : CreateOutbreakUiIntent

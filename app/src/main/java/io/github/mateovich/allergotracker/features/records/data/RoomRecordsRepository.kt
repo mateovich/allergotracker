@@ -129,6 +129,7 @@ private fun io.github.mateovich.allergotracker.features.exposure.data.ExposureEv
         intensityLevel = intensityLevel,
         detailSnapshot = RecordDetailSnapshot.Exposure(
             intensityLabel = recordIntensityLabel(intensityLevel),
+            durationMinutes = durationMinutes,
             place = place,
             notes = notes
         )
@@ -154,6 +155,7 @@ private fun io.github.mateovich.allergotracker.features.outbreak.data.OutbreakEv
         detailSnapshot = RecordDetailSnapshot.Outbreak(
             bodyLocation = bodyLocation,
             intensityLabel = recordIntensityLabel(intensityLevel),
+            durationMinutes = durationMinutes,
             notes = notes
         )
     )
@@ -178,6 +180,7 @@ private fun io.github.mateovich.allergotracker.features.exposure.data.ExposureEv
         exposureType = exposureType,
         intensityLabel = recordIntensityLabel(intensityLevel),
         notes = notes,
+        durationMinutes = durationMinutes,
         place = place
     )
 }
@@ -189,6 +192,7 @@ private fun io.github.mateovich.allergotracker.features.outbreak.data.OutbreakEv
         outbreakDescriptor = outbreakDescriptor,
         bodyLocation = bodyLocation,
         intensityLabel = recordIntensityLabel(intensityLevel),
+        durationMinutes = durationMinutes,
         notes = notes
     )
 }

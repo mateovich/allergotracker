@@ -2,6 +2,8 @@ package io.github.mateovich.allergotracker.features.outbreak.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.mateovich.allergotracker.core.common.duration.DURATION_VALIDATION_MESSAGE
+import io.github.mateovich.allergotracker.core.common.duration.parseOptionalDurationMinutes
 import io.github.mateovich.allergotracker.core.common.error.DomainError
 import io.github.mateovich.allergotracker.core.common.result.AppResult
 import io.github.mateovich.allergotracker.features.eventcatalog.domain.ObserveReusableEventCatalogUseCase
@@ -222,6 +224,9 @@ class EditOutbreakViewModel(
                     canSave = canSave(it.outbreakDescriptor, it.bodyLocation, intent.level)
                 )
             }
+            is EditOutbreakUiIntent.UpdateDurationMinutes -> updateState {
+                it.copy(durationMinutes = intent.value, durationMinutesError = null, formMessage = "")
+            }
             is EditOutbreakUiIntent.UpdateNotes -> updateState { it.copy(notes = intent.value) }
             is EditOutbreakUiIntent.SelectOccurredOn -> updateState {
                 it.withOccurredAt(composeOccurredAt(intent.value, it.selectedOccurredTime))
@@ -255,6 +260,7 @@ class EditOutbreakViewModel(
                             outbreakDescriptor = event.outbreakDescriptor,
                             bodyLocation = event.bodyLocation,
                             deleteRecordLabel = deleteRecordLabel(event.outbreakDescriptor, event.bodyLocation),
+                            durationMinutes = event.durationMinutes?.toString().orEmpty(),
                             notes = event.notes.orEmpty(),
                             selectedIntensityLevel = event.intensityLevel,
                             selectedOutbreakDescriptorCatalogId = event.outbreakDescriptorCatalogId,
@@ -283,6 +289,12 @@ class EditOutbreakViewModel(
     private fun save() {
         val currentState = mutableState.value
         if (!currentState.canSave || currentState.isSaving || currentState.isDeleting || currentState.isLoading) return
+        val durationMinutes = try {
+            parseOptionalDurationMinutes(currentState.durationMinutes)
+        } catch (_: IllegalArgumentException) {
+            currentState.showDurationError()
+            return
+        }
         updateState { it.copy(isSaving = true, formMessage = "") }
         viewModelScope.launch {
             when (
@@ -293,6 +305,7 @@ class EditOutbreakViewModel(
                         bodyLocation = currentState.bodyLocation,
                         occurredAtEpochMs = currentState.occurredAtEpochMs,
                         notes = currentState.notes,
+                        durationMinutes = durationMinutes,
                         intensityLevel = currentState.selectedIntensityLevel,
                         outbreakDescriptorCatalogId = currentState.selectedOutbreakDescriptorCatalogId,
                         bodyLocationCatalogId = currentState.selectedBodyLocationCatalogId
@@ -311,6 +324,7 @@ class EditOutbreakViewModel(
                             outbreakDescriptorError = error.fieldError("outbreakDescriptor"),
                             bodyLocationError = error.fieldError("bodyLocation"),
                             intensityError = error.fieldError("intensityLevel"),
+                            durationMinutesError = error.fieldError("durationMinutes"),
                             occurredAtError = error.fieldError("occurredAtEpochMs"),
                             formMessage = error.message,
                             canSave = canSave(it.outbreakDescriptor, it.bodyLocation, it.selectedIntensityLevel)
@@ -402,6 +416,16 @@ class EditOutbreakViewModel(
             filteredBodyLocations = availableBodyLocations.filterForQuery(bodyLocation),
             showCreateBodyLocationOption = bodyLocation.trim().isNotBlank() && !availableBodyLocations.hasExactName(bodyLocation)
         )
+    }
+
+    private fun EditOutbreakUiState.showDurationError() {
+        updateState {
+            it.copy(
+                durationMinutesError = DURATION_VALIDATION_MESSAGE,
+                formMessage = "Please fix the highlighted fields.",
+                isSaving = false
+            )
+        }
     }
 
     private fun EditOutbreakUiState.withOccurredAt(
