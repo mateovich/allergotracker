@@ -430,7 +430,7 @@ class CreateCompoundViewModel(
             canSave = name.isNotBlank() && components.hasCompleteValidComposition(),
             filteredComponents = availableComponents
                 .filterByQuery(componentSearchQuery)
-                .take(if (componentSearchQuery.isBlank()) MAX_VISIBLE_COMPONENT_OPTIONS else Int.MAX_VALUE)
+                .take(MAX_VISIBLE_COMPONENT_OPTIONS)
         )
     }
 
@@ -537,9 +537,5 @@ class CreateCompoundViewModel(
             is DomainError.ValidationError -> fieldErrors[key]
             else -> null
         }
-    }
-
-    private companion object {
-        const val MAX_VISIBLE_COMPONENT_OPTIONS = 8
     }
 }

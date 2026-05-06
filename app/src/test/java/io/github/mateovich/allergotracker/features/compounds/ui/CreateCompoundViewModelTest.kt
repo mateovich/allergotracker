@@ -101,6 +101,76 @@ class CreateCompoundViewModelTest {
     }
 
     @Test
+    fun one_character_component_query_hides_saved_suggestions() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentSearchQuery("o"))
+
+        assertEquals(emptyList<CompoundComponentCatalogOptionUiModel>(), viewModel.state.value.filteredComponents)
+    }
+
+    @Test
+    fun two_character_component_query_shows_matching_saved_suggestions() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentSearchQuery("oa"))
+
+        assertEquals(listOf("Oat milk"), viewModel.state.value.filteredComponents.map { it.name })
+    }
+
+    @Test
+    fun component_query_matches_saved_suggestions_without_matching_diacritics() {
+        val viewModel = buildViewModel(
+            ingredients = listOf(
+                ReusableIngredient(
+                    id = 17L,
+                    name = "Café",
+                    notes = null,
+                    createdAtEpochMs = 1L,
+                    updatedAtEpochMs = 2L
+                )
+            ),
+            compounds = listOf(
+                ReusableCompound(
+                    id = 19L,
+                    name = "Limon base",
+                    notes = null,
+                    compositionStatus = CompoundCompositionStatus.COMPLETE,
+                    components = emptyList(),
+                    createdAtEpochMs = 1L,
+                    updatedAtEpochMs = 1L
+                )
+            )
+        )
+
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentSearchQuery("cafe"))
+        assertEquals(listOf("Café"), viewModel.state.value.filteredComponents.map { it.name })
+
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentSearchQuery("limón"))
+        assertEquals(listOf("Limon base"), viewModel.state.value.filteredComponents.map { it.name })
+    }
+
+    @Test
+    fun matching_component_suggestions_are_capped_to_max_visible_options() {
+        val viewModel = buildViewModel(
+            ingredients = (1L..10L).map { id ->
+                ReusableIngredient(
+                    id = id,
+                    name = "Cafe $id",
+                    notes = null,
+                    createdAtEpochMs = id,
+                    updatedAtEpochMs = id
+                )
+            },
+            compounds = emptyList()
+        )
+
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentSearchQuery("ca"))
+
+        assertEquals(8, viewModel.state.value.filteredComponents.size)
+    }
+
+    @Test
     fun blocked_component_add_keeps_search_query() {
         val viewModel = buildViewModel()
 
@@ -373,26 +443,36 @@ class CreateCompoundViewModelTest {
         createResult: AppResult<ReusableCompound>? = null,
         createIngredientResult: AppResult<ReusableIngredient>? = null,
         prefilledName: String = "",
-        seededIngredient: IngestionReusableSelectionResult? = null
-    ): CreateCompoundViewModel {
-        val ingredients = MutableStateFlow(
-            listOf(
-                ReusableIngredient(
-                    id = 7L,
-                    name = "Oat milk",
-                    notes = null,
-                    createdAtEpochMs = 1L,
-                    updatedAtEpochMs = 2L
-                ),
-                ReusableIngredient(
-                    id = 8L,
-                    name = "Banana",
-                    notes = null,
-                    createdAtEpochMs = 3L,
-                    updatedAtEpochMs = 4L
-                )
+        seededIngredient: IngestionReusableSelectionResult? = null,
+        ingredients: List<ReusableIngredient> = listOf(
+            ReusableIngredient(
+                id = 7L,
+                name = "Oat milk",
+                notes = null,
+                createdAtEpochMs = 1L,
+                updatedAtEpochMs = 2L
+            ),
+            ReusableIngredient(
+                id = 8L,
+                name = "Banana",
+                notes = null,
+                createdAtEpochMs = 3L,
+                updatedAtEpochMs = 4L
+            )
+        ),
+        compounds: List<ReusableCompound> = listOf(
+            ReusableCompound(
+                id = 9L,
+                name = "Granola",
+                notes = null,
+                compositionStatus = CompoundCompositionStatus.COMPLETE,
+                components = emptyList(),
+                createdAtEpochMs = 1L,
+                updatedAtEpochMs = 1L
             )
         )
+    ): CreateCompoundViewModel {
+        val observedIngredients = MutableStateFlow(ingredients)
         return CreateCompoundViewModel(
             createReusableCompoundUseCase = CreateReusableCompoundUseCase(
                 repository = object : ReusableCompoundRepository {
@@ -440,25 +520,11 @@ class CreateCompoundViewModelTest {
                         )
                     }
 
-                    override fun observeIngredients(): Flow<List<ReusableIngredient>> = ingredients
+                    override fun observeIngredients(): Flow<List<ReusableIngredient>> = observedIngredients
                 }
             ),
-            observeReusableIngredients = { ingredients },
-            observeReusableCompounds = {
-                MutableStateFlow(
-                    listOf(
-                        ReusableCompound(
-                            id = 9L,
-                            name = "Granola",
-                            notes = null,
-                            compositionStatus = CompoundCompositionStatus.COMPLETE,
-                            components = emptyList(),
-                            createdAtEpochMs = 1L,
-                            updatedAtEpochMs = 1L
-                        )
-                    )
-                )
-            },
+            observeReusableIngredients = { observedIngredients },
+            observeReusableCompounds = { MutableStateFlow(compounds) },
             initialName = prefilledName,
             initialSeedIngredient = seededIngredient
         )

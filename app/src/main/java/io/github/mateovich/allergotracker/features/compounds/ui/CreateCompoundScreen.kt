@@ -85,6 +85,7 @@ fun CreateCompoundScreen(
             CompoundComposer(
                 prefix = "compound",
                 componentSearchQuery = state.componentSearchQuery,
+                availableComponents = state.availableComponents,
                 filteredComponents = state.filteredComponents,
                 components = state.components,
                 selectedPreset = state.selectedPreset,

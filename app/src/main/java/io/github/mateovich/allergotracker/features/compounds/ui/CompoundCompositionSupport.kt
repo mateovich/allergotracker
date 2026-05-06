@@ -2,9 +2,12 @@ package io.github.mateovich.allergotracker.features.compounds.ui
 
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.text.Normalizer
 import kotlin.math.roundToInt
 
 internal const val COMPOUND_TOTAL_BASIS_POINTS: Int = 10_000
+internal const val MIN_COMPONENT_SUGGESTION_QUERY_LENGTH: Int = 2
+internal const val MAX_VISIBLE_COMPONENT_OPTIONS: Int = 8
 
 enum class CompoundCompositionPreset(
     val wireValue: String,
@@ -338,8 +341,27 @@ internal fun List<CompoundComponentRowUiModel>.normalizedValuesForAdjustment(): 
 }
 
 internal fun List<CompoundComponentCatalogOptionUiModel>.filterByQuery(query: String): List<CompoundComponentCatalogOptionUiModel> {
-    val normalizedQuery = query.trim().lowercase()
-    return filter { option ->
-        normalizedQuery.isBlank() || option.name.lowercase().contains(normalizedQuery)
+    val normalizedQuery = query.toComponentSearchKey()
+    if (query.isBlank()) {
+        return this
     }
+    if (normalizedQuery.length < MIN_COMPONENT_SUGGESTION_QUERY_LENGTH) {
+        return emptyList()
+    }
+    return filter { option ->
+        option.name.toComponentSearchKey().contains(normalizedQuery)
+    }
+}
+
+internal fun List<CompoundComponentCatalogOptionUiModel>.hasExactSavedIngredientMatch(query: String): Boolean {
+    val normalizedQuery = query.toComponentSearchKey()
+    return normalizedQuery.isNotBlank() && any { option ->
+        option.kind == "ingredient" && option.name.toComponentSearchKey() == normalizedQuery
+    }
+}
+
+internal fun String.toComponentSearchKey(): String {
+    val collapsed = trim().replace(Regex("\\s+"), " ").lowercase()
+    return Normalizer.normalize(collapsed, Normalizer.Form.NFD)
+        .replace(Regex("\\p{Mn}+"), "")
 }

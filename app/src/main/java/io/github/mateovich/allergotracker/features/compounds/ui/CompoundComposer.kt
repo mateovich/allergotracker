@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 fun CompoundComposer(
     prefix: String,
     componentSearchQuery: String,
+    availableComponents: List<CompoundComponentCatalogOptionUiModel>,
     filteredComponents: List<CompoundComponentCatalogOptionUiModel>,
     components: List<CompoundComponentRowUiModel>,
     selectedPreset: CompoundCompositionPreset?,
@@ -39,12 +40,10 @@ fun CompoundComposer(
     onProportionSliderChange: (Int, Int) -> Unit,
     onRemoveComponent: (Int) -> Unit
 ) {
-    val normalizedQuery = componentSearchQuery.trim().replace(Regex("\\s+"), " ").lowercase()
-    val hasExactSavedIngredientMatch = filteredComponents.any { option ->
-        option.kind == "ingredient" && option.name.trim().replace(Regex("\\s+"), " ").lowercase() == normalizedQuery
-    }
+    val normalizedQuery = componentSearchQuery.toComponentSearchKey()
+    val hasExactSavedIngredientMatch = availableComponents.hasExactSavedIngredientMatch(componentSearchQuery)
     val hasExactSelectedIngredientMatch = components.any { component ->
-        component.kind == "ingredient" && component.name.trim().replace(Regex("\\s+"), " ").lowercase() == normalizedQuery
+        component.kind == "ingredient" && component.name.toComponentSearchKey() == normalizedQuery
     }
 
     OutlinedTextField(

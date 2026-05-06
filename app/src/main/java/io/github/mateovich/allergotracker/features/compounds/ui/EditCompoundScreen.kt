@@ -126,6 +126,7 @@ fun EditCompoundScreen(
             CompoundComposer(
                 prefix = "edit-compound",
                 componentSearchQuery = state.componentSearchQuery,
+                availableComponents = state.availableComponents,
                 filteredComponents = state.filteredComponents,
                 components = state.components,
                 selectedPreset = state.selectedPreset,
