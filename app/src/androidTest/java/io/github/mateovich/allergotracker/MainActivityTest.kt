@@ -764,6 +764,7 @@ class MainActivityTest {
         waitForTag("ingestion-reusable-edit")
         composeRule.onNodeWithTag("ingestion-reusable-edit").assertIsDisplayed().performClick()
         composeRule.onNodeWithTag("edit-ingredient-form-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-ingredient-make-compound").assertTextContains("Make it a compound")
         composeRule.onNodeWithTag("edit-ingredient-make-compound").performClick()
 
         composeRule.onNodeWithTag("create-compound-form-screen").assertIsDisplayed()

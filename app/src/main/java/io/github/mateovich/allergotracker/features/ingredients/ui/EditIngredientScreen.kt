@@ -140,7 +140,7 @@ fun EditIngredientScreen(
                 enabled = !state.isSaving && !state.isRetiring && !state.isMerging,
                 modifier = Modifier.fillMaxWidth().testTag("edit-ingredient-make-compound")
             ) {
-                Text("Make into compound")
+                Text("Make it a compound")
             }
             Button(
                 onClick = { viewModel.onIntent(EditIngredientUiIntent.RequestMergeFlow) },
