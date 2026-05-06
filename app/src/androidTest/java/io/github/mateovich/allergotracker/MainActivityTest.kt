@@ -71,6 +71,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("export-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("local-only-notice").assertIsDisplayed()
         composeRule.onNodeWithTag("distribution-notice").assertIsDisplayed()
+        composeRule.onNodeWithTag("export-workflow-section").assertIsDisplayed()
         composeRule.onNodeWithTag("export-format-selector").assertIsDisplayed()
         composeRule.onNodeWithTag("export-scope-selector").assertIsDisplayed()
         composeRule.onNodeWithTag("export-summary").assertIsDisplayed()
@@ -81,6 +82,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("export-scope-ingestion").performClick()
         composeRule.onNodeWithTag("export-summary-text")
             .assertTextContains("JSON export will include only ingestion records saved on this device.")
+        composeRule.onNodeWithTag("import-section").performScrollTo().assertIsDisplayed()
     }
 
     @Test

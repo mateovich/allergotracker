@@ -85,117 +85,104 @@ fun ExportScreen(
                 )
             }
 
-            ExportSection(
-                title = "Format",
-                testTag = "export-format-selector"
+            WorkflowSection(
+                title = "Export",
+                testTag = "export-workflow-section"
             ) {
-                state.formatOptions.forEach { option ->
-                    ExportChoiceRow(
-                        title = option.label,
-                        description = option.description,
-                        selected = option.isSelected,
-                        testTag = "export-format-${option.format.name.lowercase()}",
-                        contentDescription = "Export format ${option.label}",
-                        onClick = { viewModel.onIntent(ExportUiIntent.SelectFormat(option.format)) }
-                    )
-                }
-                state.formatValidationMessage?.let { message ->
-                    ValidationMessage(message = message, testTag = "export-format-validation")
-                }
-            }
-
-            ExportSection(
-                title = "Scope",
-                testTag = "export-scope-selector"
-            ) {
-                state.scopeOptions.forEach { option ->
-                    ExportChoiceRow(
-                        title = option.label,
-                        description = option.description,
-                        selected = option.isSelected,
-                        testTag = option.testTag,
-                        contentDescription = "Export scope ${option.label}",
-                        onClick = { viewModel.onIntent(ExportUiIntent.SelectScope(option.scope)) }
-                    )
-                }
-                state.scopeValidationMessage?.let { message ->
-                    ValidationMessage(message = message, testTag = "export-scope-validation")
-                }
-            }
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("export-summary")
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(text = "Summary", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = state.summaryText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.testTag("export-summary-text")
-                    )
-                }
-            }
-
-            if (state.stagedExport != null && state.deliveryResult == null) {
                 ExportSection(
-                    title = "Destination",
-                    testTag = "export-destination-selector"
+                    title = "Format",
+                    testTag = "export-format-selector"
                 ) {
-                    state.destinationOptions.forEach { option ->
+                    state.formatOptions.forEach { option ->
+                        ExportChoiceRow(
+                            title = option.label,
+                            description = option.description,
+                            selected = option.isSelected,
+                            testTag = "export-format-${option.format.name.lowercase()}",
+                            contentDescription = "Export format ${option.label}",
+                            onClick = { viewModel.onIntent(ExportUiIntent.SelectFormat(option.format)) }
+                        )
+                    }
+                    state.formatValidationMessage?.let { message ->
+                        ValidationMessage(message = message, testTag = "export-format-validation")
+                    }
+                }
+
+                ExportSection(
+                    title = "Scope",
+                    testTag = "export-scope-selector"
+                ) {
+                    state.scopeOptions.forEach { option ->
                         ExportChoiceRow(
                             title = option.label,
                             description = option.description,
                             selected = option.isSelected,
                             testTag = option.testTag,
-                            contentDescription = "Export destination ${option.label}",
-                            onClick = { viewModel.onIntent(ExportUiIntent.SelectDestination(option.destination)) }
+                            contentDescription = "Export scope ${option.label}",
+                            onClick = { viewModel.onIntent(ExportUiIntent.SelectScope(option.scope)) }
                         )
                     }
-                    Text(
-                        text = "Save access stays scoped to the destination you confirm for this staged file.",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.testTag("export-destination-scope-note")
+                    state.scopeValidationMessage?.let { message ->
+                        ValidationMessage(message = message, testTag = "export-scope-validation")
+                    }
+                }
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("export-summary")
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(text = "Summary", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            text = state.summaryText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.testTag("export-summary-text")
+                        )
+                    }
+                }
+
+                if (state.stagedExport != null && state.deliveryResult == null) {
+                    ExportSection(
+                        title = "Destination",
+                        testTag = "export-destination-selector"
+                    ) {
+                        state.destinationOptions.forEach { option ->
+                            ExportChoiceRow(
+                                title = option.label,
+                                description = option.description,
+                                selected = option.isSelected,
+                                testTag = option.testTag,
+                                contentDescription = "Export destination ${option.label}",
+                                onClick = { viewModel.onIntent(ExportUiIntent.SelectDestination(option.destination)) }
+                            )
+                        }
+                        Text(
+                            text = "Save access stays scoped to the destination you confirm for this staged file.",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.testTag("export-destination-scope-note")
+                        )
+                    }
+                }
+
+                if (state.stagedExport != null && state.selectedDestination != null && state.deliveryResult == null) {
+                    FinalConfirmationSection(
+                        state = state,
+                        onConfirm = { viewModel.onIntent(ExportUiIntent.ConfirmFinalDelivery) },
+                        onCancel = { viewModel.onIntent(ExportUiIntent.CancelFinalDelivery) }
                     )
                 }
-            }
 
-            if (state.stagedExport != null && state.selectedDestination != null && state.deliveryResult == null) {
-                FinalConfirmationSection(
-                    state = state,
-                    onConfirm = { viewModel.onIntent(ExportUiIntent.ConfirmFinalDelivery) },
-                    onCancel = { viewModel.onIntent(ExportUiIntent.CancelFinalDelivery) }
-                )
-            }
+                state.deliveryResult?.let { result ->
+                    DeliveryResultSection(
+                        result = result,
+                        scopeSummary = state.summaryText
+                    )
+                }
 
-            state.deliveryResult?.let { result ->
-                DeliveryResultSection(
-                    result = result,
-                    scopeSummary = state.summaryText
-                )
-            }
-
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                ImportSection(
-                    state = state,
-                    onSelectFile = {
-                        val testUri = (context as? MainActivity)?.consumeImportDocumentForTesting()
-                        if (testUri != null) {
-                            viewModel.onIntent(ExportUiIntent.ImportDocumentSelected(testUri))
-                        } else {
-                            importPickerLauncher.launch(arrayOf("application/json"))
-                        }
-                    },
-                    onConfirmImport = { viewModel.onIntent(ExportUiIntent.ConfirmImportApply) },
-                    onCancelImport = { viewModel.onIntent(ExportUiIntent.CancelImportReview) }
-                )
                 state.generalValidationMessage?.let { message ->
                     ValidationMessage(message = message, testTag = "export-general-validation")
                 }
@@ -227,7 +214,38 @@ fun ExportScreen(
                     }
                 }
             }
+
+            ImportSection(
+                state = state,
+                onSelectFile = {
+                    val testUri = (context as? MainActivity)?.consumeImportDocumentForTesting()
+                    if (testUri != null) {
+                        viewModel.onIntent(ExportUiIntent.ImportDocumentSelected(testUri))
+                    } else {
+                        importPickerLauncher.launch(arrayOf("application/json"))
+                    }
+                },
+                onConfirmImport = { viewModel.onIntent(ExportUiIntent.ConfirmImportApply) },
+                onCancelImport = { viewModel.onIntent(ExportUiIntent.CancelImportReview) }
+            )
         }
+    }
+}
+
+@Composable
+private fun WorkflowSection(
+    title: String,
+    testTag: String,
+    content: @Composable () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(testTag),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(text = title, style = MaterialTheme.typography.titleLarge)
+        content()
     }
 }
 
