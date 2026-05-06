@@ -76,13 +76,40 @@ class CreateCompoundViewModelTest {
     fun inline_ingredient_creation_adds_new_component_immediately() {
         val viewModel = buildViewModel()
 
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentSearchQuery("Cocoa"))
         viewModel.onIntent(CreateCompoundUiIntent.ShowInlineIngredientDialog("Cocoa"))
         viewModel.onIntent(CreateCompoundUiIntent.CreateInlineIngredient("Cocoa"))
 
         assertFalse(viewModel.state.value.showInlineIngredientDialog)
+        assertEquals("", viewModel.state.value.componentSearchQuery)
         assertEquals(listOf("Cocoa"), viewModel.state.value.components.map { it.name })
         assertEquals(listOf("100"), viewModel.state.value.components.map { it.proportionPercent })
         assertEquals("100% total", viewModel.state.value.totalPercentLabel)
+    }
+
+    @Test
+    fun successful_existing_component_add_clears_search_query() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentSearchQuery("Oat"))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentSearchQuery("Gran"))
+        viewModel.onIntent(CreateCompoundUiIntent.AddCompoundComponent(9L))
+
+        assertEquals("", viewModel.state.value.componentSearchQuery)
+        assertEquals(listOf("Oat milk", "Granola"), viewModel.state.value.components.map { it.name })
+    }
+
+    @Test
+    fun blocked_component_add_keeps_search_query() {
+        val viewModel = buildViewModel()
+
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentSearchQuery("Oat milk"))
+        viewModel.onIntent(CreateCompoundUiIntent.AddIngredientComponent(7L))
+
+        assertEquals("Oat milk", viewModel.state.value.componentSearchQuery)
+        assertEquals(1, viewModel.state.value.components.size)
     }
 
     @Test
@@ -97,8 +124,10 @@ class CreateCompoundViewModelTest {
         )
 
         viewModel.onIntent(CreateCompoundUiIntent.ShowInlineIngredientDialog("Cocoa"))
+        viewModel.onIntent(CreateCompoundUiIntent.UpdateComponentSearchQuery("Cocoa"))
         viewModel.onIntent(CreateCompoundUiIntent.CreateInlineIngredient("Cocoa"))
 
+        assertEquals("Cocoa", viewModel.state.value.componentSearchQuery)
         assertEquals("An ingredient with this name already exists.", viewModel.state.value.inlineIngredientError)
 
         viewModel.onIntent(CreateCompoundUiIntent.UpdateInlineIngredientName("Cocoa powder"))

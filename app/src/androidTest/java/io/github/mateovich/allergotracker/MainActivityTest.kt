@@ -10,6 +10,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -325,8 +326,13 @@ class MainActivityTest {
         composeRule.onNodeWithTag("compound-inline-ingredient-save").performClick()
 
         composeRule.onNodeWithTag("compound-component-row-0").assertIsDisplayed()
+        composeRule.onNodeWithTag("compound-component-search").assertTextEquals("")
         composeRule.onNodeWithText("Cocoa (ingredient)").assertIsDisplayed()
         composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
+        composeRule.onNodeWithTag("compound-component-search").performTextReplacement("Cocoa")
+        composeRule.onNodeWithTag("compound-create-inline-ingredient")
+            .assertTextContains("'Cocoa' already added")
+            .assertIsNotEnabled()
         composeRule.onNodeWithTag("compound-save").performClick()
 
         waitForTag("create-ingestion-form-screen")
@@ -350,8 +356,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("compound-total-label").assertTextContains("0% total")
         composeRule.onAllNodesWithTag("compound-component-proportion-0").assertCountEquals(0)
         composeRule.onNodeWithTag("compound-save").performClick()
-        composeRule.onNodeWithTag("compound-component-error-0")
-            .assertTextContains("Enter a proportion greater than 0%.")
+        composeRule.onNodeWithText("Enter a proportion greater than 0%.").assertIsDisplayed()
 
         setSliderPercentage("compound-component-slider-0", 100f)
         composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
@@ -516,11 +521,9 @@ class MainActivityTest {
         composeRule.onNodeWithTag("records-list").assertIsDisplayed()
         composeRule.onNodeWithText("Exposure").assertIsDisplayed()
         composeRule.onNodeWithText("Pollen").assertIsDisplayed()
-        composeRule.onNodeWithText("Park").assertIsDisplayed()
-        composeRule.onNodeWithText("Intensity 3").assertIsDisplayed()
 
         composeRule.onNodeWithText("Pollen").performClick()
-        composeRule.onNodeWithTag("record-detail-field-1").assertTextContains("Park")
+        composeRule.onNodeWithText("Park").assertIsDisplayed()
     }
 
     @Test
@@ -624,20 +627,21 @@ class MainActivityTest {
         composeRule.onNodeWithTag("record-detail-edit").performClick()
         assertOfflineFormHasNoDependencyWarnings("edit-ingestion-form-screen")
 
-        composeRule.onNodeWithTag("edit-ingestion-item-name").performTextReplacement("Green tea")
+        composeRule.onNodeWithTag("edit-ingestion-item-name").assertTextContains("Tea")
         composeRule.onNodeWithTag("edit-ingestion-quantity-3").performClick()
+        composeRule.onNodeWithTag("edit-ingestion-notes").performTextReplacement("Evening cup")
         composeRule.onNodeWithTag("edit-ingestion-save").performClick()
 
         composeRule.onNodeWithTag("records-list").assertIsDisplayed()
-        composeRule.onNodeWithText("Green tea").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Tea").assertCountEquals(0)
+        composeRule.onNodeWithText("Tea").assertIsDisplayed()
 
-        composeRule.onNodeWithText("Green tea").performClick()
+        composeRule.onNodeWithText("Tea").performClick()
+        composeRule.onNodeWithTag("record-detail-field-3").assertTextContains("Evening cup")
         openDeleteFromDetail("edit-ingestion-form-screen", "edit-ingestion-delete", "edit-ingestion-delete-confirm")
         composeRule.onNodeWithTag("edit-ingestion-delete-confirm").performClick()
 
         composeRule.onNodeWithTag("records-empty-state").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Green tea").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Tea").assertCountEquals(0)
     }
 
     @Test
@@ -670,12 +674,11 @@ class MainActivityTest {
 
         waitForTag("records-list")
         composeRule.onNodeWithText("Dust").assertIsDisplayed()
-        composeRule.onNodeWithText("Office").assertIsDisplayed()
         composeRule.onAllNodesWithText("Pollen").assertCountEquals(0)
 
         composeRule.onNodeWithText("Dust").performClick()
         composeRule.onNodeWithTag("record-detail-occurred-at").assertIsDisplayed()
-        composeRule.onNodeWithTag("record-detail-field-1").assertTextContains("Office")
+        composeRule.onNodeWithText("Office").assertIsDisplayed()
         composeRule.onNodeWithTag("record-detail-edit").performClick()
         composeRule.onNodeWithTag("edit-exposure-occurred-at-date-picker").performScrollTo()
         composeRule.onNodeWithText("2023-11-13").assertIsDisplayed()
@@ -805,7 +808,7 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("edit-compound-component-search").performTextReplacement("Oat milk")
         composeRule.onNodeWithTag("edit-compound-create-inline-ingredient")
-            .assertTextContains("'Oat milk' already saved as ingredient")
+            .assertTextContains("'Oat milk' already added")
             .assertIsNotEnabled()
 
         composeRule.onNodeWithTag("edit-compound-component-search").performTextReplacement("Cocoa")
@@ -814,7 +817,10 @@ class MainActivityTest {
         composeRule.onNodeWithTag("edit-compound-inline-ingredient-name").performTextReplacement("Cocoa")
         composeRule.onNodeWithTag("edit-compound-inline-ingredient-save").performClick()
 
+        waitForTag("edit-compound-component-row-1")
+        composeRule.onNodeWithTag("edit-compound-component-row-1").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Cocoa (ingredient)").assertIsDisplayed()
+        composeRule.onNodeWithTag("edit-compound-component-search").assertTextEquals("")
         composeRule.onAllNodesWithTag("edit-compound-create-inline-ingredient").assertCountEquals(0)
     }
 

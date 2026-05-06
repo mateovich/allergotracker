@@ -40,9 +40,10 @@ fun CompoundComposer(
     onRemoveComponent: (Int) -> Unit
 ) {
     val normalizedQuery = componentSearchQuery.trim().replace(Regex("\\s+"), " ").lowercase()
-    val hasExactIngredientMatch = filteredComponents.any { option ->
+    val hasExactSavedIngredientMatch = filteredComponents.any { option ->
         option.kind == "ingredient" && option.name.trim().replace(Regex("\\s+"), " ").lowercase() == normalizedQuery
-    } || components.any { component ->
+    }
+    val hasExactSelectedIngredientMatch = components.any { component ->
         component.kind == "ingredient" && component.name.trim().replace(Regex("\\s+"), " ").lowercase() == normalizedQuery
     }
 
@@ -63,11 +64,17 @@ fun CompoundComposer(
         ) {
             if (onCreateIngredient != null && componentSearchQuery.isNotBlank()) {
                 AssistChip(
-                    onClick = { if (!hasExactIngredientMatch) onCreateIngredient(componentSearchQuery) },
-                    enabled = !hasExactIngredientMatch,
+                    onClick = {
+                        if (!hasExactSavedIngredientMatch && !hasExactSelectedIngredientMatch) {
+                            onCreateIngredient(componentSearchQuery)
+                        }
+                    },
+                    enabled = !hasExactSavedIngredientMatch && !hasExactSelectedIngredientMatch,
                     label = {
                         Text(
-                            if (hasExactIngredientMatch) {
+                            if (hasExactSelectedIngredientMatch) {
+                                "'${componentSearchQuery}' already added"
+                            } else if (hasExactSavedIngredientMatch) {
                                 "'${componentSearchQuery}' already saved as ingredient"
                             } else {
                                 "New ingredient: '${componentSearchQuery}'"

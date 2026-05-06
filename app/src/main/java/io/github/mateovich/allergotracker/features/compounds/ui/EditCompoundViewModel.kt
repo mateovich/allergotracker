@@ -279,6 +279,7 @@ class EditCompoundViewModel(
                     reusableEntityId = reusableId,
                     name = option.name
                 ),
+                componentSearchQuery = "",
                 selectedPreset = null,
                 componentsError = null,
                 formMessage = "",
