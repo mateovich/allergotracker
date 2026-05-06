@@ -58,6 +58,27 @@ class CompoundProportionAdjustmentEngineTest {
     }
 
     @Test
+    fun slider_percent_quantizes_to_tenth_percentage_point_basis_points() {
+        assertEquals(3_330, 33.34f.toSliderBasisPointsStep())
+        assertEquals(3_340, 33.35f.toSliderBasisPointsStep())
+        assertEquals(0, (-1f).toSliderBasisPointsStep())
+        assertEquals(10_000, 100.01f.toSliderBasisPointsStep())
+    }
+
+    @Test
+    fun quantized_slider_requests_keep_exact_100_percent_total() {
+        val result = CompoundProportionAdjustmentEngine.adjust(
+            values = listOf(3_333, 3_333, 3_334),
+            touchedOrder = emptyList(),
+            index = 0,
+            requestedBasisPoints = 33.34f.toSliderBasisPointsStep()
+        )
+
+        assertEquals(10_000, result.values.sum())
+        assertEquals(listOf(3_330, 3_335, 3_335), result.values)
+    }
+
+    @Test
     fun repeated_edits_keep_deterministic_fifo_redistribution() {
         val first = CompoundProportionAdjustmentEngine.adjust(
             values = listOf(6_000, 2_500, 1_500),

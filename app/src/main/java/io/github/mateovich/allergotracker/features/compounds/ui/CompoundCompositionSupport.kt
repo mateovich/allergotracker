@@ -2,6 +2,7 @@ package io.github.mateovich.allergotracker.features.compounds.ui
 
 import java.math.BigDecimal
 import java.math.RoundingMode
+import kotlin.math.roundToInt
 
 internal const val COMPOUND_TOTAL_BASIS_POINTS: Int = 10_000
 
@@ -271,6 +272,11 @@ internal fun String.toBasisPointsOrNull(): Int? {
     } catch (_: ArithmeticException) {
         null
     }
+}
+
+internal fun Float.toSliderBasisPointsStep(): Int {
+    val basisPoints = (this * 100).roundToInt()
+    return (((basisPoints + 5) / 10) * 10).coerceIn(0, COMPOUND_TOTAL_BASIS_POINTS)
 }
 
 internal fun Int.toPercentLabel(): String {

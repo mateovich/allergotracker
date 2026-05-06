@@ -347,10 +347,12 @@ class MainActivityTest {
         composeRule.onNodeWithTag("compound-name").performTextInput("Breakfast mix")
         composeRule.onNodeWithText("Oat milk - Ingredient").performClick()
         composeRule.onNodeWithTag("compound-total-label").assertTextContains("0% total")
+        composeRule.onAllNodesWithTag("compound-component-proportion-0").assertCountEquals(0)
         composeRule.onNodeWithTag("compound-save").performClick()
-        waitForText("Enter a proportion greater than 0%.")
+        composeRule.onNodeWithTag("compound-component-error-0")
+            .assertTextContains("Enter a proportion greater than 0%.")
 
-        composeRule.onNodeWithTag("compound-component-proportion-0").performTextReplacement("100")
+        setSliderPercentage("compound-component-slider-0", 100f)
         composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
     }
 
@@ -366,7 +368,7 @@ class MainActivityTest {
         composeRule.onNodeWithText("Oat milk - Ingredient").performClick()
 
         composeRule.onAllNodesWithText("Oat milk - Ingredient").assertCountEquals(0)
-        composeRule.onNodeWithTag("compound-component-proportion-0").performTextReplacement("100")
+        setSliderPercentage("compound-component-slider-0", 100f)
         composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
     }
 
@@ -1299,7 +1301,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("ingestion-create-compound").performClick()
         composeRule.onNodeWithTag("compound-name").performTextInput("Breakfast mix")
         composeRule.onNodeWithText("Oat milk - Ingredient").performClick()
-        composeRule.onNodeWithTag("compound-component-proportion-0").performTextReplacement("100")
+        setSliderPercentage("compound-component-slider-0", 100f)
         composeRule.onNodeWithTag("compound-save").performClick()
 
         waitForTag("create-ingestion-form-screen")
@@ -1410,7 +1412,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("create-compound-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("compound-name").performTextInput(compoundName)
         composeRule.onNodeWithText("$ingredientName - Ingredient").performClick()
-        composeRule.onNodeWithTag("compound-component-proportion-0").performTextReplacement("100")
+        setSliderPercentage("compound-component-slider-0", 100f)
         composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
         composeRule.onNodeWithTag("compound-save").performClick()
         waitForTag("create-ingestion-form-screen")
@@ -1430,7 +1432,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("compound-name").performTextInput(compoundName)
         composeRule.onNodeWithText("$firstIngredientName - Ingredient").performClick()
         composeRule.onNodeWithText("$secondIngredientName - Ingredient").performClick()
-        composeRule.onNodeWithTag("compound-component-proportion-0").performTextReplacement("60")
+        setSliderPercentage("compound-component-slider-0", 60f)
         composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
         composeRule.onNodeWithTag("compound-save").performClick()
         waitForTag("create-ingestion-form-screen")
@@ -1445,7 +1447,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("compound-name").performTextInput(compoundName)
         waitForText("$childCompoundName - Compound")
         composeRule.onNodeWithText("$childCompoundName - Compound").performClick()
-        composeRule.onNodeWithTag("compound-component-proportion-0").performTextReplacement("100")
+        setSliderPercentage("compound-component-slider-0", 100f)
         composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
         composeRule.onNodeWithTag("compound-save").performClick()
         waitForTag("create-ingestion-form-screen")

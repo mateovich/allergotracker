@@ -144,8 +144,9 @@ fun CompoundComposer(
                 }
                 Slider(
                     value = (component.proportionBasisPoints ?: 0) / 100f,
-                    onValueChange = { value -> onProportionSliderChange(index, (value * 100).toInt()) },
+                    onValueChange = { value -> onProportionSliderChange(index, value.toSliderBasisPointsStep()) },
                     valueRange = 0f..100f,
+                    steps = 999,
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("$prefix-component-slider-$index")
@@ -154,24 +155,19 @@ fun CompoundComposer(
                             stateDescription = component.proportionBasisPoints?.toPercentLabel() ?: "0%"
                         }
                 )
-                OutlinedTextField(
-                    value = component.proportionPercent,
-                    onValueChange = { onProportionTextChange(index, it) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("$prefix-component-proportion-$index"),
-                    label = { Text("Proportion (%)") },
-                    supportingText = {
-                        if (component.targetError != null || component.proportionError != null) {
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                component.targetError?.let { Text(it) }
-                                component.proportionError?.let { Text(it) }
-                            }
+                if (component.targetError != null || component.proportionError != null) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.testTag("$prefix-component-error-$index")
+                    ) {
+                        component.targetError?.let { error ->
+                            Text(text = error, color = MaterialTheme.colorScheme.error)
                         }
-                    },
-                    isError = component.proportionError != null || component.targetError != null,
-                    singleLine = true
-                )
+                        component.proportionError?.let { error ->
+                            Text(text = error, color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
                 TextButton(
                     onClick = { onRemoveComponent(index) },
                     modifier = Modifier.testTag("$prefix-component-remove-$index")
