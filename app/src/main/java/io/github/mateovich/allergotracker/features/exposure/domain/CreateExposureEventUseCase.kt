@@ -15,6 +15,7 @@ class CreateExposureEventUseCase(
     suspend operator fun invoke(command: CreateExposureEventCommand): AppResult<ExposureEvent> {
         val sanitizedCommand = command.copy(
             exposureType = command.exposureType.trim(),
+            place = command.place?.trim()?.takeIf { it.isNotEmpty() },
             notes = command.notes?.trim()?.takeIf { it.isNotEmpty() }
         )
         val fieldErrors = buildMap {

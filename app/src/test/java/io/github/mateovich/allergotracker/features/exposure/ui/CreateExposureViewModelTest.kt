@@ -271,6 +271,24 @@ class CreateExposureViewModelTest {
         assertEquals(5, savedCommand?.intensityLevel)
     }
 
+    @Test
+    fun save_includes_optional_place_without_blocking_blank_values() = runBlocking {
+        var savedCommand: CreateExposureEventCommand? = null
+        val viewModel = buildViewModel(onCreateExposure = { savedCommand = it })
+
+        viewModel.onIntent(CreateExposureUiIntent.UpdateExposureType("Pollen"))
+        viewModel.onIntent(CreateExposureUiIntent.UpdatePlace("Back yard"))
+        viewModel.onIntent(CreateExposureUiIntent.Save)
+
+        assertEquals("Back yard", savedCommand?.place)
+        assertEquals("Back yard", viewModel.state.value.place)
+
+        viewModel.onIntent(CreateExposureUiIntent.UpdatePlace(""))
+        viewModel.onIntent(CreateExposureUiIntent.Save)
+
+        assertEquals("", viewModel.state.value.place)
+    }
+
     private fun buildViewModel(
         availableCatalog: List<ReusableEventCatalog> = emptyList(),
         onCreateExposure: (CreateExposureEventCommand) -> Unit = {}

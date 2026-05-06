@@ -193,6 +193,7 @@ class RoomStructuredImportRepository(
                             CreateExposureEventCommand(
                                 exposureType = mappedCatalog?.name ?: exposure.exposureType,
                                 occurredAtEpochMs = exposure.occurredAt.toEpochMillis(),
+                                place = exposure.place,
                                 notes = exposure.notes,
                                 intensityLevel = exposure.intensityLevel,
                                 exposureTypeCatalogId = mappedCatalog?.id

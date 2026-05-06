@@ -1,6 +1,7 @@
 package io.github.mateovich.allergotracker.features.import.data
 
 import io.github.mateovich.allergotracker.core.common.result.AppResult
+import io.github.mateovich.allergotracker.core.export.schema.ExposureExportDto
 import io.github.mateovich.allergotracker.core.export.schema.IngestionExportDto
 import io.github.mateovich.allergotracker.core.export.schema.ReusableEntityReferenceDto
 import io.github.mateovich.allergotracker.core.export.schema.ReusableEventCatalogExportDto
@@ -47,6 +48,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RoomStructuredImportRepositoryJvmTest {
+    private val exposureCommands = mutableListOf<CreateExposureEventCommand>()
     private val repository = RoomStructuredImportRepository(
         reusableIngredientDao = FakeReusableIngredientDao(),
         reusableCompoundDao = FakeReusableCompoundDao(),
@@ -59,7 +61,7 @@ class RoomStructuredImportRepositoryJvmTest {
             currentTimeProvider = CurrentTimeProvider { FIXED_NOW }
         ),
         createExposureEventUseCase = CreateExposureEventUseCase(
-            repository = FakeExposureRepository(),
+            repository = FakeExposureRepository(exposureCommands),
             currentTimeProvider = CurrentTimeProvider { FIXED_NOW }
         ),
         createOutbreakEventUseCase = CreateOutbreakEventUseCase(
@@ -89,6 +91,17 @@ class RoomStructuredImportRepositoryJvmTest {
             "An ingestion record references an ingredient that is not present in the import file.",
             review.error.message
         )
+    }
+
+    @Test
+    fun apply_preserves_exposure_place_and_accepts_missing_place_from_older_exports() = runBlocking {
+        val reviewResult = repository.review(document(), exposurePlaceEnvelope())
+        require(reviewResult is AppResult.Success)
+
+        val result = repository.apply(reviewResult.value)
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(listOf("Garage", null), exposureCommands.map { it.place })
     }
 
     private fun document(): ImportDocumentContent {
@@ -128,6 +141,34 @@ class RoomStructuredImportRepositoryJvmTest {
                         occurredAt = "2023-11-14T22:13:20Z",
                         notes = "contains personal context",
                         reusableEntityRef = ReusableEntityReferenceDto(kind = "ingredient", id = 999L),
+                        createdAt = "2023-11-14T22:13:20Z"
+                    )
+                )
+            )
+        )
+    }
+
+    private fun exposurePlaceEnvelope(): VersionedExportEnvelopeDto {
+        return VersionedExportEnvelopeDto(
+            schemaVersion = "2.0.0",
+            exportedAt = "2023-11-14T22:13:20Z",
+            data = VersionedExportDataDto(
+                exposures = listOf(
+                    ExposureExportDto(
+                        id = 20L,
+                        exposureType = "Dust",
+                        occurredAt = "2023-11-14T22:13:20Z",
+                        place = "Garage",
+                        notes = null,
+                        intensityLevel = 2,
+                        createdAt = "2023-11-14T22:13:20Z"
+                    ),
+                    ExposureExportDto(
+                        id = 21L,
+                        exposureType = "Pollen",
+                        occurredAt = "2023-11-14T22:13:20Z",
+                        notes = null,
+                        intensityLevel = 3,
                         createdAt = "2023-11-14T22:13:20Z"
                     )
                 )
@@ -201,8 +242,15 @@ class RoomStructuredImportRepositoryJvmTest {
         override suspend fun deleteIngestion(id: Long): AppResult<Unit> = error("unused")
     }
 
-    private class FakeExposureRepository : ExposureRepository {
-        override suspend fun createExposure(command: CreateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
+    private class FakeExposureRepository(
+        private val createdCommands: MutableList<CreateExposureEventCommand>
+    ) : ExposureRepository {
+        override suspend fun createExposure(command: CreateExposureEventCommand): AppResult<ExposureEvent> {
+            createdCommands += command
+            return AppResult.Success(
+                ExposureEvent(100L + createdCommands.size, command.exposureType, command.occurredAtEpochMs, command.notes, place = command.place)
+            )
+        }
         override suspend fun getExposure(id: Long): AppResult<ExposureEvent> = error("unused")
         override suspend fun updateExposure(command: io.github.mateovich.allergotracker.features.exposure.domain.UpdateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
         override suspend fun deleteExposure(id: Long): AppResult<Unit> = error("unused")

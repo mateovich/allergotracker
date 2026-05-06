@@ -32,6 +32,7 @@ sealed interface RecordDetailSnapshot {
 
     data class Exposure(
         val intensityLabel: String,
+        val place: String?,
         val notes: String?
     ) : RecordDetailSnapshot
 

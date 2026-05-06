@@ -69,6 +69,7 @@ class GenerateVersionedJsonExportUseCaseTest {
         assertEquals("compound", ingestion.getValue("reusable_entity_ref").jsonObject.getValue("kind").jsonPrimitive.content)
         assertEquals("compound", component.getValue("component_ref").jsonObject.getValue("kind").jsonPrimitive.content)
         assertTrue(exposure.containsKey("exposure_type_catalog_ref"))
+        assertEquals("Rooftop", exposure.getValue("place").jsonPrimitive.content)
         assertTrue(outbreak.containsKey("outbreak_descriptor_catalog_ref"))
         assertFalse(ingestion.containsKey("reusable_entity_id"))
         assertFalse(component.containsKey("child_compound_id"))
@@ -557,7 +558,8 @@ class GenerateVersionedJsonExportUseCaseTest {
                 notes = null,
                 intensityLevel = 3,
                 exposureTypeCatalogRef = ExportEventCatalogReference(kind = "exposure_type", id = 70L),
-                createdAtEpochMs = 1_699_999_300_000L
+                createdAtEpochMs = 1_699_999_300_000L,
+                place = "Rooftop"
             )
         ),
         outbreaks = listOf(

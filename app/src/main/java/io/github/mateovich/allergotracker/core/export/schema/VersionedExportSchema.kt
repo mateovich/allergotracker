@@ -88,6 +88,7 @@ data class ExposureExportDto(
     val exposureType: String,
     @SerialName("occurred_at")
     val occurredAt: String,
+    val place: String? = null,
     val notes: String? = null,
     @SerialName("intensity_level")
     val intensityLevel: Int,

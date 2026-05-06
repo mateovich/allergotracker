@@ -36,7 +36,8 @@ data class ExportExposureRecord(
     val notes: String?,
     val intensityLevel: Int,
     val exposureTypeCatalogRef: ExportEventCatalogReference?,
-    val createdAtEpochMs: Long
+    val createdAtEpochMs: Long,
+    val place: String? = null
 )
 
 data class ExportOutbreakRecord(

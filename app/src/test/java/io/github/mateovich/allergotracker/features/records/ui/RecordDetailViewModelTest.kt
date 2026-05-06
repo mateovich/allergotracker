@@ -36,6 +36,7 @@ class RecordDetailViewModelTest {
                             recordId = 5L,
                             occurredAtEpochMs = 1_700_000_000_000L,
                             exposureType = "Pollen",
+                            place = "Park",
                             intensityLabel = "Intensity 2",
                             notes = "outside"
                         )
@@ -47,10 +48,11 @@ class RecordDetailViewModelTest {
         viewModel.onIntent(RecordDetailUiIntent.Load)
 
         assertEquals(
-            listOf("Exposure", "Intensity", "Notes"),
+            listOf("Exposure", "Place", "Intensity", "Notes"),
             viewModel.state.value.fields.map { it.label }
         )
-        assertEquals("Intensity 2", viewModel.state.value.fields[1].value)
+        assertEquals("Park", viewModel.state.value.fields[1].value)
+        assertEquals("Intensity 2", viewModel.state.value.fields[2].value)
     }
 
     @Test

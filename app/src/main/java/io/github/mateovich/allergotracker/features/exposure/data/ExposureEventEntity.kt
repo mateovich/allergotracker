@@ -34,5 +34,7 @@ data class ExposureEventEntity(
     @ColumnInfo(name = "intensity_level")
     val intensityLevel: Int = 3,
     @ColumnInfo(name = "exposure_type_catalog_id")
-    val exposureTypeCatalogId: Long? = null
+    val exposureTypeCatalogId: Long? = null,
+    @ColumnInfo(name = "place")
+    val place: String? = null
 )

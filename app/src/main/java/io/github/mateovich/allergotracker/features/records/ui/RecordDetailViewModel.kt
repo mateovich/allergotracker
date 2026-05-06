@@ -106,6 +106,7 @@ class RecordDetailViewModel(
 
             is RecordDetail.Exposure -> listOf(
                 RecordDetailFieldUiModel(label = "Exposure", value = exposureType),
+                RecordDetailFieldUiModel(label = "Place", value = place.orEmpty().ifBlank { "None" }),
                 RecordDetailFieldUiModel(label = "Intensity", value = intensityLabel),
                 RecordDetailFieldUiModel(label = "Notes", value = notes.orEmpty().ifBlank { "None" })
             )

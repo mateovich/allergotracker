@@ -135,6 +135,7 @@ class EditExposureViewModel(
                     )
                 )
             }
+            is EditExposureUiIntent.UpdatePlace -> updateState { it.copy(place = intent.value) }
             is EditExposureUiIntent.UpdateNotes -> updateState { it.copy(notes = intent.value) }
             is EditExposureUiIntent.SelectIntensityLevel -> updateState {
                 it.copy(
@@ -174,6 +175,7 @@ class EditExposureViewModel(
                         it.copy(
                             exposureType = event.exposureType,
                             deleteRecordLabel = event.exposureType,
+                            place = event.place.orEmpty(),
                             notes = event.notes.orEmpty(),
                             selectedIntensityLevel = event.intensityLevel,
                             selectedExposureTypeCatalogId = event.exposureTypeCatalogId,
@@ -204,6 +206,7 @@ class EditExposureViewModel(
                         id = recordId,
                         exposureType = currentState.exposureType,
                         occurredAtEpochMs = currentState.occurredAtEpochMs,
+                        place = currentState.place,
                         notes = currentState.notes,
                         intensityLevel = currentState.selectedIntensityLevel,
                         exposureTypeCatalogId = currentState.selectedExposureTypeCatalogId

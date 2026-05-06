@@ -72,7 +72,8 @@ class RoomExportSnapshotRepository(
                                     ownerDescription = "exposure record ${entity.id}",
                                     fieldLabel = "exposure_type_catalog_id"
                                 ),
-                                createdAtEpochMs = entity.createdAtEpochMs
+                                createdAtEpochMs = entity.createdAtEpochMs,
+                                place = entity.place
                             )
                         },
                         outbreaks = outbreakEntities.map { entity ->

@@ -62,7 +62,8 @@ class InMemoryRecordsRepository(
                             intensityLabel = (record.detailSnapshot as? RecordDetailSnapshot.Exposure)?.intensityLabel
                                 ?: recordIntensityLabel(record.intensityLevel),
                             notes = (record.detailSnapshot as? RecordDetailSnapshot.Exposure)?.notes
-                                ?: record.detailLabel.takeIf { it.isNotBlank() && it != "Exposure recorded" }
+                                ?: record.detailLabel.takeIf { it.isNotBlank() && it != "Exposure recorded" },
+                            place = (record.detailSnapshot as? RecordDetailSnapshot.Exposure)?.place
                         )
 
                         RecordEventType.OUTBREAK -> RecordDetail.Outbreak(

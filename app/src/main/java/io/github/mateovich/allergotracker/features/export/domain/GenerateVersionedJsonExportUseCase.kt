@@ -188,6 +188,7 @@ private fun ExportSnapshot.toDto(
                 id = record.id,
                 exposureType = record.exposureType,
                 occurredAt = record.occurredAtEpochMs.toUtcIsoString(),
+                place = record.place,
                 notes = record.notes,
                 intensityLevel = record.intensityLevel,
                 exposureTypeCatalogRef = record.exposureTypeCatalogRef?.toDto(),

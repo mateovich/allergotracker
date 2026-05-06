@@ -29,7 +29,8 @@ sealed interface RecordDetail {
         override val occurredAtEpochMs: Long,
         val exposureType: String,
         val intensityLabel: String,
-        override val notes: String?
+        override val notes: String?,
+        val place: String? = null
     ) : RecordDetail {
         override val eventType: RecordEventType = RecordEventType.EXPOSURE
         override val typeLabel: String = "Exposure"

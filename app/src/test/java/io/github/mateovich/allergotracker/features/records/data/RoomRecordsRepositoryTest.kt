@@ -890,7 +890,8 @@ class RoomRecordsRepositoryTest {
                         occurredAtEpochMs = 1_700_000_100_000L,
                         notes = "outside",
                         createdAtEpochMs = 1_700_000_100_000L,
-                        intensityLevel = 2
+                        intensityLevel = 2,
+                        place = "Park"
                     )
                 )
             ),
@@ -921,6 +922,7 @@ class RoomRecordsRepositoryTest {
         assertEquals("2 Light snack", ingestionValue.quantityLabel)
         assertEquals("with honey", ingestionValue.notes)
         assertEquals("Pollen", exposureValue.exposureType)
+        assertEquals("Park", exposureValue.place)
         assertEquals("Intensity 2", exposureValue.intensityLabel)
         assertEquals("outside", exposureValue.notes)
         assertEquals("Skin flare", outbreakValue.outbreakDescriptor)

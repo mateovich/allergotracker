@@ -8,6 +8,7 @@ data class EditExposureUiState(
     val title: String = "Edit Exposure",
     val exposureType: String = "",
     val deleteRecordLabel: String = "",
+    val place: String = "",
     val notes: String = "",
     val selectedIntensityLevel: Int = 3,
     val occurredAtEpochMs: Long = 0L,
@@ -43,6 +44,7 @@ sealed interface EditExposureUiIntent {
     data object ClearExposureCatalogSelection : EditExposureUiIntent
     data object ClearRetiredExposureCatalogSelection : EditExposureUiIntent
     data object EditSelectedExposureCatalog : EditExposureUiIntent
+    data class UpdatePlace(val value: String) : EditExposureUiIntent
     data class UpdateNotes(val value: String) : EditExposureUiIntent
     data class SelectIntensityLevel(val level: Int) : EditExposureUiIntent
     data class SelectOccurredOn(val value: LocalDate) : EditExposureUiIntent

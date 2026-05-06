@@ -1386,7 +1386,8 @@ private class ReactiveRecordStore(
                                 occurredAtEpochMs = it.occurredAtEpochMs,
                                 exposureType = it.exposureType,
                                 intensityLabel = recordIntensityLabel(it.intensityLevel),
-                                notes = it.notes
+                                notes = it.notes,
+                                place = it.place
                             )
                         )
                     }
@@ -1459,7 +1460,8 @@ private class ReactiveRecordStore(
             val updated = current.copy(
                 exposureType = command.exposureType,
                 occurredAtEpochMs = command.occurredAtEpochMs,
-                notes = command.notes
+                notes = command.notes,
+                place = command.place
             )
             exposureState.value = updated
             return AppResult.Success(updated)
@@ -1532,6 +1534,7 @@ private fun ExposureEvent.toRecordSummary(): RecordSummary {
         title = exposureType,
         detailLabel = listOfNotNull(
             recordIntensityLabel(intensityLevel),
+            place?.takeIf { it.isNotBlank() },
             notes?.takeIf { it.isNotBlank() }
         ).joinToString(" - ").ifBlank { "Exposure recorded" },
         occurredAtEpochMs = occurredAtEpochMs,
@@ -1541,6 +1544,7 @@ private fun ExposureEvent.toRecordSummary(): RecordSummary {
         intensityLevel = intensityLevel,
         detailSnapshot = RecordDetailSnapshot.Exposure(
             intensityLabel = recordIntensityLabel(intensityLevel),
+            place = place,
             notes = notes
         )
     )

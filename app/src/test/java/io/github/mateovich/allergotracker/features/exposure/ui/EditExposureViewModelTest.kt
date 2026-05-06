@@ -371,6 +371,39 @@ class EditExposureViewModelTest {
     }
 
     @Test
+    fun load_and_save_preserve_optional_place() = runBlocking {
+        var savedCommand: UpdateExposureEventCommand? = null
+        val repository = object : ExposureRepository {
+            override suspend fun createExposure(command: io.github.mateovich.allergotracker.features.exposure.domain.CreateExposureEventCommand): AppResult<ExposureEvent> = error("unused")
+            override suspend fun getExposure(id: Long): AppResult<ExposureEvent> = AppResult.Success(
+                ExposureEvent(id, "Pollen", existingOccurredAt, "outside", place = "Park")
+            )
+            override suspend fun updateExposure(command: UpdateExposureEventCommand): AppResult<ExposureEvent> {
+                savedCommand = command
+                return AppResult.Success(
+                    ExposureEvent(command.id, command.exposureType, command.occurredAtEpochMs, command.notes, place = command.place)
+                )
+            }
+            override suspend fun deleteExposure(id: Long): AppResult<Unit> = AppResult.Success(Unit)
+        }
+        val viewModel = EditExposureViewModel(
+            recordId = 5L,
+            getExposureEventUseCase = GetExposureEventUseCase(repository),
+            deleteExposureEventUseCase = DeleteExposureEventUseCase(repository),
+            updateExposureEventUseCase = UpdateExposureEventUseCase(repository, CurrentTimeProvider { fixedNow }),
+            currentTimeProvider = CurrentTimeProvider { fixedNow }
+        )
+
+        viewModel.onIntent(EditExposureUiIntent.Load)
+        assertEquals("Park", viewModel.state.value.place)
+
+        viewModel.onIntent(EditExposureUiIntent.UpdatePlace("Office"))
+        viewModel.onIntent(EditExposureUiIntent.Save)
+
+        assertEquals("Office", savedCommand?.place)
+    }
+
+    @Test
     fun failed_load_can_retry_and_recover() = runBlocking {
         var loadAttempts = 0
         val repository = object : ExposureRepository {

@@ -119,6 +119,7 @@ private fun io.github.mateovich.allergotracker.features.exposure.data.ExposureEv
         title = exposureType,
         detailLabel = listOfNotNull(
             recordIntensityLabel(intensityLevel),
+            place?.takeIf { it.isNotBlank() },
             notes?.takeIf { it.isNotBlank() }
         ).joinToString(" - ").ifBlank { "Exposure recorded" },
         occurredAtEpochMs = occurredAtEpochMs,
@@ -128,6 +129,7 @@ private fun io.github.mateovich.allergotracker.features.exposure.data.ExposureEv
         intensityLevel = intensityLevel,
         detailSnapshot = RecordDetailSnapshot.Exposure(
             intensityLabel = recordIntensityLabel(intensityLevel),
+            place = place,
             notes = notes
         )
     )
@@ -175,7 +177,8 @@ private fun io.github.mateovich.allergotracker.features.exposure.data.ExposureEv
         occurredAtEpochMs = occurredAtEpochMs,
         exposureType = exposureType,
         intensityLabel = recordIntensityLabel(intensityLevel),
-        notes = notes
+        notes = notes,
+        place = place
     )
 }
 

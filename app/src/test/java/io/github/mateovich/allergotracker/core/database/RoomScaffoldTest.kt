@@ -4,6 +4,7 @@ import io.github.mateovich.allergotracker.core.database.migrations.Migration_1_2
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_10_11
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_11_12
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_12_13
+import io.github.mateovich.allergotracker.core.database.migrations.Migration_13_14
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_2_3
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_3_4
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_4_5
@@ -31,7 +32,7 @@ class RoomScaffoldTest {
         assertTrue(source.contains("ReusableCompoundEntity::class"))
         assertTrue(source.contains("ReusableCompoundComponentEntity::class"))
         assertTrue(source.contains("ReusableEventCatalogEntity::class"))
-        assertTrue(source.contains("version = 13"))
+        assertTrue(source.contains("version = 14"))
         assertTrue(source.contains("exportSchema = true"))
         assertTrue(source.contains("abstract fun homeDao(): HomeDao"))
         assertTrue(source.contains("abstract fun ingestionEventDao(): IngestionEventDao"))
@@ -124,6 +125,18 @@ class RoomScaffoldTest {
     fun event_intensity_backfill_migration_12_13_is_declared() {
         assertEquals(12, Migration_12_13.startVersion)
         assertEquals(13, Migration_12_13.endVersion)
+    }
+
+    @Test
+    fun exposure_place_migration_13_14_is_declared() {
+        assertEquals(13, Migration_13_14.startVersion)
+        assertEquals(14, Migration_13_14.endVersion)
+
+        val migrationFile = resolveProjectFile("src/main/java/io/github/mateovich/allergotracker/core/database/migrations/Migration_13_14.kt")
+        val schemaFile = resolveProjectFile("schemas/io.github.mateovich.allergotracker.core.database.AppDatabase/14.json")
+
+        assertTrue(migrationFile.readText().contains("ALTER TABLE exposure_events ADD COLUMN place TEXT"))
+        assertTrue(schemaFile.readText().contains("\"columnName\": \"place\""))
     }
 
     private fun resolveProjectFile(relativeToAppModule: String): File {

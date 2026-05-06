@@ -154,6 +154,16 @@ fun CreateExposureScreen(
                 }
             }
 
+            OutlinedTextField(
+                value = state.place,
+                onValueChange = { viewModel.onIntent(CreateExposureUiIntent.UpdatePlace(it)) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("exposure-place"),
+                label = { Text("Place (optional)") },
+                singleLine = true
+            )
+
             DateTimePickerSection(
                 title = "When did it happen?",
                 timeLabel = state.occurredAtLabel,

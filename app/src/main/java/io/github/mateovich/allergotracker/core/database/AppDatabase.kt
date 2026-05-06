@@ -27,7 +27,7 @@ import io.github.mateovich.allergotracker.features.outbreak.data.OutbreakEventEn
         ReusableCompoundEntity::class,
         ReusableCompoundComponentEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -34,6 +34,7 @@ class RoomExposureRepositoryTest {
                 exposureType = "Pollen",
                 occurredAtEpochMs = 1_700_000_000_000L,
                 notes = "outside",
+                place = "Back yard",
                 intensityLevel = 4
             )
         )
@@ -41,6 +42,7 @@ class RoomExposureRepositoryTest {
         val savedEntity = dao.inserted.single()
         assertTrue(result is AppResult.Success)
         assertEquals("Pollen", savedEntity.exposureType)
+        assertEquals("Back yard", savedEntity.place)
         assertEquals(4, savedEntity.intensityLevel)
         assertEquals(1_700_000_123_000L, savedEntity.createdAtEpochMs)
         assertEquals(1L, savedEntity.exposureTypeCatalogId)
@@ -62,6 +64,7 @@ class RoomExposureRepositoryTest {
                 exposureType = "Dust",
                 occurredAtEpochMs = 1_700_000_200_000L,
                 notes = "indoors",
+                place = "Office",
                 intensityLevel = 5
             )
         )
@@ -69,6 +72,7 @@ class RoomExposureRepositoryTest {
         assertEquals("Dust", dao.updated.single().exposureType)
         assertEquals(1_700_000_200_000L, dao.updated.single().occurredAtEpochMs)
         assertEquals("indoors", dao.updated.single().notes)
+        assertEquals("Office", dao.updated.single().place)
         assertEquals(5, dao.updated.single().intensityLevel)
     }
 

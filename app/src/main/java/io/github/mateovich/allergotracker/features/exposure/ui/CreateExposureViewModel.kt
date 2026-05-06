@@ -125,6 +125,10 @@ class CreateExposureViewModel(
                 )
             }
 
+            is CreateExposureUiIntent.UpdatePlace -> updateState {
+                it.copy(place = intent.value)
+            }
+
             is CreateExposureUiIntent.UpdateNotes -> updateState {
                 it.copy(notes = intent.value)
             }
@@ -167,6 +171,7 @@ class CreateExposureViewModel(
                     CreateExposureEventCommand(
                         exposureType = currentState.exposureType,
                         occurredAtEpochMs = currentState.occurredAtEpochMs,
+                        place = currentState.place,
                         notes = currentState.notes,
                         intensityLevel = currentState.selectedIntensityLevel,
                         exposureTypeCatalogId = currentState.selectedExposureTypeCatalogId

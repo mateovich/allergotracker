@@ -27,6 +27,7 @@ enum class ExposureTimePreset(
 data class CreateExposureUiState(
     val title: String = "Create Exposure",
     val exposureType: String = "",
+    val place: String = "",
     val notes: String = "",
     val selectedIntensityLevel: Int = 3,
     val occurredAtEpochMs: Long = 0L,
@@ -57,6 +58,7 @@ sealed interface CreateExposureUiIntent {
     data object ClearExposureCatalogSelection : CreateExposureUiIntent
     data object ClearRetiredExposureCatalogSelection : CreateExposureUiIntent
     data object EditSelectedExposureCatalog : CreateExposureUiIntent
+    data class UpdatePlace(val value: String) : CreateExposureUiIntent
     data class UpdateNotes(val value: String) : CreateExposureUiIntent
     data class SelectIntensityLevel(val level: Int) : CreateExposureUiIntent
     data class SelectOccurredOn(val value: LocalDate) : CreateExposureUiIntent

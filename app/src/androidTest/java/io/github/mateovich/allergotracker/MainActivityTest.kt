@@ -504,13 +504,18 @@ class MainActivityTest {
         composeRule.onNodeWithText("Enter what you were exposed to.").assertIsDisplayed()
 
         composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
+        composeRule.onNodeWithTag("exposure-place").performScrollTo().performTextInput("Park")
         composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
 
         waitForTag("records-list")
         composeRule.onNodeWithTag("records-list").assertIsDisplayed()
         composeRule.onNodeWithText("Exposure").assertIsDisplayed()
         composeRule.onNodeWithText("Pollen").assertIsDisplayed()
+        composeRule.onNodeWithText("Park").assertIsDisplayed()
         composeRule.onNodeWithText("Intensity 3").assertIsDisplayed()
+
+        composeRule.onNodeWithText("Pollen").performClick()
+        composeRule.onNodeWithTag("record-detail-field-1").assertTextContains("Park")
     }
 
     @Test
@@ -636,6 +641,7 @@ class MainActivityTest {
         composeRule.onNodeWithText("Exposure").performClick()
 
         composeRule.onNodeWithTag("exposure-type").performTextInput("Pollen")
+        composeRule.onNodeWithTag("exposure-place").performScrollTo().performTextInput("Park")
         composeRule.onNodeWithTag("exposure-save").performScrollTo().performClick()
 
         waitForTag("records-list")
@@ -649,6 +655,8 @@ class MainActivityTest {
         composeRule.onAllNodesWithTag("edit-exposure-occurred-at-input").assertCountEquals(0)
 
         composeRule.onNodeWithTag("edit-exposure-type").performTextReplacement("Dust")
+        composeRule.onNodeWithTag("edit-exposure-place").performScrollTo().assertTextContains("Park")
+        composeRule.onNodeWithTag("edit-exposure-place").performTextReplacement("Office")
         composeRule.onNodeWithTag("edit-exposure-occurred-at-date-picker").performClick()
         setDatePicker(2023, 11, 13)
         composeRule.onNodeWithTag("edit-exposure-occurred-at-time-picker").performClick()
@@ -657,10 +665,12 @@ class MainActivityTest {
 
         waitForTag("records-list")
         composeRule.onNodeWithText("Dust").assertIsDisplayed()
+        composeRule.onNodeWithText("Office").assertIsDisplayed()
         composeRule.onAllNodesWithText("Pollen").assertCountEquals(0)
 
         composeRule.onNodeWithText("Dust").performClick()
         composeRule.onNodeWithTag("record-detail-occurred-at").assertIsDisplayed()
+        composeRule.onNodeWithTag("record-detail-field-1").assertTextContains("Office")
         composeRule.onNodeWithTag("record-detail-edit").performClick()
         composeRule.onNodeWithTag("edit-exposure-occurred-at-date-picker").performScrollTo()
         composeRule.onNodeWithText("2023-11-13").assertIsDisplayed()
