@@ -18,10 +18,12 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.espresso.Espresso.onView
@@ -606,7 +608,12 @@ class RecordsScreenTest {
         composeRule.onNodeWithTag("edit-exposure-form-screen").assertIsDisplayed()
         composeRule.onAllNodesWithTag("edit-exposure-delete-confirm").assertCountEquals(0)
 
-        composeRule.onNodeWithTag("edit-exposure-delete").performClick()
+        ensureDeleteDialogVisible(
+            composeRule = composeRule,
+            formTag = "edit-exposure-form-screen",
+            deleteButtonTag = "edit-exposure-delete",
+            dialogActionTag = "edit-exposure-delete-confirm"
+        )
         composeRule.onNodeWithTag("edit-exposure-delete-confirm").assertIsDisplayed()
     }
 
@@ -783,6 +790,38 @@ class RecordsScreenTest {
         composeRule.onNodeWithTag("records-add-menu-scrim").performClick()
 
         composeRule.onAllNodesWithText("Ingestion").assertCountEquals(0)
+    }
+
+    @Test
+    fun add_fab_is_inset_from_screen_corner() {
+        val factory = recordsFactoryFor(
+            recordsRepository = object : RecordsRepository {
+                override fun observeRecordCount() = flowOf(0)
+
+                override fun observeRecords(filters: Flow<RecordsFilter>) = flowOf(emptyList<RecordSummary>())
+            },
+            fixedNow = 1_700_000_000_000L
+        )
+
+        composeRule.setContent {
+            RecordsScreen(
+                onNavigateToRoute = {},
+                viewModelFactory = factory
+            )
+        }
+
+        val fabBounds = composeRule.onNodeWithTag("records-add-fab").fetchSemanticsNode().boundsInRoot
+        val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        val expectedInset = with(composeRule.density) { 20.dp.toPx() }
+
+        assertTrue(
+            "Expected records-add-fab end inset >= 20.dp",
+            rootBounds.right - fabBounds.right >= expectedInset
+        )
+        assertTrue(
+            "Expected records-add-fab bottom inset >= 20.dp",
+            rootBounds.bottom - fabBounds.bottom >= expectedInset
+        )
     }
 
     @Test

@@ -154,6 +154,7 @@ fun RecordsScreen(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .wrapContentSize()
+                    .padding(end = 20.dp, bottom = 20.dp)
             ) {
                 PrimaryAddFab(
                     contentDescription = state.addActionLabel,

@@ -5,6 +5,9 @@ import android.view.View
 import android.widget.DatePicker
 import android.widget.TimePicker
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -23,13 +26,16 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.UiController
 import androidx.test.espresso.ViewAction
 import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.time.Instant
 import java.time.LocalDateTime
@@ -327,7 +333,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("compound-inline-ingredient-save").performClick()
 
         composeRule.onNodeWithTag("compound-component-row-0").assertIsDisplayed()
-        composeRule.onNodeWithTag("compound-component-search").assertTextEquals("")
+        composeRule.onNodeWithTag("compound-component-search").assertEditableTextEmpty()
         composeRule.onNodeWithText("Cocoa (ingredient)").assertIsDisplayed()
         composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
         composeRule.onNodeWithTag("compound-component-search").performTextReplacement("Cocoa")
@@ -633,11 +639,12 @@ class MainActivityTest {
         composeRule.onNodeWithTag("edit-ingestion-notes").performTextReplacement("Evening cup")
         composeRule.onNodeWithTag("edit-ingestion-save").performClick()
 
+        waitForTag("records-list")
         composeRule.onNodeWithTag("records-list").assertIsDisplayed()
         composeRule.onNodeWithText("Tea").assertIsDisplayed()
 
         composeRule.onNodeWithText("Tea").performClick()
-        composeRule.onNodeWithTag("record-detail-field-3").assertTextContains("Evening cup")
+        composeRule.onNodeWithText("Evening cup").assertIsDisplayed()
         openDeleteFromDetail("edit-ingestion-form-screen", "edit-ingestion-delete", "edit-ingestion-delete-confirm")
         composeRule.onNodeWithTag("edit-ingestion-delete-confirm").performClick()
 
@@ -846,7 +853,7 @@ class MainActivityTest {
         waitForTag("edit-compound-component-row-1")
         composeRule.onNodeWithTag("edit-compound-component-row-1").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Cocoa (ingredient)").assertIsDisplayed()
-        composeRule.onNodeWithTag("edit-compound-component-search").assertTextEquals("")
+        composeRule.onNodeWithTag("edit-compound-component-search").assertEditableTextEmpty()
         composeRule.onAllNodesWithTag("edit-compound-create-inline-ingredient").assertCountEquals(0)
     }
 
@@ -1543,6 +1550,10 @@ class MainActivityTest {
         }
     }
 
+    private fun SemanticsNodeInteraction.assertEditableTextEmpty() {
+        this.assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
+    }
+
     private fun ensureDeleteDialogVisible(
         formTag: String,
         deleteButtonTag: String,
@@ -1569,12 +1580,12 @@ class MainActivityTest {
     private fun setDatePicker(year: Int, month: Int, day: Int) {
         onView(androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom(DatePicker::class.java))
             .perform(setDatePickerValue(year, month, day))
-        onView(withTextFromAndroid(android.R.string.ok)).perform(click())
+        onView(withTextFromAndroid(android.R.string.ok)).inRoot(isDialog()).perform(click())
         composeRule.waitForIdle()
     }
 
     private fun confirmDialog() {
-        onView(withTextFromAndroid(android.R.string.ok)).perform(click())
+        onView(withTextFromAndroid(android.R.string.ok)).inRoot(isDialog()).perform(click())
         composeRule.waitForIdle()
     }
 
