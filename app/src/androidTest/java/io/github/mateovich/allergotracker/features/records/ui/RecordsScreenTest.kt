@@ -1089,7 +1089,7 @@ private fun assertEditFormShowsOfflineNotice(
     composeRule.onNodeWithTag("record-detail-edit").performClick()
     composeRule.onNodeWithTag(formTag).assertIsDisplayed()
     composeRule.onNodeWithTag("local-only-notice").assertIsDisplayed()
-    composeRule.onNodeWithText("Works offline. Saved only on this device.").assertIsDisplayed()
+    composeRule.onNodeWithText("Offline-ready. Export to share your data.").assertIsDisplayed()
 }
 
 private fun RecordsScreenTest.assertNodeAppearsAbove(upperTag: String, lowerTag: String) {

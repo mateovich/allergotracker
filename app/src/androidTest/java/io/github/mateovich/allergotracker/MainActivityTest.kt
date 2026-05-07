@@ -938,7 +938,7 @@ class MainActivityTest {
         composeRule.onNodeWithText("Ingredient name").assertIsDisplayed()
         composeRule.onNodeWithText("Notes (optional)").assertIsDisplayed()
         composeRule.onNodeWithText("Save changes").assertIsDisplayed()
-        composeRule.onNodeWithText("Works offline. Saved only on this device.").assertIsDisplayed()
+        composeRule.onNodeWithText("Offline-ready. Export to share your data.").assertIsDisplayed()
 
         composeRule.onNodeWithTag("edit-ingredient-name").performTextReplacement("   ")
         composeRule.onNodeWithText("Enter an ingredient name.").assertIsDisplayed()
@@ -952,7 +952,7 @@ class MainActivityTest {
         composeRule.onNodeWithText("Edit Compound").assertIsDisplayed()
         composeRule.onNodeWithText("Compound name").assertIsDisplayed()
         composeRule.onNodeWithText("Save changes").assertIsDisplayed()
-        composeRule.onNodeWithText("Works offline. Saved only on this device.").assertIsDisplayed()
+        composeRule.onNodeWithText("Offline-ready. Export to share your data.").assertIsDisplayed()
 
         navigateBack()
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
@@ -970,7 +970,7 @@ class MainActivityTest {
         composeRule.onNodeWithText("Edit Exposure Type").assertIsDisplayed()
         composeRule.onNodeWithText("Exposure type").assertIsDisplayed()
         composeRule.onNodeWithText("Save changes").assertIsDisplayed()
-        composeRule.onNodeWithText("Works offline. Saved only on this device.").assertIsDisplayed()
+        composeRule.onNodeWithText("Offline-ready. Export to share your data.").assertIsDisplayed()
     }
 
     @Test
@@ -1418,7 +1418,7 @@ class MainActivityTest {
     private fun assertOfflineFormHasNoDependencyWarnings(destinationTag: String) {
         composeRule.onNodeWithTag(destinationTag).assertIsDisplayed()
         composeRule.onNodeWithTag("local-only-notice").assertIsDisplayed()
-        composeRule.onNodeWithText("Works offline. Saved only on this device.").assertIsDisplayed()
+        composeRule.onNodeWithText("Offline-ready. Export to share your data.").assertIsDisplayed()
         when {
             destinationTag.startsWith("create-ingestion") -> composeRule.onAllNodesWithText("Couldn't save ingestion locally. Try again.").assertCountEquals(0)
             destinationTag.startsWith("create-exposure") -> composeRule.onAllNodesWithText("Couldn't save exposure locally. Try again.").assertCountEquals(0)

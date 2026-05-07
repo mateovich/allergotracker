@@ -35,7 +35,7 @@ data class ExportDestinationOptionUiModel(
 
 data class ExportUiState(
     val title: String = "Export",
-    val distributionNotice: String = "This build keeps capture, review, export, and import available without Play or store services.",
+    val distributionNotice: String = "This build supports local capture, review, export, and import without Play services.",
     val unavailableCapabilityMessage: String? = null,
     val formatOptions: List<ExportFormatOptionUiModel> = emptyList(),
     val scopeOptions: List<ExportScopeOptionUiModel> = emptyList(),

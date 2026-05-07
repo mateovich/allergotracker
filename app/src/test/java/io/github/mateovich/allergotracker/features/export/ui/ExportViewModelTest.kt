@@ -256,7 +256,7 @@ class ExportViewModelTest {
 
         assertNull(viewModel.state.value.statusMessage)
         assertEquals(
-            "This build keeps capture, review, export, and import available without Play or store services.",
+            "This build supports local capture, review, export, and import without Play services.",
             viewModel.state.value.distributionNotice
         )
         assertEquals(

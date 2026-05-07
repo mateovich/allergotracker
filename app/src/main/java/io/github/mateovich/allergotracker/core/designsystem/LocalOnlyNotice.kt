@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.dp
 
 object LocalOnlyNoticeDefaults {
     const val testTag = "local-only-notice"
-    const val message = "Works offline. Saved only on this device."
+    const val message = "Offline-ready. Export to share your data."
 }
 
 @Composable

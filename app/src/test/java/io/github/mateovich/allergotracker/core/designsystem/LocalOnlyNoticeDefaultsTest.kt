@@ -8,7 +8,7 @@ class LocalOnlyNoticeDefaultsTest {
     @Test
     fun offline_notice_copy_stays_calm_and_device_local() {
         assertEquals(
-            "Works offline. Saved only on this device.",
+            "Offline-ready. Export to share your data.",
             LocalOnlyNoticeDefaults.message
         )
     }

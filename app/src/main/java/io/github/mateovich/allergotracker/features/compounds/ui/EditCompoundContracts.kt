@@ -9,7 +9,7 @@ data class EditCompoundUiState(
     val title: String = "Edit Compound",
     val name: String = "",
     val notes: String = "",
-    val helperMessage: String = "Adjust saved components and keep the total locked at 100% before saving.",
+    val helperMessage: String = "Update components and proportions while keeping the total at 100% before saving.",
     val componentSearchQuery: String = "",
     val availableComponents: List<CompoundComponentCatalogOptionUiModel> = emptyList(),
     val filteredComponents: List<CompoundComponentCatalogOptionUiModel> = emptyList(),

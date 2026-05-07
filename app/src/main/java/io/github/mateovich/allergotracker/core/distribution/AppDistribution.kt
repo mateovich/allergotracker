@@ -8,7 +8,7 @@ data class AppDistribution(
     val unavailableCapabilityMessage: String?
 ) {
     val distributionNotice: String =
-        "This build keeps capture, review, export, and import available without Play or store services."
+        "This build supports local capture, review, export, and import without Play services."
 }
 
 object AppDistributionFactory {
