@@ -13,6 +13,7 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -760,6 +761,20 @@ class MainActivityTest {
         waitForTag("ingestion-inline-ingredient-name")
         composeRule.onNodeWithTag("ingestion-inline-ingredient-name").performTextReplacement("Oat milk")
         composeRule.onNodeWithTag("ingestion-inline-ingredient-save").performClick()
+        waitForTag("ingestion-reusable-summary")
+        composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
+
+        waitForTag("records-list")
+        composeRule.onNodeWithText("Oat milk").assertIsDisplayed()
+        composeRule.onNodeWithText("2 Light snack - Reusable ingredient").assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        waitForTag("records-add-menu")
+        composeRule.onNodeWithContentDescription("Ingestion").performClick()
+        composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Oat")
+        waitForText("Oat milk - Ingredient")
+        composeRule.onNodeWithText("Oat milk - Ingredient").performClick()
 
         waitForTag("ingestion-reusable-edit")
         composeRule.onNodeWithTag("ingestion-reusable-edit").assertIsDisplayed().performClick()
@@ -776,6 +791,16 @@ class MainActivityTest {
         waitForTag("create-ingestion-form-screen")
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk blend")
         composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable compound selected: Oat milk blend")
+        composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
+
+        waitForTag("records-list")
+        composeRule.onNode(
+            hasContentDescription("Oat milk, 2 Light snack - Reusable ingredient", substring = true)
+        ).assertIsDisplayed()
+        composeRule.onNode(
+            hasContentDescription("Oat milk blend, 2 Light snack - Reusable compound", substring = true)
+        ).assertIsDisplayed()
     }
 
     @Test
