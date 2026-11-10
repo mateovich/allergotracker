@@ -31,6 +31,56 @@ class RoomReusableIngredientRepositoryTest {
     }
 
     @Test
+    fun create_with_provisional_flag_persists_the_flag_and_returns_it() = runBlocking {
+        val dao = FakeReusableIngredientDao()
+        val repository = RoomReusableIngredientRepository(dao) { 1_700_000_123_000L }
+
+        val result = repository.createIngredient(
+            CreateReusableIngredientCommand(name = "Pizza", notes = null, isProvisional = true)
+        )
+
+        assertTrue(dao.inserted.single().isProvisional)
+        assertTrue((result as AppResult.Success<ReusableIngredient>).value.isProvisional)
+    }
+
+    @Test
+    fun create_defaults_to_a_regular_ingredient() = runBlocking {
+        val dao = FakeReusableIngredientDao()
+        val repository = RoomReusableIngredientRepository(dao) { 1_700_000_123_000L }
+
+        repository.createIngredient(CreateReusableIngredientCommand(name = "Oat milk", notes = null))
+
+        assertEquals(false, dao.inserted.single().isProvisional)
+    }
+
+    @Test
+    fun set_provisional_updates_flag_and_returns_updated_ingredient() = runBlocking {
+        val dao = FakeReusableIngredientDao(
+            existing = ReusableIngredientEntity(
+                id = 4L, name = "Pizza", normalizedName = "pizza", notes = null,
+                createdAtEpochMs = 1L, updatedAtEpochMs = 1L, isProvisional = true
+            )
+        )
+        val repository = RoomReusableIngredientRepository(dao) { 99L }
+
+        val result = repository.setIngredientProvisional(4L, false)
+
+        assertEquals(listOf(Triple(4L, false, 99L)), dao.provisionalUpdates)
+        val ingredient = (result as AppResult.Success<ReusableIngredient>).value
+        assertEquals(false, ingredient.isProvisional)
+        assertEquals(99L, ingredient.updatedAtEpochMs)
+    }
+
+    @Test
+    fun set_provisional_on_missing_ingredient_returns_integrity_error() = runBlocking {
+        val repository = RoomReusableIngredientRepository(FakeReusableIngredientDao()) { 99L }
+
+        val result = repository.setIngredientProvisional(4L, false)
+
+        assertTrue((result as AppResult.Error).error is DomainError.IntegrityError)
+    }
+
+    @Test
     fun create_reuses_existing_ingredient_when_name_matches_ignoring_case() = runBlocking {
         val dao = FakeReusableIngredientDao(
             existing = ReusableIngredientEntity(
@@ -148,6 +198,13 @@ private class FakeReusableIngredientDao(
     override suspend fun existsById(id: Long): Boolean = existing?.id == id
 
     override suspend fun touchById(id: Long, updatedAtEpochMs: Long): Int = if (existing?.id == id) 1 else 0
+
+    val provisionalUpdates = mutableListOf<Triple<Long, Boolean, Long>>()
+
+    override suspend fun setProvisional(id: Long, isProvisional: Boolean, updatedAtEpochMs: Long): Int {
+        provisionalUpdates += Triple(id, isProvisional, updatedAtEpochMs)
+        return if (existing?.id == id) 1 else 0
+    }
 
     override fun observeAll(): Flow<List<ReusableIngredientEntity>> = emptyFlow()
 }

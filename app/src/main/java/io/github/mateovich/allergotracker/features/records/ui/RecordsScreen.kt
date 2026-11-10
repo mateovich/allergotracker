@@ -40,6 +40,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.mateovich.allergotracker.core.designsystem.AppScreenScaffold
 import io.github.mateovich.allergotracker.core.designsystem.EmptyStateMessage
 import io.github.mateovich.allergotracker.core.designsystem.PrimaryAddFab
+import io.github.mateovich.allergotracker.navigation.AppRoutes
 import io.github.mateovich.allergotracker.features.ingestion.domain.IngestionQuantityOption
 import io.github.mateovich.allergotracker.features.records.domain.RecordEventType
 import java.time.LocalDate
@@ -66,6 +67,14 @@ fun RecordsScreen(
     AppScreenScaffold(
         title = state.title,
         topBarActions = {
+            TextButton(
+                onClick = { onNavigateToRoute(AppRoutes.PROVISIONAL) },
+                modifier = Modifier
+                    .testTag("records-provisional-action")
+                    .semantics { contentDescription = "Provisional compounds" }
+            ) {
+                Text(text = "Provisional")
+            }
             TextButton(
                 onClick = { viewModel.onIntent(RecordsUiIntent.OpenFilterDialog) },
                 modifier = Modifier

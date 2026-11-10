@@ -13,6 +13,7 @@ import io.github.mateovich.allergotracker.features.ingredients.domain.MergeReusa
 import io.github.mateovich.allergotracker.features.ingredients.domain.ObserveReusableIngredientsUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredient
 import io.github.mateovich.allergotracker.features.ingredients.domain.RetireReusableIngredientUseCase
+import io.github.mateovich.allergotracker.features.ingredients.domain.SetIngredientProvisionalUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.UpdateReusableIngredientCommand
 import io.github.mateovich.allergotracker.features.ingredients.domain.UpdateReusableIngredientUseCase
 import kotlinx.coroutines.channels.Channel
@@ -30,7 +31,8 @@ class EditIngredientViewModel(
     private val getReusableIngredientMergePreviewUseCase: GetReusableIngredientMergePreviewUseCase,
     private val mergeReusableIngredientUseCase: MergeReusableIngredientUseCase,
     private val getReusableIngredientRetirementImpactUseCase: GetReusableIngredientRetirementImpactUseCase,
-    private val retireReusableIngredientUseCase: RetireReusableIngredientUseCase
+    private val retireReusableIngredientUseCase: RetireReusableIngredientUseCase,
+    private val setIngredientProvisionalUseCase: SetIngredientProvisionalUseCase? = null
 ) : ViewModel() {
     private var observedIngredients: List<ReusableIngredient> = emptyList()
 
@@ -95,6 +97,19 @@ class EditIngredientViewModel(
             }
             EditIngredientUiIntent.ConfirmRetirement -> retire()
             EditIngredientUiIntent.MakeIntoCompound -> makeIntoCompound()
+            EditIngredientUiIntent.KeepAsRegularIngredient -> keepAsRegularIngredient()
+        }
+    }
+
+    private fun keepAsRegularIngredient() {
+        val useCase = setIngredientProvisionalUseCase ?: return
+        val currentState = mutableState.value
+        if (!currentState.isProvisional || currentState.isLoading || currentState.isSaving) return
+        viewModelScope.launch {
+            when (val result = useCase(ingredientId, false)) {
+                is AppResult.Success -> updateState { it.copy(isProvisional = false, formMessage = "") }
+                is AppResult.Error -> updateState { it.copy(formMessage = result.error.message) }
+            }
         }
     }
 
@@ -119,6 +134,7 @@ class EditIngredientViewModel(
                     it.copy(
                         name = result.value.name,
                         notes = result.value.notes.orEmpty(),
+                        isProvisional = result.value.isProvisional,
                         isLoading = false,
                         canSave = result.value.name.isNotBlank()
                     ).refreshMergeDestinationOptions()

@@ -50,6 +50,7 @@ sealed interface EditIngestionUiIntent {
     data class ApplyReusableSelection(val result: IngestionReusableSelectionResult) : EditIngestionUiIntent
     data class SelectReusableEntity(val result: IngestionReusableSelectionResult) : EditIngestionUiIntent
     data class CreateInlineIngredient(val name: String) : EditIngestionUiIntent
+    data class CreateProvisionalIngredient(val name: String) : EditIngestionUiIntent
     data class UpdateInlineIngredientName(val value: String) : EditIngestionUiIntent
     data class ShowInlineIngredientDialog(val prefillName: String) : EditIngestionUiIntent
     data object CancelInlineIngredientCreation : EditIngestionUiIntent

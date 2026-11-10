@@ -21,6 +21,7 @@ import io.github.mateovich.allergotracker.core.database.migrations.Migration_11_
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_12_13
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_13_14
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_14_15
+import io.github.mateovich.allergotracker.core.database.migrations.Migration_15_16
 import io.github.mateovich.allergotracker.features.compounds.data.RoomReusableCompoundRepository
 import io.github.mateovich.allergotracker.features.compounds.domain.CreateReusableCompoundUseCase
 import io.github.mateovich.allergotracker.features.compounds.domain.CompoundChildEdge
@@ -71,11 +72,13 @@ import io.github.mateovich.allergotracker.features.ingredients.domain.GetReusabl
 import io.github.mateovich.allergotracker.features.ingredients.domain.GetReusableIngredientRetirementImpactUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.GetReusableIngredientUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.MergeReusableIngredientUseCase
+import io.github.mateovich.allergotracker.features.ingredients.domain.SetIngredientProvisionalUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.ObserveReusableIngredientsUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.RetireReusableIngredientUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.UpdateReusableIngredientUseCase
 import io.github.mateovich.allergotracker.features.ingredients.ui.CreateIngredientViewModelFactory
 import io.github.mateovich.allergotracker.features.ingredients.ui.EditIngredientViewModelFactory
+import io.github.mateovich.allergotracker.features.ingredients.ui.ProvisionalIngredientsViewModelFactory
 import io.github.mateovich.allergotracker.features.ingestion.data.RoomIngestionRepository
 import io.github.mateovich.allergotracker.features.ingestion.data.IngestionEventEntity
 import io.github.mateovich.allergotracker.features.ingestion.domain.CreateIngestionDefaultsUseCase
@@ -119,7 +122,7 @@ class AppContainer(appContext: Context) {
         appContext,
         AppDatabase::class.java,
         "app_database"
-    ).addMigrations(Migration_1_2, Migration_2_3, Migration_3_4, Migration_4_5, Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12, Migration_12_13, Migration_13_14, Migration_14_15).build()
+    ).addMigrations(Migration_1_2, Migration_2_3, Migration_3_4, Migration_4_5, Migration_5_6, Migration_6_7, Migration_7_8, Migration_8_9, Migration_9_10, Migration_10_11, Migration_11_12, Migration_12_13, Migration_13_14, Migration_14_15, Migration_15_16).build()
 
     private val homeDao: HomeDao = appDatabase.homeDao()
     private val ingestionEventDao = appDatabase.ingestionEventDao()
@@ -522,6 +525,7 @@ class AppContainer(appContext: Context) {
             createOutbreakEventUseCase,
             observeReusableEventCatalogUseCase
         )
+    private val setIngredientProvisionalUseCase = SetIngredientProvisionalUseCase(reusableIngredientRepository)
     private val replaceIngredientWithCompoundUseCase = ReplaceIngredientWithCompoundUseCase(
         createCompound = createReusableCompoundUseCase::invoke,
         getIngredientName = { ingredientId ->
@@ -555,6 +559,8 @@ class AppContainer(appContext: Context) {
             appDatabase.withTransaction { block() }
         }
     )
+    val provisionalIngredientsViewModelFactory: ProvisionalIngredientsViewModelFactory =
+        ProvisionalIngredientsViewModelFactory(observeReusableIngredientsUseCase)
     val createIngredientViewModelFactory: CreateIngredientViewModelFactory =
         CreateIngredientViewModelFactory(createReusableIngredientUseCase)
     fun createCreateCompoundViewModelFactory(
@@ -580,7 +586,8 @@ class AppContainer(appContext: Context) {
             getReusableIngredientMergePreviewUseCase,
             mergeReusableIngredientUseCase,
             getReusableIngredientRetirementImpactUseCase,
-            retireReusableIngredientUseCase
+            retireReusableIngredientUseCase,
+            setIngredientProvisionalUseCase
         )
     }
 

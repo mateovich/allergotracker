@@ -862,6 +862,99 @@ class MainActivityTest {
     }
 
     @Test
+    fun provisional_compound_is_listed_and_leaves_the_list_when_completed_as_a_compound() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+        createReusableIngredientInline("Dough")
+        composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Pizza")
+        waitForTag("ingestion-create-provisional-ingredient")
+        composeRule.onNodeWithTag("ingestion-create-provisional-ingredient").performClick()
+        waitForTag("ingestion-reusable-clear")
+        composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
+
+        waitForTag("records-list")
+        composeRule.onNodeWithTag("records-provisional-action").performClick()
+        waitForTag("provisional-ingredients-screen")
+        composeRule.onAllNodesWithTag("provisional-ingredients-empty").assertCountEquals(0)
+        composeRule.onNodeWithText("Pizza").assertIsDisplayed()
+        composeRule.onNodeWithText("Pizza").performClick()
+
+        waitForTag("edit-ingredient-provisional-notice")
+        composeRule.onNodeWithTag("edit-ingredient-make-compound").performClick()
+        composeRule.onNodeWithTag("compound-name").assertTextContains("Pizza")
+        composeRule.onNodeWithText("Dough - Ingredient").performClick()
+        setSliderPercentage("compound-component-slider-0", 100f)
+        composeRule.onNodeWithTag("compound-save").performClick()
+        waitForTag("compound-replace-confirm")
+        composeRule.onNodeWithTag("compound-replace-confirm").performClick()
+
+        waitForTag("provisional-ingredients-empty")
+        navigateBack()
+        waitForTag("records-list")
+        composeRule.onNode(
+            hasContentDescription("Pizza, 2 Light snack - Reusable compound", substring = true)
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun provisional_compound_can_be_kept_as_a_regular_ingredient() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+        composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Pizza")
+        waitForTag("ingestion-create-provisional-ingredient")
+        composeRule.onNodeWithTag("ingestion-create-provisional-ingredient").performClick()
+        waitForTag("ingestion-reusable-clear")
+        composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
+
+        waitForTag("records-list")
+        composeRule.onNodeWithTag("records-provisional-action").performClick()
+        waitForTag("provisional-ingredients-screen")
+        composeRule.onNodeWithText("Pizza").performClick()
+        waitForTag("edit-ingredient-keep-regular")
+        composeRule.onNodeWithTag("edit-ingredient-keep-regular").performClick()
+
+        composeRule.onAllNodesWithTag("edit-ingredient-provisional-notice").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("edit-ingredient-keep-regular").assertCountEquals(0)
+        navigateBack()
+        waitForTag("provisional-ingredients-empty")
+        navigateBack()
+        waitForTag("records-list")
+        composeRule.onNode(
+            hasContentDescription("Pizza, 2 Light snack - Reusable ingredient", substring = true)
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun provisional_chip_is_offered_in_edit_ingestion_and_marks_suggestions() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+        createReusableIngredientInline("Tea")
+        composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Tea")
+        waitForText("Tea - Ingredient")
+        composeRule.onNodeWithText("Tea - Ingredient").performClick()
+        composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
+
+        waitForTag("records-list")
+        composeRule.onNodeWithText("Tea").performClick()
+        waitForTag("record-detail-edit")
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+        composeRule.onNodeWithTag("edit-ingestion-item-name").performTextReplacement("Lasagna")
+        waitForTag("ingestion-create-provisional-ingredient")
+        composeRule.onNodeWithTag("ingestion-create-provisional-ingredient").performClick()
+        composeRule.onNodeWithTag("edit-ingestion-item-name").assertTextContains("Lasagna")
+        composeRule.onNodeWithTag("edit-ingestion-save").performScrollTo().performClick()
+
+        waitForTag("records-list")
+        composeRule.onNodeWithTag("records-provisional-action").performClick()
+        waitForTag("provisional-ingredients-screen")
+        composeRule.onNodeWithText("Lasagna").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Tea").assertCountEquals(0)
+    }
+
+    @Test
     fun make_it_a_compound_cancelled_confirmation_keeps_the_ingredient() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()

@@ -14,5 +14,8 @@ interface ReusableIngredientRepository {
     suspend fun deleteIngredient(id: Long): AppResult<Unit> =
         AppResult.Error(io.github.mateovich.allergotracker.core.common.error.DomainError.PersistenceError("Unsupported operation."))
 
+    suspend fun setIngredientProvisional(id: Long, isProvisional: Boolean): AppResult<ReusableIngredient> =
+        AppResult.Error(io.github.mateovich.allergotracker.core.common.error.DomainError.PersistenceError("Unsupported operation."))
+
     fun observeIngredients(): Flow<List<ReusableIngredient>>
 }

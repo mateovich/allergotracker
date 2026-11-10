@@ -21,5 +21,7 @@ data class ReusableIngredientEntity(
     @ColumnInfo(name = "created_at_epoch_ms")
     val createdAtEpochMs: Long,
     @ColumnInfo(name = "updated_at_epoch_ms")
-    val updatedAtEpochMs: Long
+    val updatedAtEpochMs: Long,
+    @ColumnInfo(name = "is_provisional", defaultValue = "0")
+    val isProvisional: Boolean = false
 )

@@ -35,6 +35,7 @@ import io.github.mateovich.allergotracker.features.exposure.ui.EditExposureViewM
 import io.github.mateovich.allergotracker.features.ingredients.ui.CreateIngredientScreen
 import io.github.mateovich.allergotracker.features.ingredients.ui.CreateIngredientViewModelFactory
 import io.github.mateovich.allergotracker.features.ingredients.ui.EditIngredientScreen
+import io.github.mateovich.allergotracker.features.ingredients.ui.ProvisionalIngredientsScreen
 import io.github.mateovich.allergotracker.features.ingredients.ui.EditIngredientViewModelFactory
 import io.github.mateovich.allergotracker.features.ingestion.ui.CreateIngestionScreen
 import io.github.mateovich.allergotracker.features.ingestion.ui.IngestionReusableSelectionResult
@@ -59,6 +60,7 @@ fun AppNavGraph(
     createExposureViewModelFactory: CreateExposureViewModelFactory,
     createOutbreakViewModelFactory: CreateOutbreakViewModelFactory,
     createIngredientViewModelFactory: CreateIngredientViewModelFactory,
+    provisionalIngredientsViewModelFactory: ViewModelProvider.Factory,
     createCompoundViewModelFactoryProvider: (String, IngestionReusableSelectionResult?) -> CreateCompoundViewModelFactory,
     editIngredientViewModelFactoryProvider: (Long) -> EditIngredientViewModelFactory,
     editCompoundViewModelFactoryProvider: (Long) -> EditCompoundViewModelFactory,
@@ -130,6 +132,12 @@ fun AppNavGraph(
                     }
                 },
                 viewModelFactory = recordDetailViewModelFactoryProvider(recordId, eventType)
+            )
+        }
+        composable(route = AppRoutes.PROVISIONAL) {
+            ProvisionalIngredientsScreen(
+                onNavigateToRoute = navController::navigate,
+                viewModelFactory = provisionalIngredientsViewModelFactory
             )
         }
         composable(route = AppRoutes.CREATE_INGESTION) {

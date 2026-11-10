@@ -66,7 +66,8 @@ class EditIngestionViewModel(
                                 ReusableEntityOptionUiModel(
                                     id = ingredient.id,
                                     name = ingredient.name,
-                                    updatedAtEpochMs = ingredient.updatedAtEpochMs
+                                    updatedAtEpochMs = ingredient.updatedAtEpochMs,
+                                    isProvisional = ingredient.isProvisional
                                 )
                             }
                         ).withFilteredReusableEntities()
@@ -136,6 +137,7 @@ class EditIngestionViewModel(
             is EditIngestionUiIntent.ApplyReusableSelection -> applyReusableSelection(intent.result)
             is EditIngestionUiIntent.SelectReusableEntity -> updateState { it.withReusableSelection(intent.result) }
             is EditIngestionUiIntent.CreateInlineIngredient -> createInlineIngredient(intent.name)
+            is EditIngestionUiIntent.CreateProvisionalIngredient -> createInlineIngredient(intent.name, isProvisional = true)
             is EditIngestionUiIntent.UpdateInlineIngredientName -> updateState {
                 it.copy(inlineIngredientName = intent.value, inlineIngredientError = null)
             }
@@ -170,7 +172,7 @@ class EditIngestionViewModel(
         }
     }
 
-    private fun createInlineIngredient(name: String) {
+    private fun createInlineIngredient(name: String, isProvisional: Boolean = false) {
         val useCase = createReusableIngredientUseCase ?: return
         val currentState = mutableState.value
         if (currentState.isCreatingInlineIngredient) return
@@ -178,7 +180,7 @@ class EditIngestionViewModel(
         updateState { it.copy(isCreatingInlineIngredient = true, inlineIngredientError = null) }
         viewModelScope.launch {
             when (
-                val result = useCase(CreateReusableIngredientCommand(name = name, notes = null))
+                val result = useCase(CreateReusableIngredientCommand(name = name, notes = null, isProvisional = isProvisional))
             ) {
                 is AppResult.Success -> {
                     val selection = IngestionReusableSelectionResult(
@@ -199,7 +201,8 @@ class EditIngestionViewModel(
                     updateState {
                         it.copy(
                             isCreatingInlineIngredient = false,
-                            inlineIngredientError = result.error.fieldError("name") ?: result.error.message
+                            inlineIngredientError = result.error.fieldError("name") ?: result.error.message,
+                            formMessage = if (isProvisional) result.error.message else it.formMessage
                         )
                     }
                 }
@@ -428,7 +431,7 @@ class EditIngestionViewModel(
                         id = ingredient.id,
                         name = ingredient.name,
                         kind = ReusableEntityKind.INGREDIENT,
-                        supportingLabel = "Ingredient",
+                        supportingLabel = if (ingredient.isProvisional) "Provisional compound" else "Ingredient",
                         updatedAtEpochMs = ingredient.updatedAtEpochMs
                     )
                 )

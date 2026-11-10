@@ -25,7 +25,8 @@ data class EditIngredientUiState(
     val mergeError: String? = null,
     val isRetiring: Boolean = false,
     val retirementImpact: ReusableIngredientRetirementImpact? = null,
-    val isRetirementDialogVisible: Boolean = false
+    val isRetirementDialogVisible: Boolean = false,
+    val isProvisional: Boolean = false
 )
 
 sealed interface EditIngredientUiIntent {
@@ -43,6 +44,7 @@ sealed interface EditIngredientUiIntent {
     data object DismissRetirementDialog : EditIngredientUiIntent
     data object ConfirmRetirement : EditIngredientUiIntent
     data object MakeIntoCompound : EditIngredientUiIntent
+    data object KeepAsRegularIngredient : EditIngredientUiIntent
 }
 
 sealed interface EditIngredientUiEffect {

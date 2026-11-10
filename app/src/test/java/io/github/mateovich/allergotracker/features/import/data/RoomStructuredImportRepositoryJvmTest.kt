@@ -276,6 +276,7 @@ class RoomStructuredImportRepositoryJvmTest {
         override suspend fun deleteById(id: Long): Int = error("unused")
         override suspend fun existsById(id: Long): Boolean = false
         override suspend fun touchById(id: Long, updatedAtEpochMs: Long): Int = error("unused")
+        override suspend fun setProvisional(id: Long, isProvisional: Boolean, updatedAtEpochMs: Long): Int = error("unused")
         override fun observeAll(): Flow<List<ReusableIngredientEntity>> = flowOf(emptyList())
     }
 

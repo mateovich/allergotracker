@@ -51,6 +51,7 @@ data class ReusableEntitySearchCallbacks(
     val onClearSelection: () -> Unit,
     val onShowInlineIngredientDialog: (prefillName: String) -> Unit,
     val onCreateInlineIngredient: (name: String) -> Unit,
+    val onCreateProvisionalIngredient: (name: String) -> Unit,
     val onUpdateInlineIngredientName: (String) -> Unit,
     val onCancelInlineIngredientCreation: () -> Unit,
     val onCreateNewCompound: (() -> Unit)? = null
@@ -89,6 +90,9 @@ internal fun ReusableEntitySearchField(
             },
             onCreateInlineIngredient = { name ->
                 onIntent(CreateIngestionUiIntent.CreateInlineIngredient(name))
+            },
+            onCreateProvisionalIngredient = { name ->
+                onIntent(CreateIngestionUiIntent.CreateProvisionalIngredient(name))
             },
             onUpdateInlineIngredientName = { name ->
                 onIntent(CreateIngestionUiIntent.UpdateInlineIngredientName(name))
@@ -138,6 +142,9 @@ internal fun EditIngestionReusableSearchField(
             },
             onCreateInlineIngredient = { name ->
                 onIntent(EditIngestionUiIntent.CreateInlineIngredient(name))
+            },
+            onCreateProvisionalIngredient = { name ->
+                onIntent(EditIngestionUiIntent.CreateProvisionalIngredient(name))
             },
             onUpdateInlineIngredientName = { name ->
                 onIntent(EditIngestionUiIntent.UpdateInlineIngredientName(name))
@@ -213,6 +220,16 @@ private fun ReusableEntitySearchFieldCore(
                                 )
                             },
                             modifier = Modifier.testTag("ingestion-create-inline-ingredient")
+                        )
+                        AssistChip(
+                            onClick = {
+                                if (!isExactMatch) {
+                                    callbacks.onCreateProvisionalIngredient(params.searchQuery.trim())
+                                }
+                            },
+                            enabled = !isExactMatch && !params.isCreatingInlineIngredient,
+                            label = { Text("Provisional compound: '${params.searchQuery}'") },
+                            modifier = Modifier.testTag("ingestion-create-provisional-ingredient")
                         )
                     }
 

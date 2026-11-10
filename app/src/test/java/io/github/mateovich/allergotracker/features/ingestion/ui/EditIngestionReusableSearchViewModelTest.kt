@@ -177,6 +177,68 @@ class EditIngestionReusableSearchViewModelTest {
         assertEquals(1, createCalls)
     }
 
+    @Test
+    fun provisional_chip_creates_flagged_ingredient_links_it_and_enables_save() = runTest {
+        val created = mutableListOf<CreateReusableIngredientCommand>()
+        val viewModel = buildViewModel(onCreateCommand = { created += it })
+        viewModel.onIntent(EditIngestionUiIntent.Load)
+        viewModel.onIntent(EditIngestionUiIntent.UpdateReusableSearchQuery("Pizza"))
+
+        viewModel.onIntent(EditIngestionUiIntent.CreateProvisionalIngredient("Pizza"))
+        advanceUntilIdle()
+
+        assertEquals(listOf(CreateReusableIngredientCommand("Pizza", null, isProvisional = true)), created)
+        assertEquals(99L, viewModel.state.value.selectedReusableEntityId)
+        assertEquals(ReusableEntityKind.INGREDIENT, viewModel.state.value.selectedReusableEntityKind)
+        assertTrue(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun regular_inline_create_does_not_set_the_provisional_flag() = runTest {
+        val created = mutableListOf<CreateReusableIngredientCommand>()
+        val viewModel = buildViewModel(onCreateCommand = { created += it })
+        viewModel.onIntent(EditIngestionUiIntent.Load)
+
+        viewModel.onIntent(EditIngestionUiIntent.CreateInlineIngredient("Cocoa"))
+        advanceUntilIdle()
+
+        assertFalse(created.single().isProvisional)
+    }
+
+    @Test
+    fun provisional_chip_error_shows_form_message_and_keeps_record_unlinked() = runTest {
+        val viewModel = buildViewModel(
+            createIngredientResult = AppResult.Error(DomainError.PersistenceError("Couldn't save ingredient locally. Try again."))
+        )
+        viewModel.onIntent(EditIngestionUiIntent.Load)
+        viewModel.onIntent(EditIngestionUiIntent.UpdateReusableSearchQuery("Pizza"))
+
+        viewModel.onIntent(EditIngestionUiIntent.CreateProvisionalIngredient("Pizza"))
+        advanceUntilIdle()
+
+        assertEquals("Couldn't save ingredient locally. Try again.", viewModel.state.value.formMessage)
+        assertNull(viewModel.state.value.selectedReusableEntityId)
+        assertFalse(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun provisional_ingredients_are_labelled_in_suggestions() = runTest {
+        val viewModel = buildViewModel(
+            ingredients = listOf(
+                ReusableIngredient(5L, "Tea", null, fixedNow, fixedNow),
+                ReusableIngredient(6L, "Pizza", null, fixedNow, fixedNow, isProvisional = true)
+            )
+        )
+        viewModel.onIntent(EditIngestionUiIntent.Load)
+
+        viewModel.onIntent(EditIngestionUiIntent.UpdateReusableSearchQuery("pi"))
+        advanceUntilIdle()
+
+        assertEquals("Provisional compound", viewModel.state.value.filteredReusableEntities.single().supportingLabel)
+        viewModel.onIntent(EditIngestionUiIntent.UpdateReusableSearchQuery("te"))
+        assertEquals("Ingredient", viewModel.state.value.filteredReusableEntities.single().supportingLabel)
+    }
+
     private fun ingredient(id: Long, name: String, updatedAt: Long = fixedNow) =
         ReusableIngredient(id, name, null, fixedNow, updatedAt)
 
@@ -195,7 +257,8 @@ class EditIngestionReusableSearchViewModelTest {
         compounds: List<ReusableCompound> = emptyList(),
         linked: Boolean = true,
         createIngredientResult: AppResult<ReusableIngredient>? = null,
-        onCreateIngredient: suspend () -> Unit = {}
+        onCreateIngredient: suspend () -> Unit = {},
+        onCreateCommand: (CreateReusableIngredientCommand) -> Unit = {}
     ): EditIngestionViewModel {
         val timeProvider = CurrentTimeProvider { fixedNow }
         val ingestionRepository = object : IngestionRepository {
@@ -243,6 +306,7 @@ class EditIngestionReusableSearchViewModelTest {
                 repository = object : ReusableIngredientRepository {
                     override suspend fun createIngredient(command: CreateReusableIngredientCommand): AppResult<ReusableIngredient> {
                         onCreateIngredient()
+                        onCreateCommand(command)
                         return createIngredientResult ?: AppResult.Success(
                             ReusableIngredient(99L, command.name, command.notes, fixedNow, fixedNow)
                         )

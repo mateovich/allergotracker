@@ -14,6 +14,7 @@ object AppRoutes {
     const val SEED_INGREDIENT_NAME_ARG = "seedIngredientName"
     const val RECORDS = "records"
     const val EXPORT = "export"
+    const val PROVISIONAL = "provisional"
     const val RECORD_DETAIL = "record-detail/{$RECORD_EVENT_TYPE_ARG}/{$RECORD_ID_ARG}"
     const val CREATE_INGESTION = "create/ingestion"
     const val CREATE_EXPOSURE = "create/exposure"

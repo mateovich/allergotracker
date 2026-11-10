@@ -13,6 +13,7 @@ import io.github.mateovich.allergotracker.features.ingestion.domain.CurrentTimeP
 import io.github.mateovich.allergotracker.features.ingestion.domain.IngestionEvent
 import io.github.mateovich.allergotracker.features.ingestion.domain.IngestionRepository
 import io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEntityKind
+import io.github.mateovich.allergotracker.core.common.error.DomainError
 import io.github.mateovich.allergotracker.core.common.result.AppResult
 import io.github.mateovich.allergotracker.features.ingredients.domain.ObserveReusableIngredientsUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReusableIngredientCommand
@@ -410,7 +411,8 @@ class CreateIngestionViewModelTest {
         compounds: List<ReusableCompound> = emptyList(),
         saveResult: AppResult<IngestionEvent>? = null,
         createIngredientResult: AppResult<ReusableIngredient>? = null,
-        savedCommands: MutableList<CreateIngestionEventCommand> = mutableListOf()
+        savedCommands: MutableList<CreateIngestionEventCommand> = mutableListOf(),
+        createdIngredientCommands: MutableList<CreateReusableIngredientCommand> = mutableListOf()
     ): CreateIngestionViewModel {
         val timeProvider = object : CurrentTimeProvider {
             override fun nowEpochMillis(): Long = fixedNow
@@ -467,6 +469,7 @@ class CreateIngestionViewModelTest {
             createReusableIngredientUseCase = CreateReusableIngredientUseCase(
                 repository = object : ReusableIngredientRepository {
                     override suspend fun createIngredient(command: CreateReusableIngredientCommand): AppResult<ReusableIngredient> {
+                        createdIngredientCommands += command
                         return createIngredientResult ?: AppResult.Success(
                             ReusableIngredient(
                                 id = 99L,
@@ -482,6 +485,35 @@ class CreateIngestionViewModelTest {
                 }
             )
         )
+    }
+
+    @Test
+    fun provisional_chip_creates_flagged_ingredient_and_links_it() = runTest {
+        val created = mutableListOf<CreateReusableIngredientCommand>()
+        val viewModel = buildViewModel(createdIngredientCommands = created)
+        viewModel.onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery("Pizza"))
+
+        viewModel.onIntent(CreateIngestionUiIntent.CreateProvisionalIngredient("Pizza"))
+        advanceUntilIdle()
+
+        assertEquals(listOf(CreateReusableIngredientCommand("Pizza", null, isProvisional = true)), created)
+        assertEquals(99L, viewModel.state.value.selectedReusableEntityId)
+        assertEquals(ReusableEntityKind.INGREDIENT, viewModel.state.value.selectedReusableEntityKind)
+        assertEquals("Pizza", viewModel.state.value.itemName)
+    }
+
+    @Test
+    fun provisional_chip_error_surfaces_form_message_without_linking() = runTest {
+        val viewModel = buildViewModel(
+            createIngredientResult = AppResult.Error(DomainError.PersistenceError("Couldn't save ingredient locally. Try again."))
+        )
+        viewModel.onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery("Pizza"))
+
+        viewModel.onIntent(CreateIngestionUiIntent.CreateProvisionalIngredient("Pizza"))
+        advanceUntilIdle()
+
+        assertEquals("Couldn't save ingredient locally. Try again.", viewModel.state.value.formMessage)
+        assertNull(viewModel.state.value.selectedReusableEntityId)
     }
 
     // === Inline ingredient creation tests (Story 5.1) ===

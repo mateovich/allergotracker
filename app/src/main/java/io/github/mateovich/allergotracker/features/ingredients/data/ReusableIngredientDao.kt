@@ -30,6 +30,9 @@ interface ReusableIngredientDao {
     @Query("UPDATE reusable_ingredients SET updated_at_epoch_ms = :updatedAtEpochMs WHERE id = :id")
     suspend fun touchById(id: Long, updatedAtEpochMs: Long): Int
 
+    @Query("UPDATE reusable_ingredients SET is_provisional = :isProvisional, updated_at_epoch_ms = :updatedAtEpochMs WHERE id = :id")
+    suspend fun setProvisional(id: Long, isProvisional: Boolean, updatedAtEpochMs: Long): Int
+
     @Query("SELECT * FROM reusable_ingredients ORDER BY name COLLATE NOCASE ASC, id ASC")
     fun observeAll(): Flow<List<ReusableIngredientEntity>>
 }

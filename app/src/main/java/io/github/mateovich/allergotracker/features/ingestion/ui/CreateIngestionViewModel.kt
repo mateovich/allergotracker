@@ -57,7 +57,8 @@ class CreateIngestionViewModel(
                             ReusableEntityOptionUiModel(
                                 id = ingredient.id,
                                 name = ingredient.name,
-                                updatedAtEpochMs = ingredient.updatedAtEpochMs
+                                updatedAtEpochMs = ingredient.updatedAtEpochMs,
+                                isProvisional = ingredient.isProvisional
                             )
                         }
                     ).withFilteredReusableEntities()
@@ -158,6 +159,7 @@ class CreateIngestionViewModel(
             is CreateIngestionUiIntent.SelectReusableEntity -> updateState { it.withReusableSelection(intent.result) }
 
             is CreateIngestionUiIntent.CreateInlineIngredient -> createInlineIngredient(intent.name)
+            is CreateIngestionUiIntent.CreateProvisionalIngredient -> createInlineIngredient(intent.name, isProvisional = true)
 
             is CreateIngestionUiIntent.UpdateInlineIngredientName -> updateState {
                 // Only update name; caller is responsible for opening the dialog via ShowInlineIngredientDialog
@@ -212,7 +214,7 @@ class CreateIngestionViewModel(
         }
     }
 
-    private fun createInlineIngredient(name: String) {
+    private fun createInlineIngredient(name: String, isProvisional: Boolean = false) {
         val currentState = mutableState.value
         if (currentState.isCreatingInlineIngredient) return
 
@@ -220,7 +222,7 @@ class CreateIngestionViewModel(
         viewModelScope.launch {
             when (
                 val result = createReusableIngredientUseCase(
-                    CreateReusableIngredientCommand(name = name, notes = null)
+                    CreateReusableIngredientCommand(name = name, notes = null, isProvisional = isProvisional)
                 )
             ) {
                 is AppResult.Success -> {
@@ -242,7 +244,8 @@ class CreateIngestionViewModel(
                     updateState {
                         it.copy(
                             isCreatingInlineIngredient = false,
-                            inlineIngredientError = result.error.fieldError("name") ?: result.error.message
+                            inlineIngredientError = result.error.fieldError("name") ?: result.error.message,
+                            formMessage = if (isProvisional) result.error.message else it.formMessage
                         )
                     }
                 }
@@ -425,7 +428,7 @@ class CreateIngestionViewModel(
                         id = ingredient.id,
                         name = ingredient.name,
                         kind = ReusableEntityKind.INGREDIENT,
-                        supportingLabel = "Ingredient",
+                        supportingLabel = if (ingredient.isProvisional) "Provisional compound" else "Ingredient",
                         updatedAtEpochMs = ingredient.updatedAtEpochMs
                     )
                 )

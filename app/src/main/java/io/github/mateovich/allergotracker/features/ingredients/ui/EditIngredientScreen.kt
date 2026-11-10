@@ -120,6 +120,14 @@ fun EditIngredientScreen(
                 label = { Text("Notes (optional)") },
                 minLines = 3
             )
+            if (state.isProvisional) {
+                Text(
+                    text = "Provisional compound: complete it with \"Make it a compound\" or keep it as a regular ingredient.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.testTag("edit-ingredient-provisional-notice")
+                )
+            }
             if (state.formMessage.isNotBlank()) {
                 Text(
                     text = state.formMessage,
@@ -140,6 +148,15 @@ fun EditIngredientScreen(
                 modifier = Modifier.fillMaxWidth().testTag("edit-ingredient-make-compound")
             ) {
                 Text("Make it a compound")
+            }
+            if (state.isProvisional) {
+                Button(
+                    onClick = { viewModel.onIntent(EditIngredientUiIntent.KeepAsRegularIngredient) },
+                    enabled = !state.isSaving && !state.isRetiring && !state.isMerging,
+                    modifier = Modifier.fillMaxWidth().testTag("edit-ingredient-keep-regular")
+                ) {
+                    Text("Keep as regular ingredient")
+                }
             }
             Button(
                 onClick = { viewModel.onIntent(EditIngredientUiIntent.RequestMergeFlow) },

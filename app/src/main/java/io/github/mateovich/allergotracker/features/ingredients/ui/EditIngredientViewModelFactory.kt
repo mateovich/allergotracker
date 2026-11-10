@@ -8,6 +8,7 @@ import io.github.mateovich.allergotracker.features.ingredients.domain.GetReusabl
 import io.github.mateovich.allergotracker.features.ingredients.domain.MergeReusableIngredientUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.ObserveReusableIngredientsUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.RetireReusableIngredientUseCase
+import io.github.mateovich.allergotracker.features.ingredients.domain.SetIngredientProvisionalUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.UpdateReusableIngredientUseCase
 
 class EditIngredientViewModelFactory(
@@ -18,7 +19,8 @@ class EditIngredientViewModelFactory(
     private val getReusableIngredientMergePreviewUseCase: GetReusableIngredientMergePreviewUseCase,
     private val mergeReusableIngredientUseCase: MergeReusableIngredientUseCase,
     private val getReusableIngredientRetirementImpactUseCase: GetReusableIngredientRetirementImpactUseCase,
-    private val retireReusableIngredientUseCase: RetireReusableIngredientUseCase
+    private val retireReusableIngredientUseCase: RetireReusableIngredientUseCase,
+    private val setIngredientProvisionalUseCase: SetIngredientProvisionalUseCase? = null
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(EditIngredientViewModel::class.java)) {
@@ -30,7 +32,8 @@ class EditIngredientViewModelFactory(
                 getReusableIngredientMergePreviewUseCase = getReusableIngredientMergePreviewUseCase,
                 mergeReusableIngredientUseCase = mergeReusableIngredientUseCase,
                 getReusableIngredientRetirementImpactUseCase = getReusableIngredientRetirementImpactUseCase,
-                retireReusableIngredientUseCase = retireReusableIngredientUseCase
+                retireReusableIngredientUseCase = retireReusableIngredientUseCase,
+                setIngredientProvisionalUseCase = setIngredientProvisionalUseCase
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")

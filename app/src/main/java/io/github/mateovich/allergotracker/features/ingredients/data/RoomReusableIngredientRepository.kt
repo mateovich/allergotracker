@@ -29,7 +29,8 @@ class RoomReusableIngredientRepository(
                 normalizedName = normalizedName,
                 notes = command.notes,
                 createdAtEpochMs = now,
-                updatedAtEpochMs = now
+                updatedAtEpochMs = now,
+                isProvisional = command.isProvisional
             )
             val id = ingredientDao.insert(entity)
             AppResult.Success(entity.copy(id = id).toDomain())
@@ -105,6 +106,20 @@ class RoomReusableIngredientRepository(
         }
     }
 
+    override suspend fun setIngredientProvisional(id: Long, isProvisional: Boolean): AppResult<ReusableIngredient> {
+        return try {
+            val current = ingredientDao.findById(id)
+                ?: return AppResult.Error(DomainError.IntegrityError("Saved ingredient is no longer available."))
+            val now = nowEpochMillis()
+            ingredientDao.setProvisional(id, isProvisional, now)
+            AppResult.Success(current.copy(isProvisional = isProvisional, updatedAtEpochMs = now).toDomain())
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+            AppResult.Error(DomainError.PersistenceError("Couldn't update ingredient locally. Try again."))
+        }
+    }
+
     override fun observeIngredients(): Flow<List<ReusableIngredient>> {
         return ingredientDao.observeAll().map { entities -> entities.map(ReusableIngredientEntity::toDomain) }
     }
@@ -116,7 +131,8 @@ private fun ReusableIngredientEntity.toDomain(): ReusableIngredient {
         name = name,
         notes = notes,
         createdAtEpochMs = createdAtEpochMs,
-        updatedAtEpochMs = updatedAtEpochMs
+        updatedAtEpochMs = updatedAtEpochMs,
+        isProvisional = isProvisional
     )
 }
 

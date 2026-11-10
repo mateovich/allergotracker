@@ -6,6 +6,7 @@ import io.github.mateovich.allergotracker.core.database.migrations.Migration_11_
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_12_13
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_13_14
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_14_15
+import io.github.mateovich.allergotracker.core.database.migrations.Migration_15_16
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_2_3
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_3_4
 import io.github.mateovich.allergotracker.core.database.migrations.Migration_4_5
@@ -33,7 +34,7 @@ class RoomScaffoldTest {
         assertTrue(source.contains("ReusableCompoundEntity::class"))
         assertTrue(source.contains("ReusableCompoundComponentEntity::class"))
         assertTrue(source.contains("ReusableEventCatalogEntity::class"))
-        assertTrue(source.contains("version = 15"))
+        assertTrue(source.contains("version = 16"))
         assertTrue(source.contains("exportSchema = true"))
         assertTrue(source.contains("abstract fun homeDao(): HomeDao"))
         assertTrue(source.contains("abstract fun ingestionEventDao(): IngestionEventDao"))
@@ -153,6 +154,21 @@ class RoomScaffoldTest {
         assertTrue(migrationSource.contains("ALTER TABLE exposure_events ADD COLUMN duration_minutes INTEGER"))
         assertTrue(migrationSource.contains("ALTER TABLE outbreak_events ADD COLUMN duration_minutes INTEGER"))
         assertTrue(schemaSource.contains("\"columnName\": \"duration_minutes\""))
+    }
+
+    @Test
+    fun provisional_ingredient_migration_15_16_is_declared() {
+        assertEquals(15, Migration_15_16.startVersion)
+        assertEquals(16, Migration_15_16.endVersion)
+
+        val migrationFile = resolveProjectFile("src/main/java/io/github/mateovich/allergotracker/core/database/migrations/Migration_15_16.kt")
+        val schemaFile = resolveProjectFile("schemas/io.github.mateovich.allergotracker.core.database.AppDatabase/16.json")
+        val migrationSource = migrationFile.readText()
+        val schemaSource = schemaFile.readText()
+
+        assertTrue(migrationSource.contains("ALTER TABLE reusable_ingredients ADD COLUMN is_provisional INTEGER NOT NULL DEFAULT 0"))
+        assertTrue(schemaSource.contains("\"columnName\": \"is_provisional\""))
+        assertTrue(schemaSource.contains("\"version\": 16"))
     }
 
     private fun resolveProjectFile(relativeToAppModule: String): File {

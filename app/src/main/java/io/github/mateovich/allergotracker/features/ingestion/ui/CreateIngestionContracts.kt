@@ -13,7 +13,8 @@ data class IngestionReusableSelectionResult(
 data class ReusableEntityOptionUiModel(
     val id: Long,
     val name: String,
-    val updatedAtEpochMs: Long
+    val updatedAtEpochMs: Long,
+    val isProvisional: Boolean = false
 )
 
 data class ReusableEntityPickerOptionUiModel(
@@ -78,6 +79,7 @@ sealed interface CreateIngestionUiIntent {
     data class ApplyReusableSelection(val result: IngestionReusableSelectionResult) : CreateIngestionUiIntent
     data class SelectReusableEntity(val result: IngestionReusableSelectionResult) : CreateIngestionUiIntent
     data class CreateInlineIngredient(val name: String) : CreateIngestionUiIntent
+    data class CreateProvisionalIngredient(val name: String) : CreateIngestionUiIntent
     data class UpdateInlineIngredientName(val value: String) : CreateIngestionUiIntent
     data class ShowInlineIngredientDialog(val prefillName: String) : CreateIngestionUiIntent
     data object CancelInlineIngredientCreation : CreateIngestionUiIntent

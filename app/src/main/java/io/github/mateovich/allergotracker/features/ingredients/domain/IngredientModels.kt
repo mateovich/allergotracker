@@ -2,7 +2,8 @@ package io.github.mateovich.allergotracker.features.ingredients.domain
 
 data class CreateReusableIngredientCommand(
     val name: String,
-    val notes: String?
+    val notes: String?,
+    val isProvisional: Boolean = false
 )
 
 data class UpdateReusableIngredientCommand(
@@ -16,5 +17,6 @@ data class ReusableIngredient(
     val name: String,
     val notes: String?,
     val createdAtEpochMs: Long,
-    val updatedAtEpochMs: Long
+    val updatedAtEpochMs: Long,
+    val isProvisional: Boolean = false
 )
