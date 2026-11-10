@@ -43,3 +43,6 @@ keystore.properties
 *.jks
 *.keystore
 secrets/
+
+# Local release artifacts (APKs are published via GitHub Releases, never committed)
+release/
