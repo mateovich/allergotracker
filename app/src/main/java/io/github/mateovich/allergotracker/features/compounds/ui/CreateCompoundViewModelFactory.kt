@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import io.github.mateovich.allergotracker.features.compounds.domain.CreateReusableCompoundUseCase
 import io.github.mateovich.allergotracker.features.compounds.domain.ObserveReusableCompoundsUseCase
+import io.github.mateovich.allergotracker.features.compounds.domain.ReplaceIngredientWithCompoundUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.ObserveReusableIngredientsUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReusableIngredientUseCase
 import io.github.mateovich.allergotracker.features.ingestion.ui.IngestionReusableSelectionResult
@@ -13,6 +14,7 @@ class CreateCompoundViewModelFactory(
     private val createReusableIngredientUseCase: CreateReusableIngredientUseCase,
     private val observeReusableIngredientsUseCase: ObserveReusableIngredientsUseCase,
     private val observeReusableCompoundsUseCase: ObserveReusableCompoundsUseCase,
+    private val replaceIngredientWithCompoundUseCase: ReplaceIngredientWithCompoundUseCase? = null,
     private val initialName: String = "",
     private val initialSeedIngredient: IngestionReusableSelectionResult? = null
 ) : ViewModelProvider.Factory {
@@ -24,6 +26,7 @@ class CreateCompoundViewModelFactory(
                 createReusableIngredientUseCase = createReusableIngredientUseCase,
                 observeReusableIngredients = observeReusableIngredientsUseCase::invoke,
                 observeReusableCompounds = observeReusableCompoundsUseCase::invoke,
+                replaceIngredientWithCompoundUseCase = replaceIngredientWithCompoundUseCase,
                 initialName = initialName,
                 initialSeedIngredient = initialSeedIngredient
             ) as T

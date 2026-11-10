@@ -43,6 +43,17 @@ interface IngestionEventDao {
         destinationName: String
     ): Int
 
+    @Query(
+        "UPDATE ingestion_events SET reusable_entity_kind = :destinationKind, reusable_entity_id = :destinationId, item_name = :destinationName WHERE reusable_entity_kind = :sourceKind AND reusable_entity_id = :sourceId"
+    )
+    suspend fun convertReusableEntityReferences(
+        sourceKind: String,
+        sourceId: Long,
+        destinationKind: String,
+        destinationId: Long,
+        destinationName: String
+    ): Int
+
     @Query("UPDATE ingestion_events SET reusable_entity_kind = NULL, reusable_entity_id = NULL WHERE reusable_entity_kind = :kind AND reusable_entity_id = :reusableId")
     suspend fun clearReusableEntityReferences(kind: String, reusableId: Long): Int
 

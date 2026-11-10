@@ -15,7 +15,6 @@ data class RecordDetailUiState(
     val isLoading: Boolean = true,
     val unavailableMessage: String = "",
     val isUnavailableDialogVisible: Boolean = false,
-    val deleteHint: String = "Delete asks for confirmation before removing this record.",
     val editActionLabel: String = "Edit record",
     val deleteActionLabel: String = "Delete record"
 )

@@ -280,7 +280,6 @@ class CreateIngestionViewModelTest {
         assertEquals("Oat milk", viewModel.state.value.itemName)
         assertNull(viewModel.state.value.selectedReusableEntityId)
         assertNull(viewModel.state.value.selectedReusableEntityKind)
-        assertNull(viewModel.state.value.selectedReusableEntitySummary)
         assertEquals("Saved reusable item was retired. Review the text value before saving.", viewModel.state.value.formMessage)
     }
 

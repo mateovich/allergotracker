@@ -14,8 +14,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -30,7 +30,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.mateovich.allergotracker.core.designsystem.AppScreenScaffold
 import io.github.mateovich.allergotracker.core.designsystem.DateTimePickerSection
-import io.github.mateovich.allergotracker.core.designsystem.LocalOnlyNotice
 import io.github.mateovich.allergotracker.navigation.AppRoutes
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.unit.dp
@@ -88,8 +87,6 @@ fun CreateIngestionScreen(
                 .testTag("create-ingestion-form-screen"),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            LocalOnlyNotice()
-
             // Unified "What did you ingest?" field that handles:
             // - Manual text entry (when no reusable entity selected)
             // - Entity search and selection
@@ -99,14 +96,8 @@ fun CreateIngestionScreen(
                 onIntent = { viewModel.onIntent(it) }
             )
 
-            // Show summary + actions only when a reusable entity is selected
-            state.selectedReusableEntitySummary?.let { summary ->
+            if (state.selectedReusableEntityId != null) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = summary,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.testTag("ingestion-reusable-summary")
-                    )
                     TextButton(
                         onClick = {
                             viewModel.onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery(""))

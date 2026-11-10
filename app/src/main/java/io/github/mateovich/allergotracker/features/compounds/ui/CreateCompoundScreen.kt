@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.mateovich.allergotracker.core.designsystem.AppScreenScaffold
-import io.github.mateovich.allergotracker.core.designsystem.LocalOnlyNotice
 import kotlinx.coroutines.flow.collectLatest
 
 @Composable
@@ -47,6 +46,38 @@ fun CreateCompoundScreen(
         }
     }
 
+    state.replacementConfirmation?.let { confirmation ->
+        AlertDialog(
+            onDismissRequest = { viewModel.onIntent(CreateCompoundUiIntent.DismissReplacementConfirmation) },
+            title = { Text("Replace ingredient?") },
+            text = {
+                Text(
+                    "\"${confirmation.ingredientName}\" will be deleted and replaced by this compound. " +
+                        "${confirmation.ingestionReferenceCount} saved record(s) and " +
+                        "${confirmation.compoundReferenceCount} compound component(s) that use it will point to the new compound. " +
+                        "This can't be undone.",
+                    modifier = Modifier.testTag("compound-replace-message")
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.onIntent(CreateCompoundUiIntent.ConfirmReplacement) },
+                    modifier = Modifier.testTag("compound-replace-confirm")
+                ) {
+                    Text("Replace")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { viewModel.onIntent(CreateCompoundUiIntent.DismissReplacementConfirmation) },
+                    modifier = Modifier.testTag("compound-replace-cancel")
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     AppScreenScaffold(title = state.title) { contentModifier ->
         Column(
             modifier = contentModifier
@@ -57,8 +88,15 @@ fun CreateCompoundScreen(
                 .testTag("create-compound-form-screen"),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            LocalOnlyNotice()
             Text(text = state.helperMessage, style = MaterialTheme.typography.bodyMedium)
+            state.replacedIngredientName?.let { ingredientName ->
+                Text(
+                    text = "Saving will replace the ingredient \"$ingredientName\" with this compound.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.testTag("compound-replace-notice")
+                )
+            }
 
             OutlinedTextField(
                 value = state.name,
@@ -74,7 +112,7 @@ fun CreateCompoundScreen(
 
             Button(
                 onClick = { viewModel.onIntent(CreateCompoundUiIntent.Save) },
-                enabled = !state.isSaving,
+                enabled = !state.isSaving && (state.replacedIngredientName == null || state.canSave),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("compound-save")

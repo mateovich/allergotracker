@@ -219,14 +219,47 @@ class EditCompoundViewModelTest {
     }
 
     @Test
+    fun blank_component_query_hides_saved_suggestions() = runBlocking {
+        val viewModel = buildViewModel(FakeEditCompoundRepository())
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+
+        assertEquals("", viewModel.state.value.componentSearchQuery)
+        assertTrue(viewModel.state.value.filteredComponents.isEmpty())
+    }
+
+    @Test
+    fun one_character_component_query_hides_saved_suggestions() = runBlocking {
+        val viewModel = buildViewModel(FakeEditCompoundRepository())
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.UpdateComponentSearchQuery("s"))
+
+        assertTrue(viewModel.state.value.filteredComponents.isEmpty())
+    }
+
+    @Test
+    fun two_character_component_query_shows_matching_saved_suggestions() = runBlocking {
+        val viewModel = buildViewModel(FakeEditCompoundRepository())
+
+        viewModel.onIntent(EditCompoundUiIntent.Load)
+        viewModel.onIntent(EditCompoundUiIntent.UpdateComponentSearchQuery("cr"))
+
+        assertEquals(listOf("Safe crunch"), viewModel.state.value.filteredComponents.map { it.name })
+    }
+
+    @Test
     fun load_filters_duplicate_and_recursive_compound_options() = runBlocking {
         val repository = FakeEditCompoundRepository()
         val viewModel = buildViewModel(repository)
 
         viewModel.onIntent(EditCompoundUiIntent.Load)
 
+        viewModel.onIntent(EditCompoundUiIntent.UpdateComponentSearchQuery("ba"))
         assertTrue(viewModel.state.value.filteredComponents.none { it.kind == "compound" && it.id == 11L })
         assertTrue(viewModel.state.value.filteredComponents.none { it.kind == "compound" && it.id == 12L })
+
+        viewModel.onIntent(EditCompoundUiIntent.UpdateComponentSearchQuery("cr"))
         assertTrue(viewModel.state.value.filteredComponents.any { it.kind == "compound" && it.id == 13L })
     }
 
@@ -288,6 +321,7 @@ class EditCompoundViewModelTest {
         viewModel.onIntent(EditCompoundUiIntent.UpdateComponentProportion(index = 0, value = "100"))
         viewModel.onIntent(EditCompoundUiIntent.UpdateComponentProportion(index = 1, value = "0"))
         viewModel.onIntent(EditCompoundUiIntent.RemoveComponent(1))
+        viewModel.onIntent(EditCompoundUiIntent.UpdateComponentSearchQuery("ba"))
 
         assertTrue(viewModel.state.value.filteredComponents.any { it.kind == "compound" && it.id == 11L })
     }

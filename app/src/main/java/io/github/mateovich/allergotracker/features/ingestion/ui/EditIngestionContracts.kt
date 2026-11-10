@@ -18,8 +18,10 @@ data class EditIngestionUiState(
     val selectedQuantityLevel: Int? = null,
     val selectedReusableEntityKind: ReusableEntityKind? = null,
     val selectedReusableEntityId: Long? = null,
-    val selectedReusableEntitySummary: String? = null,
-    val isItemNameReadOnly: Boolean = false,
+    val reusableSearchQuery: String = "",
+    val filteredReusableEntities: List<ReusableEntityPickerOptionUiModel> = emptyList(),
+    val availableIngredients: List<ReusableEntityOptionUiModel> = emptyList(),
+    val availableCompounds: List<ReusableEntityOptionUiModel> = emptyList(),
     val itemNameError: String? = null,
     val quantityError: String? = null,
     val occurredAtError: String? = null,
@@ -29,11 +31,16 @@ data class EditIngestionUiState(
     val isDeleting: Boolean = false,
     val isDeleteConfirmationVisible: Boolean = false,
     val canSave: Boolean = false,
-    val canDelete: Boolean = false
+    val canDelete: Boolean = false,
+    val isCreatingInlineIngredient: Boolean = false,
+    val inlineIngredientError: String? = null,
+    val showInlineIngredientDialog: Boolean = false,
+    val inlineIngredientName: String = ""
 )
 
 sealed interface EditIngestionUiIntent {
     data object Load : EditIngestionUiIntent
+    data class UpdateReusableSearchQuery(val value: String) : EditIngestionUiIntent
     data class UpdateItemName(val value: String) : EditIngestionUiIntent
     data class UpdateNotes(val value: String) : EditIngestionUiIntent
     data class SelectQuantityLevel(val level: Int) : EditIngestionUiIntent
@@ -41,7 +48,11 @@ sealed interface EditIngestionUiIntent {
     data class SelectTime(val value: LocalTime) : EditIngestionUiIntent
     data class SelectTimePreset(val preset: IngestionTimePreset) : EditIngestionUiIntent
     data class ApplyReusableSelection(val result: IngestionReusableSelectionResult) : EditIngestionUiIntent
-    data object EditSelectedReusableEntity : EditIngestionUiIntent
+    data class SelectReusableEntity(val result: IngestionReusableSelectionResult) : EditIngestionUiIntent
+    data class CreateInlineIngredient(val name: String) : EditIngestionUiIntent
+    data class UpdateInlineIngredientName(val value: String) : EditIngestionUiIntent
+    data class ShowInlineIngredientDialog(val prefillName: String) : EditIngestionUiIntent
+    data object CancelInlineIngredientCreation : EditIngestionUiIntent
     data object ClearRetiredReusableSelection : EditIngestionUiIntent
     data object ShowDeleteConfirmation : EditIngestionUiIntent
     data object DismissDeleteConfirmation : EditIngestionUiIntent
@@ -51,5 +62,4 @@ sealed interface EditIngestionUiIntent {
 
 sealed interface EditIngestionUiEffect {
     data object NavigateToRecords : EditIngestionUiEffect
-    data class NavigateToEditReusableEntity(val kind: ReusableEntityKind, val id: Long) : EditIngestionUiEffect
 }

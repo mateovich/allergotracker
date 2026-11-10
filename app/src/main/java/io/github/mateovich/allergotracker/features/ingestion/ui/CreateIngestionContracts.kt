@@ -49,7 +49,6 @@ data class CreateIngestionUiState(
     val selectedTimePreset: IngestionTimePreset? = IngestionTimePreset.NOW,
     val quantityOptions: List<QuantityOptionUiModel> = emptyList(),
     val selectedQuantityLevel: Int? = null,
-    val selectedReusableEntitySummary: String? = null,
     val selectedReusableEntityId: Long? = null,
     val selectedReusableEntityKind: ReusableEntityKind? = null,
     val reusableSearchQuery: String = "",

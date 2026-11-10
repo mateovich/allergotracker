@@ -1005,6 +1005,13 @@ private class FakeIngestionEventDao(
     ): Int = 0
 
     override suspend fun clearReusableEntityReferences(kind: String, reusableId: Long): Int = 0
+    override suspend fun convertReusableEntityReferences(
+        sourceKind: String,
+        sourceId: Long,
+        destinationKind: String,
+        destinationId: Long,
+        destinationName: String
+    ): Int = 0
 
     override fun observeRecordCount(): Flow<Int> = state.map { it.size }
 

@@ -58,8 +58,9 @@ class CreateCompoundViewModelTest {
     }
 
     @Test
-    fun seeded_ingredient_starts_with_single_ready_component() {
+    fun seeded_ingredient_prefills_name_but_leaves_components_empty() {
         val viewModel = buildViewModel(
+            prefilledName = "Oat milk",
             seededIngredient = IngestionReusableSelectionResult(
                 id = 7L,
                 name = "Oat milk",
@@ -67,9 +68,8 @@ class CreateCompoundViewModelTest {
             )
         )
 
-        assertEquals(listOf("Oat milk"), viewModel.state.value.components.map { it.name })
-        assertEquals(listOf("100"), viewModel.state.value.components.map { it.proportionPercent })
-        assertEquals("100% total", viewModel.state.value.totalPercentLabel)
+        assertEquals("Oat milk", viewModel.state.value.name)
+        assertTrue(viewModel.state.value.components.isEmpty())
     }
 
     @Test

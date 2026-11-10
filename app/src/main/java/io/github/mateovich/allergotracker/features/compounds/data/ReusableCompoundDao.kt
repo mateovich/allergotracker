@@ -74,6 +74,11 @@ interface ReusableCompoundDao {
     suspend fun replaceIngredientComponentReferences(sourceIngredientId: Long, destinationIngredientId: Long): Int
 
     @Query(
+        "UPDATE reusable_compound_components SET component_kind = 'compound', ingredient_id = NULL, child_compound_id = :compoundId WHERE component_kind = 'ingredient' AND ingredient_id = :ingredientId"
+    )
+    suspend fun replaceIngredientComponentsWithCompound(ingredientId: Long, compoundId: Long): Int
+
+    @Query(
         "SELECT COUNT(*) FROM reusable_compound_components WHERE component_kind = 'compound' AND child_compound_id = :compoundId"
     )
     suspend fun countChildCompoundReferences(compoundId: Long): Int

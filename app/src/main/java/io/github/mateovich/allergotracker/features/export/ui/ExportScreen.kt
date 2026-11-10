@@ -31,7 +31,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.mateovich.allergotracker.MainActivity
 import io.github.mateovich.allergotracker.core.designsystem.AppScreenScaffold
-import io.github.mateovich.allergotracker.core.designsystem.LocalOnlyNotice
 import kotlinx.coroutines.flow.collectLatest
 
 @Composable
@@ -65,7 +64,6 @@ fun ExportScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                LocalOnlyNotice()
                 Text(
                     text = state.distributionNotice,
                     style = MaterialTheme.typography.bodySmall,

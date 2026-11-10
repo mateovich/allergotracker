@@ -666,10 +666,17 @@ class EditCompoundViewModel(
 
     private fun EditCompoundUiState.withDerivedFields(): EditCompoundUiState {
         val totalBasisPoints = components.sumOf { it.proportionBasisPoints ?: 0 }
+        val filtered = if (componentSearchQuery.isBlank()) {
+            emptyList()
+        } else {
+            availableComponents
+                .filterByQuery(componentSearchQuery)
+                .take(MAX_VISIBLE_COMPONENT_OPTIONS)
+        }
         return copy(
             totalPercentLabel = "${totalBasisPoints.toPercentLabel()} total",
             canSave = !isLoading && name.isNotBlank() && components.hasCompleteValidComposition(),
-            filteredComponents = availableComponents.filterByQuery(componentSearchQuery)
+            filteredComponents = filtered
         )
     }
 

@@ -78,7 +78,7 @@ class MainActivityTest {
         composeRule.onNodeWithContentDescription("Export").performClick()
 
         composeRule.onNodeWithTag("export-screen").assertIsDisplayed()
-        composeRule.onNodeWithTag("local-only-notice").assertIsDisplayed()
+        composeRule.onNodeWithTag("local-only-notice").assertDoesNotExist()
         composeRule.onNodeWithTag("distribution-notice").assertIsDisplayed()
         composeRule.onNodeWithTag("export-workflow-section").assertIsDisplayed()
         composeRule.onNodeWithTag("export-format-selector").assertIsDisplayed()
@@ -286,11 +286,10 @@ class MainActivityTest {
         waitForTag("ingestion-inline-ingredient-name")
         composeRule.onNodeWithTag("ingestion-inline-ingredient-name").performTextReplacement("Oat milk")
         composeRule.onNodeWithTag("ingestion-inline-ingredient-save").performClick()
-        waitForTag("ingestion-reusable-summary")
+        waitForTag("ingestion-reusable-clear")
 
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk")
-        composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable ingredient selected: Oat milk")
     }
 
     @Test
@@ -302,7 +301,6 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Breakfast mix")
-        composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable compound selected: Breakfast mix")
     }
 
     @Test
@@ -344,7 +342,6 @@ class MainActivityTest {
 
         waitForTag("create-ingestion-form-screen")
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Chocolate mix")
-        composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable compound selected: Chocolate mix")
     }
 
     @Test
@@ -432,7 +429,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Breakfast mix")
         composeRule.onNodeWithTag("ingestion-notes").assertTextContains("Post workout")
-        composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable compound selected: Breakfast mix")
+        composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Breakfast mix")
         composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
 
         composeRule.onNodeWithTag("records-list").assertIsDisplayed()
@@ -454,10 +451,9 @@ class MainActivityTest {
         composeRule.onNodeWithText("Ingestion").performClick()
         composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Oat")
         composeRule.onNodeWithText("Oat milk - Ingredient").performClick()
-        waitForTag("ingestion-reusable-summary")
+        waitForTag("ingestion-reusable-clear")
 
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk")
-        composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable ingredient selected: Oat milk")
     }
 
     @Test
@@ -475,7 +471,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("oat")
         composeRule.onNodeWithText("Oat milk - Ingredient").assertIsDisplayed().performClick()
 
-        composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable ingredient selected: Oat milk")
+        composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk")
     }
 
     @Test
@@ -492,12 +488,12 @@ class MainActivityTest {
         waitForTag("ingestion-inline-ingredient-name")
         composeRule.onNodeWithTag("ingestion-inline-ingredient-name").performTextReplacement("Oat milk")
         composeRule.onNodeWithTag("ingestion-inline-ingredient-save").performClick()
-        waitForTag("ingestion-reusable-summary")
+        waitForTag("ingestion-reusable-clear")
 
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk")
         composeRule.onNodeWithTag("ingestion-notes").assertTextContains("Morning routine")
-        composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable ingredient selected: Oat milk")
+        composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk")
         composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
 
         composeRule.onNodeWithTag("records-list").assertIsDisplayed()
@@ -617,6 +613,53 @@ class MainActivityTest {
         composeRule.onNodeWithTag("records-screen-content").assertIsDisplayed()
         composeRule.onNodeWithText("Tea").assertIsDisplayed()
         composeRule.onNodeWithTag("records-list").assertIsDisplayed()
+    }
+
+    @Test
+    fun create_ingestion_in_field_clear_drops_reusable_selection_and_makes_field_editable() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+        createReusableIngredientInline("Banana")
+        composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Banana")
+        waitForText("Banana - Ingredient")
+        composeRule.onNodeWithText("Banana - Ingredient").performClick()
+        waitForTag("ingestion-reusable-clear")
+
+        composeRule.onNodeWithText("Clear").performClick()
+
+        composeRule.onAllNodesWithTag("ingestion-reusable-clear").assertCountEquals(0)
+        composeRule.onNodeWithTag("ingestion-reusable-search").assertEditableTextEmpty()
+    }
+
+    @Test
+    fun ingestion_edit_changes_linked_ingredient_by_typing_and_selecting_a_suggestion() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+        createReusableIngredientInline("Banana")
+        createReusableIngredientInline("Oat milk")
+        composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Oat milk")
+        waitForText("Oat milk - Ingredient")
+        composeRule.onNodeWithText("Oat milk - Ingredient").performClick()
+        composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
+        composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
+
+        waitForTag("records-list")
+        composeRule.onNodeWithText("Oat milk").performClick()
+        waitForTag("record-detail-edit")
+        composeRule.onNodeWithTag("record-detail-edit").performClick()
+
+        composeRule.onNodeWithTag("edit-ingestion-item-name").performTextReplacement("Zzz never saved")
+        composeRule.onNodeWithTag("edit-ingestion-save").assertIsNotEnabled()
+
+        composeRule.onNodeWithTag("edit-ingestion-item-name").performTextReplacement("Ban")
+        waitForText("Banana - Ingredient")
+        composeRule.onNodeWithText("Banana - Ingredient").performClick()
+        composeRule.onNodeWithTag("edit-ingestion-item-name").assertTextContains("Banana")
+        composeRule.onNodeWithTag("edit-ingestion-save").performScrollTo().performClick()
+
+        waitForTag("records-list")
+        composeRule.onNodeWithText("Banana").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Oat milk").assertCountEquals(0)
     }
 
     @Test
@@ -754,13 +797,13 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk plus")
-        composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable ingredient selected: Oat milk plus")
     }
 
     @Test
-    fun ingredient_edit_flow_can_seed_new_compound_and_return_selected_compound() {
+    fun make_it_a_compound_replaces_the_ingredient_and_relinks_saved_records() {
         composeRule.onNodeWithContentDescription("Add record").performClick()
         composeRule.onNodeWithText("Ingestion").performClick()
+        createReusableIngredientInline("Oats")
 
         composeRule.onNodeWithTag("ingestion-reusable-search").performTextReplacement("Oat milk")
         waitForTag("ingestion-create-inline-ingredient")
@@ -768,18 +811,17 @@ class MainActivityTest {
         waitForTag("ingestion-inline-ingredient-name")
         composeRule.onNodeWithTag("ingestion-inline-ingredient-name").performTextReplacement("Oat milk")
         composeRule.onNodeWithTag("ingestion-inline-ingredient-save").performClick()
-        waitForTag("ingestion-reusable-summary")
+        waitForTag("ingestion-reusable-clear")
         composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
         composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
 
         waitForTag("records-list")
-        composeRule.onNodeWithText("Oat milk").assertIsDisplayed()
         composeRule.onNodeWithText("2 Light snack - Reusable ingredient").assertIsDisplayed()
 
         composeRule.onNodeWithContentDescription("Add record").performClick()
         waitForTag("records-add-menu")
         composeRule.onNodeWithContentDescription("Ingestion").performClick()
-        composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Oat")
+        composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Oat milk")
         waitForText("Oat milk - Ingredient")
         composeRule.onNodeWithText("Oat milk - Ingredient").performClick()
 
@@ -790,24 +832,58 @@ class MainActivityTest {
         composeRule.onNodeWithTag("edit-ingredient-make-compound").performClick()
 
         composeRule.onNodeWithTag("create-compound-form-screen").assertIsDisplayed()
-        composeRule.onNodeWithText("Oat milk (ingredient)").assertIsDisplayed()
+        composeRule.onNodeWithTag("compound-replace-notice").assertIsDisplayed()
+        composeRule.onNodeWithTag("compound-name").assertTextContains("Oat milk")
+        composeRule.onAllNodesWithText("Oat milk (ingredient)").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Oat milk - Ingredient").assertCountEquals(0)
+        composeRule.onNodeWithTag("compound-save").assertIsNotEnabled()
+
+        composeRule.onNodeWithText("Oats - Ingredient").performClick()
+        setSliderPercentage("compound-component-slider-0", 100f)
         composeRule.onNodeWithTag("compound-total-label").assertTextContains("100% total")
-        composeRule.onNodeWithTag("compound-name").performTextReplacement("Oat milk blend")
         composeRule.onNodeWithTag("compound-save").performClick()
 
+        waitForTag("compound-replace-message")
+        composeRule.onNodeWithTag("compound-replace-message").assertTextContains("1 saved record(s)", substring = true)
+        composeRule.onNodeWithTag("compound-replace-confirm").performClick()
+
         waitForTag("create-ingestion-form-screen")
-        composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk blend")
-        composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable compound selected: Oat milk blend")
+        composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk")
         composeRule.onNodeWithTag("ingestion-quantity-2").performClick()
         composeRule.onNodeWithTag("ingestion-save").performScrollTo().performClick()
 
         waitForTag("records-list")
-        composeRule.onNode(
-            hasContentDescription("Oat milk, 2 Light snack - Reusable ingredient", substring = true)
-        ).assertIsDisplayed()
-        composeRule.onNode(
-            hasContentDescription("Oat milk blend, 2 Light snack - Reusable compound", substring = true)
-        ).assertIsDisplayed()
+        composeRule.onAllNodes(
+            hasContentDescription("Oat milk, 2 Light snack - Reusable compound", substring = true)
+        ).assertCountEquals(2)
+        composeRule.onAllNodes(
+            hasContentDescription("Reusable ingredient", substring = true)
+        ).assertCountEquals(0)
+    }
+
+    @Test
+    fun make_it_a_compound_cancelled_confirmation_keeps_the_ingredient() {
+        composeRule.onNodeWithContentDescription("Add record").performClick()
+        composeRule.onNodeWithText("Ingestion").performClick()
+        createReusableIngredientInline("Oats")
+        createReusableIngredientInline("Oat milk")
+        composeRule.onNodeWithTag("ingestion-reusable-search").performTextInput("Oat milk")
+        waitForText("Oat milk - Ingredient")
+        composeRule.onNodeWithText("Oat milk - Ingredient").performClick()
+        waitForTag("ingestion-reusable-edit")
+        composeRule.onNodeWithTag("ingestion-reusable-edit").performClick()
+        composeRule.onNodeWithTag("edit-ingredient-make-compound").performClick()
+
+        composeRule.onNodeWithText("Oats - Ingredient").performClick()
+        setSliderPercentage("compound-component-slider-0", 100f)
+        composeRule.onNodeWithTag("compound-save").performClick()
+        waitForTag("compound-replace-cancel")
+        composeRule.onNodeWithTag("compound-replace-cancel").performClick()
+
+        composeRule.onAllNodesWithTag("compound-replace-confirm").assertCountEquals(0)
+        composeRule.onNodeWithTag("create-compound-form-screen").assertIsDisplayed()
+        navigateBack()
+        composeRule.onNodeWithTag("edit-ingredient-form-screen").assertIsDisplayed()
     }
 
     @Test
@@ -825,7 +901,6 @@ class MainActivityTest {
 
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Breakfast mix plus")
-        composeRule.onNodeWithTag("ingestion-reusable-summary").assertTextContains("Reusable compound selected: Breakfast mix plus")
     }
 
     @Test
@@ -881,8 +956,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("edit-compound-save").performClick()
 
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
-        composeRule.onNodeWithTag("ingestion-reusable-summary")
-            .assertTextContains("Reusable compound selected: Breakfast mix")
+        composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Breakfast mix")
     }
 
     @Test
@@ -945,7 +1019,7 @@ class MainActivityTest {
         composeRule.onNodeWithText("Ingredient name").assertIsDisplayed()
         composeRule.onNodeWithText("Notes (optional)").assertIsDisplayed()
         composeRule.onNodeWithText("Save changes").assertIsDisplayed()
-        composeRule.onNodeWithText("Offline-ready. Export to share your data.").assertIsDisplayed()
+        composeRule.onNodeWithText("Offline-ready. Export to share your data.").assertDoesNotExist()
 
         composeRule.onNodeWithTag("edit-ingredient-name").performTextReplacement("   ")
         composeRule.onNodeWithText("Enter an ingredient name.").assertIsDisplayed()
@@ -959,7 +1033,7 @@ class MainActivityTest {
         composeRule.onNodeWithText("Edit Compound").assertIsDisplayed()
         composeRule.onNodeWithText("Compound name").assertIsDisplayed()
         composeRule.onNodeWithText("Save changes").assertIsDisplayed()
-        composeRule.onNodeWithText("Offline-ready. Export to share your data.").assertIsDisplayed()
+        composeRule.onNodeWithText("Offline-ready. Export to share your data.").assertDoesNotExist()
 
         navigateBack()
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
@@ -977,7 +1051,7 @@ class MainActivityTest {
         composeRule.onNodeWithText("Edit Exposure Type").assertIsDisplayed()
         composeRule.onNodeWithText("Exposure type").assertIsDisplayed()
         composeRule.onNodeWithText("Save changes").assertIsDisplayed()
-        composeRule.onNodeWithText("Offline-ready. Export to share your data.").assertIsDisplayed()
+        composeRule.onNodeWithText("Offline-ready. Export to share your data.").assertDoesNotExist()
     }
 
     @Test
@@ -999,7 +1073,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("edit-ingredient-retire-confirm").performClick()
 
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
-        composeRule.onAllNodesWithTag("ingestion-reusable-summary").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("ingestion-reusable-clear").assertCountEquals(0)
         composeRule.onAllNodesWithTag("ingestion-reusable-edit").assertCountEquals(0)
         composeRule.onNodeWithTag("ingestion-form-message")
             .assertTextContains("Saved reusable item was retired. Review the text value before saving.")
@@ -1030,8 +1104,6 @@ class MainActivityTest {
         composeRule.onNodeWithTag("edit-ingredient-merge-confirm").performClick()
 
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
-        composeRule.onNodeWithTag("ingestion-reusable-summary")
-            .assertTextContains("Reusable ingredient selected: Oat milk plus")
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Oat milk plus")
     }
 
@@ -1061,8 +1133,6 @@ class MainActivityTest {
         composeRule.onNodeWithTag("edit-compound-merge-confirm").performClick()
 
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
-        composeRule.onNodeWithTag("ingestion-reusable-summary")
-            .assertTextContains("Reusable compound selected: Breakfast mix plus")
         composeRule.onNodeWithTag("ingestion-reusable-search").assertTextContains("Breakfast mix plus")
     }
 
@@ -1081,7 +1151,7 @@ class MainActivityTest {
         composeRule.onNodeWithTag("edit-compound-retire-confirm").performClick()
 
         composeRule.onNodeWithTag("create-ingestion-form-screen").assertIsDisplayed()
-        composeRule.onAllNodesWithTag("ingestion-reusable-summary").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("ingestion-reusable-clear").assertCountEquals(0)
         composeRule.onAllNodesWithTag("ingestion-reusable-edit").assertCountEquals(0)
         composeRule.onNodeWithTag("ingestion-form-message")
             .assertTextContains("Saved reusable item was retired. Review the text value before saving.")
@@ -1424,8 +1494,8 @@ class MainActivityTest {
 
     private fun assertOfflineFormHasNoDependencyWarnings(destinationTag: String) {
         composeRule.onNodeWithTag(destinationTag).assertIsDisplayed()
-        composeRule.onNodeWithTag("local-only-notice").assertIsDisplayed()
-        composeRule.onNodeWithText("Offline-ready. Export to share your data.").assertIsDisplayed()
+        composeRule.onNodeWithTag("local-only-notice").assertDoesNotExist()
+        composeRule.onNodeWithText("Offline-ready. Export to share your data.").assertDoesNotExist()
         when {
             destinationTag.startsWith("create-ingestion") -> composeRule.onAllNodesWithText("Couldn't save ingestion locally. Try again.").assertCountEquals(0)
             destinationTag.startsWith("create-exposure") -> composeRule.onAllNodesWithText("Couldn't save exposure locally. Try again.").assertCountEquals(0)

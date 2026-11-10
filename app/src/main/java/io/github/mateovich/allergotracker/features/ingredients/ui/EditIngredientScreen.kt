@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.mateovich.allergotracker.core.designsystem.AppScreenScaffold
-import io.github.mateovich.allergotracker.core.designsystem.LocalOnlyNotice
 import io.github.mateovich.allergotracker.features.ingestion.ui.IngestionReusableSelectionResult
 import io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredientMergePreview
 import io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredientRetirementImpact
@@ -59,6 +58,7 @@ fun EditIngredientScreen(
                 is EditIngredientUiEffect.NavigateBackWithSelection -> onNavigateBackWithSelection(effect.result)
                 is EditIngredientUiEffect.NavigateToCreateCompound -> onNavigateToCreateCompound(
                     io.github.mateovich.allergotracker.navigation.AppRoutes.createCompound(
+                        prefillName = effect.name,
                         seedIngredientId = effect.id,
                         seedIngredientName = effect.name
                     )
@@ -104,7 +104,6 @@ fun EditIngredientScreen(
                 .testTag("edit-ingredient-form-screen"),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            LocalOnlyNotice()
             OutlinedTextField(
                 value = state.name,
                 onValueChange = { viewModel.onIntent(EditIngredientUiIntent.UpdateName(it)) },

@@ -115,7 +115,6 @@ class CreateIngestionViewModel(
             is CreateIngestionUiIntent.UpdateItemName -> updateState {
                 it.copy(
                     itemName = intent.value,
-                    selectedReusableEntitySummary = null,
                     selectedReusableEntityId = null,
                     selectedReusableEntityKind = null,
                     itemNameError = null,
@@ -202,7 +201,6 @@ class CreateIngestionViewModel(
             CreateIngestionUiIntent.ClearRetiredReusableSelection -> updateState {
                 // Keep itemName in reusableSearchQuery so the unified field shows the name for review.
                 it.copy(
-                    selectedReusableEntitySummary = null,
                     selectedReusableEntityId = null,
                     selectedReusableEntityKind = null,
                     reusableSearchQuery = it.itemName,
@@ -409,7 +407,6 @@ class CreateIngestionViewModel(
     ): CreateIngestionUiState {
         return copy(
             itemName = result.name,
-            selectedReusableEntitySummary = "${result.kind.label} selected: ${result.name}",
             selectedReusableEntityId = result.id,
             selectedReusableEntityKind = result.kind,
             reusableSearchQuery = result.name,

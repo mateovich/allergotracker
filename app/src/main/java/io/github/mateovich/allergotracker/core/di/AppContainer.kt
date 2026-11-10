@@ -3,6 +3,7 @@ package io.github.mateovich.allergotracker.core.di
 import android.content.Context
 import androidx.room.Room
 import androidx.room.withTransaction
+import io.github.mateovich.allergotracker.core.common.result.AppResult
 import io.github.mateovich.allergotracker.core.database.AppDatabase
 import io.github.mateovich.allergotracker.core.database.HomeDao
 import io.github.mateovich.allergotracker.core.distribution.AppDistributionFactory
@@ -23,6 +24,7 @@ import io.github.mateovich.allergotracker.core.database.migrations.Migration_14_
 import io.github.mateovich.allergotracker.features.compounds.data.RoomReusableCompoundRepository
 import io.github.mateovich.allergotracker.features.compounds.domain.CreateReusableCompoundUseCase
 import io.github.mateovich.allergotracker.features.compounds.domain.CompoundChildEdge
+import io.github.mateovich.allergotracker.features.compounds.domain.ReplaceIngredientWithCompoundUseCase
 import io.github.mateovich.allergotracker.features.compounds.domain.CompoundCompositionIntegrity
 import io.github.mateovich.allergotracker.features.compounds.domain.GetReusableCompoundMergePreviewUseCase
 import io.github.mateovich.allergotracker.features.compounds.domain.GetReusableCompoundRetirementImpactUseCase
@@ -520,6 +522,39 @@ class AppContainer(appContext: Context) {
             createOutbreakEventUseCase,
             observeReusableEventCatalogUseCase
         )
+    private val replaceIngredientWithCompoundUseCase = ReplaceIngredientWithCompoundUseCase(
+        createCompound = createReusableCompoundUseCase::invoke,
+        getIngredientName = { ingredientId ->
+            when (val result = reusableIngredientRepository.getIngredient(ingredientId)) {
+                is AppResult.Success -> AppResult.Success(result.value.name)
+                is AppResult.Error -> result
+            }
+        },
+        deleteIngredient = reusableIngredientRepository::deleteIngredient,
+        countIngestionReferences = { ingredientId ->
+            ingestionEventDao.countReusableEntityReferences(ReusableEntityKind.INGREDIENT.storageValue, ingredientId)
+        },
+        countComponentReferences = reusableCompoundDao::countIngredientComponentReferences,
+        findParentCompoundIds = reusableCompoundDao::findCompoundIdsReferencingIngredient,
+        findChildCompoundEdges = {
+            reusableCompoundDao.findAllChildCompoundEdges().map { edge ->
+                CompoundChildEdge(edge.parentCompoundId, edge.childCompoundId)
+            }
+        },
+        reassignIngestionReferences = { ingredientId, compoundId, compoundName ->
+            ingestionEventDao.convertReusableEntityReferences(
+                ReusableEntityKind.INGREDIENT.storageValue,
+                ingredientId,
+                ReusableEntityKind.COMPOUND.storageValue,
+                compoundId,
+                compoundName
+            )
+        },
+        replaceComponentReferences = reusableCompoundDao::replaceIngredientComponentsWithCompound,
+        runAtomically = { block ->
+            appDatabase.withTransaction { block() }
+        }
+    )
     val createIngredientViewModelFactory: CreateIngredientViewModelFactory =
         CreateIngredientViewModelFactory(createReusableIngredientUseCase)
     fun createCreateCompoundViewModelFactory(
@@ -531,6 +566,7 @@ class AppContainer(appContext: Context) {
             createReusableIngredientUseCase,
             observeReusableIngredientsUseCase,
             observeReusableCompoundsUseCase,
+            replaceIngredientWithCompoundUseCase,
             initialName,
             initialSeedIngredient
         )
@@ -593,7 +629,10 @@ class AppContainer(appContext: Context) {
                     ReusableEntityKind.INGREDIENT -> reusableIngredientDao.existsById(id)
                     ReusableEntityKind.COMPOUND -> reusableCompoundDao.existsById(id)
                 }
-            }
+            },
+            observeReusableIngredientsUseCase = observeReusableIngredientsUseCase,
+            observeReusableCompoundsUseCase = observeReusableCompoundsUseCase,
+            createReusableIngredientUseCase = createReusableIngredientUseCase
         )
     }
 

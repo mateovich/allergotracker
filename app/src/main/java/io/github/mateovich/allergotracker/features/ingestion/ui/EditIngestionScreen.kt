@@ -19,7 +19,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -35,7 +34,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.mateovich.allergotracker.core.designsystem.AppScreenScaffold
 import io.github.mateovich.allergotracker.core.designsystem.DateTimePickerSection
-import io.github.mateovich.allergotracker.core.designsystem.LocalOnlyNotice
 import io.github.mateovich.allergotracker.navigation.AppRoutes
 import kotlinx.coroutines.flow.collectLatest
 
@@ -72,12 +70,6 @@ fun EditIngestionScreen(
         viewModel.effects.collectLatest { effect ->
             when (effect) {
                 EditIngestionUiEffect.NavigateToRecords -> onNavigateToRoute(AppRoutes.RECORDS)
-                is EditIngestionUiEffect.NavigateToEditReusableEntity -> onNavigateToRoute(
-                    when (effect.kind) {
-                        io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEntityKind.INGREDIENT -> AppRoutes.editIngredient(effect.id)
-                        io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEntityKind.COMPOUND -> AppRoutes.editCompound(effect.id)
-                    }
-                )
             }
         }
     }
@@ -155,28 +147,12 @@ fun EditIngestionScreen(
                     }
                 )
             }
-            LocalOnlyNotice()
-            state.selectedReusableEntitySummary?.let { summary ->
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(text = summary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("edit-ingestion-reusable-summary"))
-                    TextButton(
-                        onClick = { viewModel.onIntent(EditIngestionUiIntent.EditSelectedReusableEntity) },
-                        modifier = Modifier.testTag("edit-ingestion-reusable-edit")
-                    ) {
-                        Text("Edit saved reusable item")
-                    }
-                }
-            }
-            OutlinedTextField(
-                value = state.itemName,
-                onValueChange = { viewModel.onIntent(EditIngestionUiIntent.UpdateItemName(it)) },
-                modifier = Modifier.fillMaxWidth().testTag("edit-ingestion-item-name"),
-                label = { Text("What did you ingest?") },
-                supportingText = { state.itemNameError?.let { Text(it) } },
-                isError = state.itemNameError != null,
-                readOnly = state.isItemNameReadOnly,
-                singleLine = true
+
+            EditIngestionReusableSearchField(
+                state = state,
+                onIntent = { viewModel.onIntent(it) }
             )
+
             DateTimePickerSection(
                 title = "When did it happen?",
                 timeLabel = state.occurredAtLabel,

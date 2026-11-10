@@ -294,6 +294,7 @@ class RoomStructuredImportRepositoryJvmTest {
         override suspend fun findCompoundIdsReferencingIngredient(ingredientId: Long): List<Long> = emptyList()
         override suspend fun countIngredientMergeConflictingCompounds(sourceIngredientId: Long, destinationIngredientId: Long): Int = 0
         override suspend fun replaceIngredientComponentReferences(sourceIngredientId: Long, destinationIngredientId: Long): Int = 0
+        override suspend fun replaceIngredientComponentsWithCompound(ingredientId: Long, compoundId: Long): Int = 0
         override suspend fun countChildCompoundReferences(compoundId: Long): Int = 0
         override suspend fun countCompoundMergeConflictingParents(sourceCompoundId: Long, destinationCompoundId: Long): Int = 0
         override suspend fun findParentCompoundIdsReferencingChild(sourceCompoundId: Long): List<Long> = emptyList()

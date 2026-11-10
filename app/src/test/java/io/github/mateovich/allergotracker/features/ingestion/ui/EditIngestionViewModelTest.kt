@@ -63,7 +63,11 @@ class EditIngestionViewModelTest {
         viewModel.onIntent(EditIngestionUiIntent.Load)
         val effect = async { viewModel.effects.first() }
 
-        viewModel.onIntent(EditIngestionUiIntent.UpdateItemName("Tea updated"))
+        viewModel.onIntent(
+            EditIngestionUiIntent.SelectReusableEntity(
+                IngestionReusableSelectionResult(id = 21L, name = "Tea updated", kind = ReusableEntityKind.INGREDIENT)
+            )
+        )
         viewModel.onIntent(EditIngestionUiIntent.Save)
 
         assertEquals(EditIngestionUiEffect.NavigateToRecords, effect.await())
@@ -111,7 +115,7 @@ class EditIngestionViewModelTest {
         var deleteCalls = 0
         val repository = object : IngestionRepository {
             override suspend fun createIngestion(command: io.github.mateovich.allergotracker.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
-            override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> = AppResult.Success(IngestionEvent(id, "Tea", 2, existingOccurredAt, "with honey"))
+            override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> = AppResult.Success(IngestionEvent(id, "Tea", 2, existingOccurredAt, "with honey", reusableEntityKind = ReusableEntityKind.INGREDIENT, reusableEntityId = 5L))
             override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> = AppResult.Success(IngestionEvent(command.id, command.itemName, command.quantityLevel ?: 0, command.occurredAtEpochMs, command.notes))
             override suspend fun deleteIngestion(id: Long): AppResult<Unit> {
                 deleteCalls += 1
@@ -140,7 +144,7 @@ class EditIngestionViewModelTest {
             override suspend fun createIngestion(command: io.github.mateovich.allergotracker.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
 
             override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> {
-                return AppResult.Success(IngestionEvent(id, "Tea", 2, existingOccurredAt, "with honey"))
+                return AppResult.Success(IngestionEvent(id, "Tea", 2, existingOccurredAt, "with honey", reusableEntityKind = ReusableEntityKind.INGREDIENT, reusableEntityId = 5L))
             }
 
             override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> {
@@ -267,7 +271,7 @@ class EditIngestionViewModelTest {
         var updateCalls = 0
         val repository = object : IngestionRepository {
             override suspend fun createIngestion(command: io.github.mateovich.allergotracker.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
-            override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> = AppResult.Success(IngestionEvent(id, "Tea", 2, existingOccurredAt, "with honey"))
+            override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> = AppResult.Success(IngestionEvent(id, "Tea", 2, existingOccurredAt, "with honey", reusableEntityKind = ReusableEntityKind.INGREDIENT, reusableEntityId = 5L))
             override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> {
                 updateCalls += 1
                 return AppResult.Success(IngestionEvent(command.id, command.itemName, command.quantityLevel ?: 0, command.occurredAtEpochMs, command.notes))
@@ -295,7 +299,7 @@ class EditIngestionViewModelTest {
         val updateGate = CompletableDeferred<Unit>()
         val repository = object : IngestionRepository {
             override suspend fun createIngestion(command: io.github.mateovich.allergotracker.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
-            override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> = AppResult.Success(IngestionEvent(id, "Tea", 2, existingOccurredAt, "with honey"))
+            override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> = AppResult.Success(IngestionEvent(id, "Tea", 2, existingOccurredAt, "with honey", reusableEntityKind = ReusableEntityKind.INGREDIENT, reusableEntityId = 5L))
             override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> {
                 updateCalls += 1
                 updateGate.await()
@@ -333,7 +337,7 @@ class EditIngestionViewModelTest {
                 return if (loadAttempts == 1) {
                     AppResult.Error(io.github.mateovich.allergotracker.core.common.error.DomainError.PersistenceError("Couldn't load ingestion locally. Try again."))
                 } else {
-                    AppResult.Success(IngestionEvent(id, "Tea", 2, existingOccurredAt, "with honey"))
+                    AppResult.Success(IngestionEvent(id, "Tea", 2, existingOccurredAt, "with honey", reusableEntityKind = ReusableEntityKind.INGREDIENT, reusableEntityId = 5L))
                 }
             }
 
@@ -361,27 +365,39 @@ class EditIngestionViewModelTest {
     }
 
     @Test
-    fun linked_name_override_keeps_reusable_identity_and_readonly_state() = runBlocking {
+    fun linked_record_loads_with_editable_item_name_and_reusable_identity() = runBlocking {
         val viewModel = buildReusableLinkedViewModel(kind = ReusableEntityKind.INGREDIENT)
 
         viewModel.onIntent(EditIngestionUiIntent.Load)
-        viewModel.onIntent(EditIngestionUiIntent.UpdateItemName("Manual override"))
 
         assertEquals("Oat milk", viewModel.state.value.itemName)
         assertEquals(ReusableEntityKind.INGREDIENT, viewModel.state.value.selectedReusableEntityKind)
         assertEquals(11L, viewModel.state.value.selectedReusableEntityId)
-        assertEquals("Reusable ingredient selected: Oat milk", viewModel.state.value.selectedReusableEntitySummary)
-        assertTrue(viewModel.state.value.isItemNameReadOnly)
+        // Field is editable (no isItemNameReadOnly flag)
+        assertTrue(viewModel.state.value.canSave)
     }
 
     @Test
-    fun linked_compound_loads_with_readonly_item_name() = runBlocking {
+    fun linked_compound_loads_with_editable_field() = runBlocking {
         val viewModel = buildReusableLinkedViewModel(kind = ReusableEntityKind.COMPOUND)
 
         viewModel.onIntent(EditIngestionUiIntent.Load)
 
         assertEquals(ReusableEntityKind.COMPOUND, viewModel.state.value.selectedReusableEntityKind)
-        assertTrue(viewModel.state.value.isItemNameReadOnly)
+        assertEquals(11L, viewModel.state.value.selectedReusableEntityId)
+        assertTrue(viewModel.state.value.canSave)
+    }
+
+    @Test
+    fun update_item_name_clears_reusable_link() = runBlocking {
+        val viewModel = buildReusableLinkedViewModel(kind = ReusableEntityKind.INGREDIENT)
+        viewModel.onIntent(EditIngestionUiIntent.Load)
+
+        viewModel.onIntent(EditIngestionUiIntent.UpdateItemName("Manual override"))
+
+        assertEquals("Manual override", viewModel.state.value.itemName)
+        assertNull(viewModel.state.value.selectedReusableEntityKind)
+        assertNull(viewModel.state.value.selectedReusableEntityId)
     }
 
     @Test
@@ -392,7 +408,6 @@ class EditIngestionViewModelTest {
 
         viewModel.onIntent(EditIngestionUiIntent.UpdateNotes("less honey"))
         viewModel.onIntent(EditIngestionUiIntent.SelectQuantityLevel(3))
-        viewModel.onIntent(EditIngestionUiIntent.UpdateItemName("Manual override"))
         viewModel.onIntent(EditIngestionUiIntent.Save)
 
         val command = updatedCommands.single()
@@ -404,26 +419,62 @@ class EditIngestionViewModelTest {
     }
 
     @Test
-    fun unlinked_manual_record_can_update_item_name() = runBlocking {
-        val viewModel = buildViewModel()
+    fun unlinked_legacy_record_cannot_save_until_reusable_is_selected() = runBlocking {
+        val updatedCommands = mutableListOf<UpdateIngestionEventCommand>()
+        val viewModel = buildViewModel(updatedCommands = updatedCommands, linked = false)
 
         viewModel.onIntent(EditIngestionUiIntent.Load)
-        viewModel.onIntent(EditIngestionUiIntent.UpdateItemName("Tea updated"))
+        viewModel.onIntent(EditIngestionUiIntent.Save)
 
-        assertEquals("Tea updated", viewModel.state.value.itemName)
-        assertNull(viewModel.state.value.selectedReusableEntityId)
-        assertTrue(!viewModel.state.value.isItemNameReadOnly)
+        assertEquals("Tea", viewModel.state.value.itemName)
+        assertTrue(!viewModel.state.value.canSave)
+        assertTrue(updatedCommands.isEmpty())
+
+        viewModel.onIntent(
+            EditIngestionUiIntent.SelectReusableEntity(
+                IngestionReusableSelectionResult(id = 21L, name = "Green tea", kind = ReusableEntityKind.INGREDIENT)
+            )
+        )
+        viewModel.onIntent(EditIngestionUiIntent.Save)
+
+        assertEquals(21L, updatedCommands.single().reusableEntityId)
+        assertEquals("Green tea", updatedCommands.single().itemName)
     }
 
     @Test
-    fun edit_selected_reusable_entity_navigates_for_active_link() = runBlocking {
-        val viewModel = buildReusableLinkedViewModel(kind = ReusableEntityKind.COMPOUND)
+    fun typing_unmatched_name_unlinks_record_and_blocks_save() = runBlocking {
+        val updatedCommands = mutableListOf<UpdateIngestionEventCommand>()
+        val viewModel = buildViewModel(updatedCommands = updatedCommands)
         viewModel.onIntent(EditIngestionUiIntent.Load)
-        val effect = async { viewModel.effects.first() }
 
-        viewModel.onIntent(EditIngestionUiIntent.EditSelectedReusableEntity)
+        viewModel.onIntent(EditIngestionUiIntent.UpdateReusableSearchQuery("Something never saved"))
+        viewModel.onIntent(EditIngestionUiIntent.Save)
 
-        assertEquals(EditIngestionUiEffect.NavigateToEditReusableEntity(ReusableEntityKind.COMPOUND, 11L), effect.await())
+        assertEquals("Something never saved", viewModel.state.value.reusableSearchQuery)
+        assertNull(viewModel.state.value.selectedReusableEntityId)
+        assertNull(viewModel.state.value.selectedReusableEntityKind)
+        assertTrue(!viewModel.state.value.canSave)
+        assertTrue(updatedCommands.isEmpty())
+    }
+
+    @Test
+    fun selecting_another_entity_replaces_link_and_saves_new_identity() = runBlocking {
+        val updatedCommands = mutableListOf<UpdateIngestionEventCommand>()
+        val viewModel = buildViewModel(updatedCommands = updatedCommands)
+        viewModel.onIntent(EditIngestionUiIntent.Load)
+
+        viewModel.onIntent(EditIngestionUiIntent.UpdateReusableSearchQuery("Gran"))
+        viewModel.onIntent(
+            EditIngestionUiIntent.SelectReusableEntity(
+                IngestionReusableSelectionResult(id = 9L, name = "Granola", kind = ReusableEntityKind.COMPOUND)
+            )
+        )
+        viewModel.onIntent(EditIngestionUiIntent.Save)
+
+        val command = updatedCommands.single()
+        assertEquals("Granola", command.itemName)
+        assertEquals(ReusableEntityKind.COMPOUND, command.reusableEntityKind)
+        assertEquals(9L, command.reusableEntityId)
     }
 
     @Test
@@ -456,7 +507,7 @@ class EditIngestionViewModelTest {
     }
 
     @Test
-    fun partial_reusable_identity_clears_link_and_allows_manual_save() = runBlocking {
+    fun partial_reusable_identity_clears_link_and_blocks_manual_save() = runBlocking {
         val updatedCommands = mutableListOf<UpdateIngestionEventCommand>()
         val repository = object : IngestionRepository {
             override suspend fun createIngestion(command: io.github.mateovich.allergotracker.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
@@ -497,11 +548,8 @@ class EditIngestionViewModelTest {
         assertEquals("Manual oat milk", viewModel.state.value.itemName)
         assertNull(viewModel.state.value.selectedReusableEntityKind)
         assertNull(viewModel.state.value.selectedReusableEntityId)
-        assertNull(viewModel.state.value.selectedReusableEntitySummary)
-        assertTrue(!viewModel.state.value.isItemNameReadOnly)
-        assertEquals("Manual oat milk", updatedCommands.single().itemName)
-        assertNull(updatedCommands.single().reusableEntityKind)
-        assertNull(updatedCommands.single().reusableEntityId)
+        assertTrue(!viewModel.state.value.canSave)
+        assertTrue(updatedCommands.isEmpty())
     }
 
     @Test
@@ -543,9 +591,8 @@ class EditIngestionViewModelTest {
         assertEquals("Oat milk", viewModel.state.value.itemName)
         assertNull(viewModel.state.value.selectedReusableEntityId)
         assertNull(viewModel.state.value.selectedReusableEntityKind)
-        assertNull(viewModel.state.value.selectedReusableEntitySummary)
-        assertEquals("Saved reusable item was retired. Review the text value before saving.", viewModel.state.value.formMessage)
-        assertTrue(!viewModel.state.value.isItemNameReadOnly)
+        assertEquals("Saved reusable item was retired. Select another saved item before saving.", viewModel.state.value.formMessage)
+        assertTrue(!viewModel.state.value.canSave)
     }
 
     @Test
@@ -587,19 +634,29 @@ class EditIngestionViewModelTest {
         assertEquals("Oat milk", viewModel.state.value.itemName)
         assertNull(viewModel.state.value.selectedReusableEntityId)
         assertNull(viewModel.state.value.selectedReusableEntityKind)
-        assertNull(viewModel.state.value.selectedReusableEntitySummary)
-        assertEquals("Saved reusable item was retired. Review the text value before saving.", viewModel.state.value.formMessage)
-        assertTrue(!viewModel.state.value.isItemNameReadOnly)
+        assertEquals("Saved reusable item was retired. Select another saved item before saving.", viewModel.state.value.formMessage)
+        assertTrue(!viewModel.state.value.canSave)
     }
 
     private fun buildViewModel(
-        updatedCommands: MutableList<UpdateIngestionEventCommand> = mutableListOf()
+        updatedCommands: MutableList<UpdateIngestionEventCommand> = mutableListOf(),
+        linked: Boolean = true
     ): EditIngestionViewModel {
         val repository = object : IngestionRepository {
             override suspend fun createIngestion(command: io.github.mateovich.allergotracker.features.ingestion.domain.CreateIngestionEventCommand): AppResult<IngestionEvent> = error("unused")
 
             override suspend fun getIngestion(id: Long): AppResult<IngestionEvent> {
-                return AppResult.Success(IngestionEvent(id, "Tea", 2, existingOccurredAt, "with honey"))
+                return AppResult.Success(
+                    IngestionEvent(
+                        id = id,
+                        itemName = "Tea",
+                        quantityLevel = 2,
+                        occurredAtEpochMs = existingOccurredAt,
+                        notes = "with honey",
+                        reusableEntityKind = ReusableEntityKind.INGREDIENT.takeIf { linked },
+                        reusableEntityId = 5L.takeIf { linked }
+                    )
+                )
             }
 
             override suspend fun updateIngestion(command: UpdateIngestionEventCommand): AppResult<IngestionEvent> {

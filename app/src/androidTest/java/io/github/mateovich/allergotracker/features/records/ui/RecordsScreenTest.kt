@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -59,6 +60,7 @@ import io.github.mateovich.allergotracker.features.ingredients.domain.CreateReus
 import io.github.mateovich.allergotracker.features.ingredients.domain.ObserveReusableIngredientsUseCase
 import io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredient
 import io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredientRepository
+import io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEntityKind
 import io.github.mateovich.allergotracker.features.ingestion.domain.UpdateIngestionEventCommand
 import io.github.mateovich.allergotracker.features.ingestion.domain.UpdateIngestionEventUseCase
 import io.github.mateovich.allergotracker.features.ingestion.ui.CreateIngestionScreen
@@ -255,7 +257,9 @@ class RecordsScreenTest {
             itemName = "Tea",
             quantityLevel = 2,
             occurredAtEpochMs = fixedNow - 60_000L,
-            notes = "with honey"
+            notes = "with honey",
+            reusableEntityKind = ReusableEntityKind.INGREDIENT,
+            reusableEntityId = 5L
         )
 
         val recordsRepository = object : RecordsRepository {
@@ -355,12 +359,12 @@ class RecordsScreenTest {
         composeRule.onNodeWithTag("record-detail-edit").performClick()
         composeRule.onNodeWithTag("edit-ingestion-form-screen").assertIsDisplayed()
 
-        composeRule.onNodeWithTag("edit-ingestion-item-name").performTextReplacement("Tea updated")
+        composeRule.onNodeWithTag("edit-ingestion-item-name").assertTextContains("Tea")
+        composeRule.onNodeWithTag("edit-ingestion-notes").performTextReplacement("Evening cup")
         composeRule.onNodeWithTag("edit-ingestion-save").performClick()
 
         composeRule.onNodeWithTag("records-list").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Tea updated").assertCountEquals(1)
-        composeRule.onAllNodesWithText("Tea").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Tea").assertCountEquals(1)
     }
 
     @Test
@@ -1127,8 +1131,8 @@ private fun assertEditFormShowsOfflineNotice(
     composeRule.onNodeWithTag(recordTag).performClick()
     composeRule.onNodeWithTag("record-detail-edit").performClick()
     composeRule.onNodeWithTag(formTag).assertIsDisplayed()
-    composeRule.onNodeWithTag("local-only-notice").assertIsDisplayed()
-    composeRule.onNodeWithText("Offline-ready. Export to share your data.").assertIsDisplayed()
+    composeRule.onNodeWithTag("local-only-notice").assertDoesNotExist()
+    composeRule.onNodeWithText("Offline-ready. Export to share your data.").assertDoesNotExist()
 }
 
 private fun RecordsScreenTest.assertNodeAppearsAbove(upperTag: String, lowerTag: String) {

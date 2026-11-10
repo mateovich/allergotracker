@@ -2,6 +2,12 @@ package io.github.mateovich.allergotracker.features.compounds.ui
 
 import io.github.mateovich.allergotracker.features.ingestion.ui.IngestionReusableSelectionResult
 
+data class ReplaceIngredientConfirmationUiModel(
+    val ingredientName: String,
+    val ingestionReferenceCount: Int,
+    val compoundReferenceCount: Int
+)
+
 data class CreateCompoundUiState(
     val title: String = "Create Compound",
     val name: String = "",
@@ -25,7 +31,9 @@ data class CreateCompoundUiState(
     val showInlineIngredientDialog: Boolean = false,
     val inlineIngredientName: String = "",
     val isSaving: Boolean = false,
-    val canSave: Boolean = false
+    val canSave: Boolean = false,
+    val replacedIngredientName: String? = null,
+    val replacementConfirmation: ReplaceIngredientConfirmationUiModel? = null
 )
 
 sealed interface CreateCompoundUiIntent {
@@ -43,6 +51,8 @@ sealed interface CreateCompoundUiIntent {
     data class ShowInlineIngredientDialog(val prefillName: String) : CreateCompoundUiIntent
     data object CancelInlineIngredientCreation : CreateCompoundUiIntent
     data object Save : CreateCompoundUiIntent
+    data object ConfirmReplacement : CreateCompoundUiIntent
+    data object DismissReplacementConfirmation : CreateCompoundUiIntent
 }
 
 sealed interface CreateCompoundUiEffect {

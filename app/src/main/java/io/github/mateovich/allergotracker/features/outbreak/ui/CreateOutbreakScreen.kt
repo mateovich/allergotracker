@@ -28,7 +28,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.mateovich.allergotracker.core.designsystem.AppScreenScaffold
 import io.github.mateovich.allergotracker.core.designsystem.DateTimePickerSection
-import io.github.mateovich.allergotracker.core.designsystem.LocalOnlyNotice
 import io.github.mateovich.allergotracker.features.eventcatalog.domain.ReusableEventCatalogKind
 import io.github.mateovich.allergotracker.features.eventcatalog.ui.EditedEventCatalogSelectionResult
 import io.github.mateovich.allergotracker.navigation.AppRoutes
@@ -99,8 +98,6 @@ fun CreateOutbreakScreen(
                 .testTag("create-outbreak-form-screen"),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            LocalOnlyNotice()
-
             OutbreakCatalogField(
                 title = "What happened?",
                 value = state.outbreakDescriptor,

@@ -9,6 +9,7 @@ import io.github.mateovich.allergotracker.features.compounds.domain.CompoundComp
 import io.github.mateovich.allergotracker.features.compounds.domain.CreateReusableCompoundCommand
 import io.github.mateovich.allergotracker.features.compounds.domain.CreateReusableCompoundComponentCommand
 import io.github.mateovich.allergotracker.features.compounds.domain.CreateReusableCompoundUseCase
+import io.github.mateovich.allergotracker.features.compounds.domain.ReplaceIngredientWithCompoundUseCase
 import io.github.mateovich.allergotracker.features.compounds.domain.ReusableCompound
 import io.github.mateovich.allergotracker.features.ingestion.domain.ReusableEntityKind
 import io.github.mateovich.allergotracker.features.ingestion.ui.IngestionReusableSelectionResult
@@ -29,12 +30,15 @@ class CreateCompoundViewModel(
     private val createReusableIngredientUseCase: CreateReusableIngredientUseCase,
     private val observeReusableIngredients: () -> Flow<List<io.github.mateovich.allergotracker.features.ingredients.domain.ReusableIngredient>> = { emptyFlow() },
     private val observeReusableCompounds: () -> Flow<List<io.github.mateovich.allergotracker.features.compounds.domain.ReusableCompound>> = { emptyFlow() },
+    private val replaceIngredientWithCompoundUseCase: ReplaceIngredientWithCompoundUseCase? = null,
     initialName: String = "",
     initialSeedIngredient: IngestionReusableSelectionResult? = null
 ) : ViewModel() {
     private var ingredientCatalogOptions: List<CompoundComponentCatalogOptionUiModel> = emptyList()
     private var compoundCatalogOptions: List<CompoundComponentCatalogOptionUiModel> = emptyList()
     private var observedCompounds: List<ReusableCompound> = emptyList()
+    private val ingredientToReplace: IngestionReusableSelectionResult? =
+        initialSeedIngredient?.takeIf { it.kind == ReusableEntityKind.INGREDIENT }
 
     private val mutableState = MutableStateFlow(buildInitialState(initialName, initialSeedIngredient))
     val state: StateFlow<CreateCompoundUiState> = mutableState.asStateFlow()
@@ -138,6 +142,8 @@ class CreateCompoundViewModel(
                 )
             }
             CreateCompoundUiIntent.Save -> save()
+            CreateCompoundUiIntent.ConfirmReplacement -> confirmReplacement()
+            CreateCompoundUiIntent.DismissReplacementConfirmation -> updateState { it.copy(replacementConfirmation = null) }
         }
     }
 
@@ -286,58 +292,115 @@ class CreateCompoundViewModel(
     }
 
     private fun save() {
+        val ingredient = ingredientToReplace
+        val replaceUseCase = replaceIngredientWithCompoundUseCase
+        if (ingredient != null && replaceUseCase != null) {
+            requestReplacementConfirmation(ingredient, replaceUseCase)
+            return
+        }
         val currentState = mutableState.value
         updateState { it.copy(isSaving = true, formMessage = "", isFormMessageError = false, isFormMessageSticky = false) }
         viewModelScope.launch {
-            when (
-                val result = createReusableCompoundUseCase(
-                    CreateReusableCompoundCommand(
-                        name = currentState.name,
-                        notes = currentState.notes,
-                        components = currentState.components.map { component ->
-                            CreateReusableCompoundComponentCommand(
-                                kind = CompoundComponentKind.fromStorageValue(component.kind),
-                                reusableEntityId = component.reusableEntityId,
-                                proportionBasisPoints = component.proportionBasisPoints
-                            )
-                        }
-                    )
-                )
-            ) {
+            when (val result = createReusableCompoundUseCase(currentState.toCreateCommand())) {
                 is AppResult.Success -> {
                     updateState { it.copy(isSaving = false) }
-                    effectChannel.trySend(
-                        CreateCompoundUiEffect.NavigateBackWithSelection(
-                            IngestionReusableSelectionResult(
-                                id = result.value.id,
-                                name = result.value.name,
-                                kind = ReusableEntityKind.COMPOUND
-                            )
+                    effectChannel.trySend(CreateCompoundUiEffect.NavigateBackWithSelection(result.value.toSelection()))
+                }
+
+                is AppResult.Error -> updateState { it.copy(isSaving = false).withSaveError(result.error) }
+            }
+        }
+    }
+
+    private fun requestReplacementConfirmation(
+        ingredient: IngestionReusableSelectionResult,
+        replaceUseCase: ReplaceIngredientWithCompoundUseCase
+    ) {
+        val currentState = mutableState.value
+        if (!currentState.canSave || currentState.isSaving) return
+        updateState { it.copy(isSaving = true, formMessage = "", isFormMessageError = false, isFormMessageSticky = false) }
+        viewModelScope.launch {
+            when (val impact = replaceUseCase.impact(ingredient.id)) {
+                is AppResult.Success -> updateState {
+                    it.copy(
+                        isSaving = false,
+                        replacementConfirmation = ReplaceIngredientConfirmationUiModel(
+                            ingredientName = impact.value.ingredientName,
+                            ingestionReferenceCount = impact.value.ingestionReferenceCount,
+                            compoundReferenceCount = impact.value.compoundReferenceCount
                         )
                     )
                 }
 
-                is AppResult.Error -> {
-                    updateState { state ->
-                        state.copy(
-                            isSaving = false,
-                            nameError = result.error.fieldError("name"),
-                            componentsError = result.error.fieldError("components"),
-                            totalError = result.error.fieldError("componentsTotal"),
-                            components = state.components.mapIndexed { index, component ->
-                                component.copy(
-                                    targetError = result.error.fieldError("components[$index].target"),
-                                    proportionError = result.error.fieldError("components[$index].proportion")
-                                )
-                            },
-                            formMessage = result.error.message,
-                            isFormMessageError = true,
-                            isFormMessageSticky = false
-                        ).withDerivedFields()
-                    }
+                is AppResult.Error -> updateState {
+                    it.copy(
+                        isSaving = false,
+                        formMessage = impact.error.message,
+                        isFormMessageError = true,
+                        isFormMessageSticky = false
+                    )
                 }
             }
         }
+    }
+
+    private fun confirmReplacement() {
+        val ingredient = ingredientToReplace ?: return
+        val replaceUseCase = replaceIngredientWithCompoundUseCase ?: return
+        val currentState = mutableState.value
+        if (currentState.replacementConfirmation == null || currentState.isSaving) return
+        updateState {
+            it.copy(
+                replacementConfirmation = null,
+                isSaving = true,
+                formMessage = "",
+                isFormMessageError = false,
+                isFormMessageSticky = false
+            )
+        }
+        viewModelScope.launch {
+            when (val result = replaceUseCase(ingredient.id, currentState.toCreateCommand())) {
+                is AppResult.Success -> {
+                    updateState { it.copy(isSaving = false) }
+                    effectChannel.trySend(CreateCompoundUiEffect.NavigateBackWithSelection(result.value.compound.toSelection()))
+                }
+
+                is AppResult.Error -> updateState { it.copy(isSaving = false).withSaveError(result.error) }
+            }
+        }
+    }
+
+    private fun CreateCompoundUiState.toCreateCommand(): CreateReusableCompoundCommand =
+        CreateReusableCompoundCommand(
+            name = name,
+            notes = notes,
+            components = components.map { component ->
+                CreateReusableCompoundComponentCommand(
+                    kind = CompoundComponentKind.fromStorageValue(component.kind),
+                    reusableEntityId = component.reusableEntityId,
+                    proportionBasisPoints = component.proportionBasisPoints
+                )
+            }
+        )
+
+    private fun ReusableCompound.toSelection(): IngestionReusableSelectionResult =
+        IngestionReusableSelectionResult(id = id, name = name, kind = ReusableEntityKind.COMPOUND)
+
+    private fun CreateCompoundUiState.withSaveError(error: DomainError): CreateCompoundUiState {
+        return copy(
+            nameError = error.fieldError("name"),
+            componentsError = error.fieldError("components"),
+            totalError = error.fieldError("componentsTotal"),
+            components = components.mapIndexed { index, component ->
+                component.copy(
+                    targetError = error.fieldError("components[$index].target"),
+                    proportionError = error.fieldError("components[$index].proportion")
+                )
+            },
+            formMessage = error.message,
+            isFormMessageError = true,
+            isFormMessageSticky = false
+        ).withDerivedFields()
     }
 
     private fun refreshCatalogOptions() {
@@ -354,20 +417,11 @@ class CreateCompoundViewModel(
         initialName: String,
         initialSeedIngredient: IngestionReusableSelectionResult?
     ): CreateCompoundUiState {
-        val seededComponent = initialSeedIngredient
-            ?.takeIf { it.kind == ReusableEntityKind.INGREDIENT }
-            ?.let { ingredient ->
-                CompoundComponentRowUiModel(
-                    kind = CompoundComponentKind.INGREDIENT.storageValue,
-                    reusableEntityId = ingredient.id,
-                    name = ingredient.name,
-                    proportionBasisPoints = COMPOUND_TOTAL_BASIS_POINTS,
-                    proportionPercent = COMPOUND_TOTAL_BASIS_POINTS.toPercentInput()
-                )
-            }
         return CreateCompoundUiState(
             name = initialName,
-            components = seededComponent?.let(::listOf).orEmpty()
+            replacedIngredientName = initialSeedIngredient
+                ?.takeIf { it.kind == ReusableEntityKind.INGREDIENT }
+                ?.name
         ).withDerivedFields()
     }
 
@@ -450,6 +504,7 @@ class CreateCompoundViewModel(
         val availableComponents = allCatalogOptions()
             .filterNot { option ->
                 (option.kind to option.id) in selectedKeys ||
+                    (option.kind == CompoundComponentKind.INGREDIENT.storageValue && option.id == ingredientToReplace?.id) ||
                     (option.kind == CompoundComponentKind.COMPOUND.storageValue && option.id in cycleChildCompoundIds)
             }
             .sortedWith(

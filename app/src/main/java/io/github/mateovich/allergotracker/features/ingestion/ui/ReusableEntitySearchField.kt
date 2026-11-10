@@ -25,31 +25,153 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
+/**
+ * Parameter struct for the generalized reusable entity search field.
+ * Both Create Ingestion and Edit Ingestion populate this from their respective states.
+ */
+data class ReusableEntitySearchParams(
+    val searchQuery: String,
+    val filteredEntities: List<ReusableEntityPickerOptionUiModel>,
+    val selectedEntityId: Long?,
+    val isCreatingInlineIngredient: Boolean,
+    val inlineIngredientError: String?,
+    val showInlineIngredientDialog: Boolean,
+    val inlineIngredientName: String,
+    val showNewCompoundChip: Boolean = true,
+    val allowEditingSelection: Boolean = false,
+    val searchFieldTag: String = "ingestion-reusable-search"
+)
+
+/**
+ * Callbacks for the generalized reusable entity search field.
+ */
+data class ReusableEntitySearchCallbacks(
+    val onSearchQueryChange: (String) -> Unit,
+    val onSelectEntity: (IngestionReusableSelectionResult) -> Unit,
+    val onClearSelection: () -> Unit,
+    val onShowInlineIngredientDialog: (prefillName: String) -> Unit,
+    val onCreateInlineIngredient: (name: String) -> Unit,
+    val onUpdateInlineIngredientName: (String) -> Unit,
+    val onCancelInlineIngredientCreation: () -> Unit,
+    val onCreateNewCompound: (() -> Unit)? = null
+)
+
 @Composable
 internal fun ReusableEntitySearchField(
     state: CreateIngestionUiState,
     onIntent: (CreateIngestionUiIntent) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val hasSelection = state.selectedReusableEntityId != null
+    ReusableEntitySearchFieldCore(
+        params = ReusableEntitySearchParams(
+            searchQuery = state.reusableSearchQuery,
+            filteredEntities = state.filteredReusableEntities,
+            selectedEntityId = state.selectedReusableEntityId,
+            isCreatingInlineIngredient = state.isCreatingInlineIngredient,
+            inlineIngredientError = state.inlineIngredientError,
+            showInlineIngredientDialog = state.showInlineIngredientDialog,
+            inlineIngredientName = state.inlineIngredientName,
+            showNewCompoundChip = true
+        ),
+        callbacks = ReusableEntitySearchCallbacks(
+            onSearchQueryChange = { query ->
+                onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery(query))
+            },
+            onSelectEntity = { result ->
+                onIntent(CreateIngestionUiIntent.SelectReusableEntity(result))
+            },
+            onClearSelection = {
+                onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery(""))
+                onIntent(CreateIngestionUiIntent.UpdateItemName(""))
+            },
+            onShowInlineIngredientDialog = { prefillName ->
+                onIntent(CreateIngestionUiIntent.ShowInlineIngredientDialog(prefillName))
+            },
+            onCreateInlineIngredient = { name ->
+                onIntent(CreateIngestionUiIntent.CreateInlineIngredient(name))
+            },
+            onUpdateInlineIngredientName = { name ->
+                onIntent(CreateIngestionUiIntent.UpdateInlineIngredientName(name))
+            },
+            onCancelInlineIngredientCreation = {
+                onIntent(CreateIngestionUiIntent.CancelInlineIngredientCreation)
+            },
+            onCreateNewCompound = {
+                onIntent(CreateIngestionUiIntent.CreateNewCompound)
+            }
+        ),
+        modifier = modifier
+    )
+}
+
+@Composable
+internal fun EditIngestionReusableSearchField(
+    state: EditIngestionUiState,
+    onIntent: (EditIngestionUiIntent) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    ReusableEntitySearchFieldCore(
+        params = ReusableEntitySearchParams(
+            searchQuery = state.reusableSearchQuery,
+            filteredEntities = state.filteredReusableEntities,
+            selectedEntityId = state.selectedReusableEntityId,
+            isCreatingInlineIngredient = state.isCreatingInlineIngredient,
+            inlineIngredientError = state.inlineIngredientError,
+            showInlineIngredientDialog = state.showInlineIngredientDialog,
+            inlineIngredientName = state.inlineIngredientName,
+            showNewCompoundChip = false,
+            allowEditingSelection = true,
+            searchFieldTag = "edit-ingestion-item-name"
+        ),
+        callbacks = ReusableEntitySearchCallbacks(
+            onSearchQueryChange = { query ->
+                onIntent(EditIngestionUiIntent.UpdateReusableSearchQuery(query))
+            },
+            onSelectEntity = { result ->
+                onIntent(EditIngestionUiIntent.SelectReusableEntity(result))
+            },
+            onClearSelection = {
+                onIntent(EditIngestionUiIntent.UpdateReusableSearchQuery(""))
+            },
+            onShowInlineIngredientDialog = { prefillName ->
+                onIntent(EditIngestionUiIntent.ShowInlineIngredientDialog(prefillName))
+            },
+            onCreateInlineIngredient = { name ->
+                onIntent(EditIngestionUiIntent.CreateInlineIngredient(name))
+            },
+            onUpdateInlineIngredientName = { name ->
+                onIntent(EditIngestionUiIntent.UpdateInlineIngredientName(name))
+            },
+            onCancelInlineIngredientCreation = {
+                onIntent(EditIngestionUiIntent.CancelInlineIngredientCreation)
+            },
+            onCreateNewCompound = null
+        ),
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun ReusableEntitySearchFieldCore(
+    params: ReusableEntitySearchParams,
+    callbacks: ReusableEntitySearchCallbacks,
+    modifier: Modifier = Modifier
+) {
+    val hasSelection = params.selectedEntityId != null
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (hasSelection) {
-            // Read-only field showing selected entity name
+        if (hasSelection && !params.allowEditingSelection) {
             OutlinedTextField(
-                value = state.reusableSearchQuery,
+                value = params.searchQuery,
                 onValueChange = { },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("ingestion-reusable-search"),
+                    .testTag(params.searchFieldTag),
                 label = { Text("What did you ingest?") },
                 readOnly = true,
                 trailingIcon = {
                     TextButton(
-                        onClick = {
-                            onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery(""))
-                            onIntent(CreateIngestionUiIntent.UpdateItemName(""))
-                        }
+                        onClick = { callbacks.onClearSelection() }
                     ) {
                         Text("Clear")
                     }
@@ -57,64 +179,51 @@ internal fun ReusableEntitySearchField(
                 singleLine = true
             )
         } else {
-            // Editable search field
             OutlinedTextField(
-                value = state.reusableSearchQuery,
-                onValueChange = { query ->
-                    onIntent(CreateIngestionUiIntent.UpdateReusableSearchQuery(query))
-                },
+                value = params.searchQuery,
+                onValueChange = { query -> callbacks.onSearchQueryChange(query) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("ingestion-reusable-search"),
+                    .testTag(params.searchFieldTag),
                 label = { Text("What did you ingest?") },
                 singleLine = true
             )
 
-            // FlowRow: chip "New:'name'" first, then matching saved entities — same pattern as
-            // CreateExposureScreen / CreateOutbreakScreen
-            val showCreateChip = state.reusableSearchQuery.isNotBlank()
-            val isExactMatch = state.hasNormalizedExactMatch()
+            val showCreateChip = params.searchQuery.isNotBlank()
+            val isExactMatch = params.hasNormalizedExactMatch()
 
-            if (showCreateChip || state.filteredReusableEntities.isNotEmpty()) {
+            if (!hasSelection && (showCreateChip || params.filteredEntities.isNotEmpty())) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.testTag("ingestion-search-dropdown")
                 ) {
-                    // "New ingredient" chip — first in flow, 3 states
                     if (showCreateChip) {
                         AssistChip(
                             onClick = {
                                 if (!isExactMatch) {
-                                    onIntent(
-                                        CreateIngestionUiIntent.ShowInlineIngredientDialog(
-                                            state.reusableSearchQuery
-                                        )
-                                    )
+                                    callbacks.onShowInlineIngredientDialog(params.searchQuery)
                                 }
                             },
                             enabled = !isExactMatch,
                             label = {
                                 Text(
-                                    if (isExactMatch) "'${state.reusableSearchQuery}' already saved"
-                                    else "New: '${state.reusableSearchQuery}'"
+                                    if (isExactMatch) "'${params.searchQuery}' already saved"
+                                    else "New: '${params.searchQuery}'"
                                 )
                             },
                             modifier = Modifier.testTag("ingestion-create-inline-ingredient")
                         )
                     }
 
-                    // Matching saved entities (ingredients + compounds)
-                    state.filteredReusableEntities.forEach { option ->
+                    params.filteredEntities.forEach { option ->
                         AssistChip(
                             onClick = {
-                                onIntent(
-                                    CreateIngestionUiIntent.SelectReusableEntity(
-                                        IngestionReusableSelectionResult(
-                                            id = option.id,
-                                            name = option.name,
-                                            kind = option.kind
-                                        )
+                                callbacks.onSelectEntity(
+                                    IngestionReusableSelectionResult(
+                                        id = option.id,
+                                        name = option.name,
+                                        kind = option.kind
                                     )
                                 )
                             },
@@ -125,7 +234,7 @@ internal fun ReusableEntitySearchField(
                         )
                     }
                 }
-            } else if (state.reusableSearchQuery.isBlank()) {
+            } else if (!hasSelection && params.searchQuery.isBlank()) {
                 Text(
                     text = "Recent saved items appear here.",
                     style = MaterialTheme.typography.bodySmall,
@@ -133,27 +242,23 @@ internal fun ReusableEntitySearchField(
                 )
             }
 
-            // "New compound" chip — full-screen compound creation (separate row, always visible)
-            AssistChip(
-                onClick = { onIntent(CreateIngestionUiIntent.CreateNewCompound) },
-                label = { Text("New compound") },
-                modifier = Modifier.testTag("ingestion-create-compound")
-            )
+            if (params.showNewCompoundChip && callbacks.onCreateNewCompound != null) {
+                AssistChip(
+                    onClick = { callbacks.onCreateNewCompound.invoke() },
+                    label = { Text("New compound") },
+                    modifier = Modifier.testTag("ingestion-create-compound")
+                )
+            }
         }
     }
 
-    // Inline ingredient creation dialog
-    if (state.showInlineIngredientDialog) {
+    if (params.showInlineIngredientDialog) {
         InlineIngredientCreationDialog(
-            initialName = state.inlineIngredientName,
-            isSaving = state.isCreatingInlineIngredient,
-            errorMessage = state.inlineIngredientError,
-            onSave = { name ->
-                onIntent(CreateIngestionUiIntent.CreateInlineIngredient(name))
-            },
-            onCancel = {
-                onIntent(CreateIngestionUiIntent.CancelInlineIngredientCreation)
-            }
+            initialName = params.inlineIngredientName,
+            isSaving = params.isCreatingInlineIngredient,
+            errorMessage = params.inlineIngredientError,
+            onSave = { name -> callbacks.onCreateInlineIngredient(name) },
+            onCancel = { callbacks.onCancelInlineIngredientCreation() }
         )
     }
 }
@@ -224,10 +329,10 @@ private fun InlineIngredientCreationDialog(
 
 // Normalize identical to CreateReusableIngredientUseCase.normalizeReusableName():
 // trim + collapse internal whitespace + lowercase for comparison
-private fun CreateIngestionUiState.hasNormalizedExactMatch(): Boolean {
-    val normalizedQuery = reusableSearchQuery.trim().replace(Regex("\\s+"), " ").lowercase()
+private fun ReusableEntitySearchParams.hasNormalizedExactMatch(): Boolean {
+    val normalizedQuery = searchQuery.trim().replace(Regex("\\s+"), " ").lowercase()
     if (normalizedQuery.isBlank()) return false
-    return filteredReusableEntities.any {
+    return filteredEntities.any {
         it.name.trim().replace(Regex("\\s+"), " ").lowercase() == normalizedQuery
     }
 }
